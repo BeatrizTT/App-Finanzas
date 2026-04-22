@@ -1,0 +1,23 @@
+{
+  "_comment": "Capital allocation logic. Controls how much to deploy per signal and for different amounts of available cash.",
+  "deployableAmounts": [500, 1000, 2000],
+  "_note_amounts": "The dashboard shows best use of cash for each of these amounts (in EUR).",
+  "tiers": [
+    { "state": "BUY_SMALL", "minPctOfDeployable": 3, "maxPctOfDeployable": 5 },
+    { "state": "BUY_PARTIAL", "minPctOfDeployable": 5, "maxPctOfDeployable": 10 },
+    { "state": "BUY_MORE", "minPctOfDeployable": 10, "maxPctOfDeployable": 20 },
+    { "state": "BUY", "minPctOfDeployable": 8, "maxPctOfDeployable": 15 },
+    { "state": "READY_TO_BUY", "minPctOfDeployable": 5, "maxPctOfDeployable": 8 },
+    { "state": "WATCH", "minPctOfDeployable": 0, "maxPctOfDeployable": 0 },
+    { "state": "WAIT", "minPctOfDeployable": 2, "maxPctOfDeployable": 4 }
+  ],
+  "etfConcentrationBonus": 0.05,
+  "_note_bonus": "If an ETF opportunity would reduce concentration risk, add this % to its allowed size.",
+  "maxSingleTradeEur": 3000,
+  "minSingleTradeEur": 50,
+  "_note_limits": "Never suggest less than min or more than max per single trade.",
+  "concentrationPenaltyReduction": 0.5,
+  "_note_penalty": "If sector/theme concentration is high, multiply suggested size by this factor.",
+  "highConvictionMultiplier": 1.2,
+  "_note_hcm": "For conviction >= 9 assets, allow up to 20% more than the base tier suggests."
+}

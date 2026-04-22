@@ -1,0 +1,8 @@
+{
+  "_comment": "Manual overrides for the engine. Edit here to temporarily block buys, flag thesis risks, or set market regime.",
+  "marketRegime": "neutral",
+  "_note_regime": "Options: 'bullish' | 'neutral' | 'bearish'. This affects all opportunity scores. Set manually.",
+  "globalNoBuy": false,
+  "_note_globalNoBuy": "Set to true to suppress all buy signals globally (e.g. during extreme uncertainty).",
+  "overrides": []
+}

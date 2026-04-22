@@ -1,0 +1,2616 @@
+{
+  "runAt": "2026-04-22T14:05:11.458Z",
+  "marketRegime": "neutral",
+  "portfolioAnalyses": [
+    {
+      "holding": {
+        "id": "msci-world",
+        "name": "iShares MSCI World UCITS ETF",
+        "ticker": "IWDA",
+        "isin": "IE00B53SZB19",
+        "type": "etf",
+        "dcaMonthlyEur": 500,
+        "avgPrice": 1213,
+        "units": 4,
+        "core": true,
+        "convictionScore": 9,
+        "tags": [
+          "broad-index",
+          "growth",
+          "global",
+          "diversification"
+        ],
+        "currency": "EUR",
+        "maxWeightPercent": 35,
+        "noBuyOverride": false,
+        "manualThesisRisk": "none"
+      },
+      "currentPrice": 1313.71,
+      "avgPrice": 1213,
+      "unrealizedPnlPct": 8.302555647155815,
+      "drawdown": {
+        "drawdown30d": 5.780637017592925,
+        "drawdown60d": 6.526116562190933,
+        "drawdown90d": 6.526116562190933,
+        "maxDrawdown": 6.526116562190933,
+        "primaryWindow": "90d"
+      },
+      "state": "BUY_SMALL",
+      "suggestedAmountEur": {
+        "min": 165,
+        "max": 330
+      },
+      "reasons": [
+        "6.5% drawdown from 90d high (5.8% / 6.5% / 6.5% over 30/60/90d)",
+        "Core long-term holding with high conviction",
+        "Active DCA of €500/month already running",
+        "ETF provides built-in diversification"
+      ],
+      "concentrationPenalty": 0.5,
+      "confidence": "medium"
+    },
+    {
+      "holding": {
+        "id": "nvda",
+        "name": "NVIDIA Corporation",
+        "ticker": "NVDA",
+        "isin": "US67066G1040",
+        "type": "stock",
+        "dcaMonthlyEur": 128,
+        "avgPrice": 157.81,
+        "units": 10,
+        "core": true,
+        "convictionScore": 9,
+        "tags": [
+          "semis",
+          "AI",
+          "growth",
+          "tech"
+        ],
+        "currency": "USD",
+        "maxWeightPercent": 20,
+        "noBuyOverride": false,
+        "manualThesisRisk": "none"
+      },
+      "currentPrice": 108.63,
+      "avgPrice": 157.81,
+      "unrealizedPnlPct": -31.164058044483877,
+      "drawdown": {
+        "drawdown30d": 7.776551489939731,
+        "drawdown60d": 8.02641605283211,
+        "drawdown90d": 8.02641605283211,
+        "maxDrawdown": 8.02641605283211,
+        "primaryWindow": "90d"
+      },
+      "state": "BUY_SMALL",
+      "suggestedAmountEur": {
+        "min": 90,
+        "max": 180
+      },
+      "reasons": [
+        "8.0% drawdown from 90d high (7.8% / 8.0% / 8.0% over 30/60/90d)",
+        "Core long-term holding with high conviction",
+        "Active DCA of €128/month already running"
+      ],
+      "concentrationPenalty": 0.5,
+      "confidence": "medium"
+    },
+    {
+      "holding": {
+        "id": "asml",
+        "name": "ASML Holding N.V.",
+        "ticker": "ASML",
+        "isin": "NL0010273215",
+        "type": "stock",
+        "dcaMonthlyEur": 128,
+        "avgPrice": 1193.7,
+        "units": 1,
+        "core": true,
+        "convictionScore": 8,
+        "tags": [
+          "semis",
+          "infrastructure",
+          "growth",
+          "europe"
+        ],
+        "currency": "EUR",
+        "maxWeightPercent": 15,
+        "noBuyOverride": false,
+        "manualThesisRisk": "none"
+      },
+      "currentPrice": 657.56,
+      "avgPrice": 1193.7,
+      "unrealizedPnlPct": -44.91413252911117,
+      "drawdown": {
+        "drawdown30d": 6.325146732007535,
+        "drawdown60d": 6.325146732007535,
+        "drawdown90d": 6.325146732007535,
+        "maxDrawdown": 6.325146732007535,
+        "primaryWindow": "90d"
+      },
+      "state": "BUY_SMALL",
+      "suggestedAmountEur": {
+        "min": 90,
+        "max": 150
+      },
+      "reasons": [
+        "6.3% drawdown from 90d high (6.3% / 6.3% / 6.3% over 30/60/90d)",
+        "Core long-term holding with high conviction",
+        "Active DCA of €128/month already running"
+      ],
+      "concentrationPenalty": 0.5,
+      "confidence": "medium"
+    },
+    {
+      "holding": {
+        "id": "msci-world-value",
+        "name": "iShares MSCI World Value Factor UCITS ETF",
+        "ticker": "IWVL",
+        "isin": "IE00BP3QZB59",
+        "type": "etf",
+        "dcaMonthlyEur": 170,
+        "avgPrice": 55.53,
+        "units": 30,
+        "core": true,
+        "convictionScore": 8,
+        "tags": [
+          "value",
+          "broad-index",
+          "diversification",
+          "global"
+        ],
+        "currency": "EUR",
+        "maxWeightPercent": 20,
+        "noBuyOverride": false,
+        "manualThesisRisk": "none"
+      },
+      "currentPrice": 58.86,
+      "avgPrice": 55.53,
+      "unrealizedPnlPct": 5.996758508914097,
+      "drawdown": {
+        "drawdown30d": 2.6624772614519587,
+        "drawdown60d": 2.9513602638087373,
+        "drawdown90d": 2.9513602638087373,
+        "maxDrawdown": 2.9513602638087373,
+        "primaryWindow": "90d"
+      },
+      "state": "DO_NOTHING",
+      "suggestedAmountEur": {
+        "min": 0,
+        "max": 0
+      },
+      "reasons": [
+        "3.0% drawdown from 90d high (2.7% / 3.0% / 3.0% over 30/60/90d)",
+        "Core long-term holding with high conviction",
+        "Active DCA of €170/month already running",
+        "ETF provides built-in diversification",
+        "Price close to recent highs — no action needed"
+      ],
+      "concentrationPenalty": 0.5,
+      "confidence": "medium"
+    },
+    {
+      "holding": {
+        "id": "msft",
+        "name": "Microsoft Corporation",
+        "ticker": "MSFT",
+        "isin": "US5949181045",
+        "type": "stock",
+        "dcaMonthlyEur": 0,
+        "avgPrice": 380,
+        "units": 3,
+        "core": false,
+        "convictionScore": 8,
+        "tags": [
+          "software",
+          "AI",
+          "cloud",
+          "tech"
+        ],
+        "currency": "USD",
+        "maxWeightPercent": 12,
+        "noBuyOverride": false,
+        "manualThesisRisk": "none"
+      },
+      "currentPrice": 390.2,
+      "avgPrice": 380,
+      "unrealizedPnlPct": 2.6842105263157867,
+      "drawdown": {
+        "drawdown30d": 4.7153915655295355,
+        "drawdown60d": 5.632542504050889,
+        "drawdown90d": 5.632542504050889,
+        "maxDrawdown": 5.632542504050889,
+        "primaryWindow": "90d"
+      },
+      "state": "BUY_SMALL",
+      "suggestedAmountEur": {
+        "min": 90,
+        "max": 150
+      },
+      "reasons": [
+        "5.6% drawdown from 90d high (4.7% / 5.6% / 5.6% over 30/60/90d)"
+      ],
+      "concentrationPenalty": 0.5,
+      "confidence": "medium"
+    },
+    {
+      "holding": {
+        "id": "amzn",
+        "name": "Amazon.com Inc.",
+        "ticker": "AMZN",
+        "isin": "US0231351067",
+        "type": "stock",
+        "dcaMonthlyEur": 0,
+        "avgPrice": 180,
+        "units": 5,
+        "core": false,
+        "convictionScore": 8,
+        "tags": [
+          "cloud",
+          "ecommerce",
+          "AI",
+          "growth"
+        ],
+        "currency": "USD",
+        "maxWeightPercent": 12,
+        "noBuyOverride": false,
+        "manualThesisRisk": "none"
+      },
+      "currentPrice": 195.68,
+      "avgPrice": 180,
+      "unrealizedPnlPct": 8.711111111111116,
+      "drawdown": {
+        "drawdown30d": 4.58357714062805,
+        "drawdown60d": 4.58357714062805,
+        "drawdown90d": 4.58357714062805,
+        "maxDrawdown": 4.58357714062805,
+        "primaryWindow": "90d"
+      },
+      "state": "DO_NOTHING",
+      "suggestedAmountEur": {
+        "min": 0,
+        "max": 0
+      },
+      "reasons": [
+        "4.6% drawdown from 90d high (4.6% / 4.6% / 4.6% over 30/60/90d)",
+        "Price close to recent highs — no action needed"
+      ],
+      "concentrationPenalty": 0.5,
+      "confidence": "medium"
+    },
+    {
+      "holding": {
+        "id": "googl",
+        "name": "Alphabet Inc. (Google)",
+        "ticker": "GOOGL",
+        "isin": "US02079K3059",
+        "type": "stock",
+        "dcaMonthlyEur": 0,
+        "avgPrice": 160,
+        "units": 5,
+        "core": false,
+        "convictionScore": 8,
+        "tags": [
+          "AI",
+          "software",
+          "cloud",
+          "tech"
+        ],
+        "currency": "USD",
+        "maxWeightPercent": 12,
+        "noBuyOverride": false,
+        "manualThesisRisk": "none"
+      },
+      "currentPrice": 162.14,
+      "avgPrice": 160,
+      "unrealizedPnlPct": 1.3374999999999915,
+      "drawdown": {
+        "drawdown30d": 3.842960502905953,
+        "drawdown60d": 3.894256416335737,
+        "drawdown90d": 3.894256416335737,
+        "maxDrawdown": 3.894256416335737,
+        "primaryWindow": "90d"
+      },
+      "state": "DO_NOTHING",
+      "suggestedAmountEur": {
+        "min": 0,
+        "max": 0
+      },
+      "reasons": [
+        "3.9% drawdown from 90d high (3.8% / 3.9% / 3.9% over 30/60/90d)",
+        "Price close to recent highs — no action needed"
+      ],
+      "concentrationPenalty": 0.5,
+      "confidence": "medium"
+    },
+    {
+      "holding": {
+        "id": "orcl",
+        "name": "Oracle Corporation",
+        "ticker": "ORCL",
+        "isin": "US68389X1054",
+        "type": "stock",
+        "dcaMonthlyEur": 0,
+        "avgPrice": 130,
+        "units": 5,
+        "core": false,
+        "convictionScore": 7,
+        "tags": [
+          "cloud",
+          "software",
+          "AI",
+          "tech"
+        ],
+        "currency": "USD",
+        "maxWeightPercent": 10,
+        "noBuyOverride": false,
+        "manualThesisRisk": "none"
+      },
+      "currentPrice": 114.79,
+      "avgPrice": 130,
+      "unrealizedPnlPct": -11.699999999999996,
+      "drawdown": {
+        "drawdown30d": 6.7278784431624175,
+        "drawdown60d": 6.81117064458516,
+        "drawdown90d": 6.81117064458516,
+        "maxDrawdown": 6.81117064458516,
+        "primaryWindow": "90d"
+      },
+      "state": "WAIT",
+      "suggestedAmountEur": {
+        "min": 60,
+        "max": 120
+      },
+      "reasons": [
+        "6.8% drawdown from 90d high (6.7% / 6.8% / 6.8% over 30/60/90d)"
+      ],
+      "concentrationPenalty": 0.5,
+      "confidence": "medium"
+    },
+    {
+      "holding": {
+        "id": "adbe",
+        "name": "Adobe Inc.",
+        "ticker": "ADBE",
+        "isin": "US00724F1012",
+        "type": "stock",
+        "dcaMonthlyEur": 0,
+        "avgPrice": 420,
+        "units": 2,
+        "core": false,
+        "convictionScore": 7,
+        "tags": [
+          "software",
+          "AI",
+          "creative",
+          "tech"
+        ],
+        "currency": "USD",
+        "maxWeightPercent": 10,
+        "noBuyOverride": false,
+        "manualThesisRisk": "none"
+      },
+      "currentPrice": 362.57,
+      "avgPrice": 420,
+      "unrealizedPnlPct": -13.673809523809524,
+      "drawdown": {
+        "drawdown30d": 7.3350883021954125,
+        "drawdown60d": 7.3350883021954125,
+        "drawdown90d": 7.3350883021954125,
+        "maxDrawdown": 7.3350883021954125,
+        "primaryWindow": "90d"
+      },
+      "state": "WAIT",
+      "suggestedAmountEur": {
+        "min": 60,
+        "max": 120
+      },
+      "reasons": [
+        "7.3% drawdown from 90d high (7.3% / 7.3% / 7.3% over 30/60/90d)"
+      ],
+      "concentrationPenalty": 0.5,
+      "confidence": "medium"
+    },
+    {
+      "holding": {
+        "id": "crm",
+        "name": "Salesforce Inc.",
+        "ticker": "CRM",
+        "isin": "US79466L3024",
+        "type": "stock",
+        "dcaMonthlyEur": 0,
+        "avgPrice": 260,
+        "units": 2,
+        "core": false,
+        "convictionScore": 7,
+        "tags": [
+          "software",
+          "AI",
+          "cloud",
+          "tech"
+        ],
+        "currency": "USD",
+        "maxWeightPercent": 10,
+        "noBuyOverride": false,
+        "manualThesisRisk": "none"
+      },
+      "currentPrice": 251.57,
+      "avgPrice": 260,
+      "unrealizedPnlPct": -3.242307692307695,
+      "drawdown": {
+        "drawdown30d": 7.623104321962322,
+        "drawdown60d": 7.623104321962322,
+        "drawdown90d": 7.623104321962322,
+        "maxDrawdown": 7.623104321962322,
+        "primaryWindow": "90d"
+      },
+      "state": "WAIT",
+      "suggestedAmountEur": {
+        "min": 60,
+        "max": 120
+      },
+      "reasons": [
+        "7.6% drawdown from 90d high (7.6% / 7.6% / 7.6% over 30/60/90d)"
+      ],
+      "concentrationPenalty": 0.5,
+      "confidence": "medium"
+    },
+    {
+      "holding": {
+        "id": "now",
+        "name": "ServiceNow Inc.",
+        "ticker": "NOW",
+        "isin": "US81762P1021",
+        "type": "stock",
+        "dcaMonthlyEur": 0,
+        "avgPrice": 880,
+        "units": 1,
+        "core": false,
+        "convictionScore": 8,
+        "tags": [
+          "software",
+          "AI",
+          "enterprise",
+          "tech"
+        ],
+        "currency": "USD",
+        "maxWeightPercent": 10,
+        "noBuyOverride": false,
+        "manualThesisRisk": "none"
+      },
+      "currentPrice": 892.47,
+      "avgPrice": 880,
+      "unrealizedPnlPct": 1.4170454545454576,
+      "drawdown": {
+        "drawdown30d": 6.406518729812484,
+        "drawdown60d": 6.406518729812484,
+        "drawdown90d": 6.406518729812484,
+        "maxDrawdown": 6.406518729812484,
+        "primaryWindow": "90d"
+      },
+      "state": "BUY_SMALL",
+      "suggestedAmountEur": {
+        "min": 90,
+        "max": 150
+      },
+      "reasons": [
+        "6.4% drawdown from 90d high (6.4% / 6.4% / 6.4% over 30/60/90d)"
+      ],
+      "concentrationPenalty": 0.5,
+      "confidence": "medium"
+    },
+    {
+      "holding": {
+        "id": "mrvl",
+        "name": "Marvell Technology Inc.",
+        "ticker": "MRVL",
+        "isin": "US5738741041",
+        "type": "stock",
+        "dcaMonthlyEur": 0,
+        "avgPrice": 75,
+        "units": 5,
+        "core": false,
+        "convictionScore": 7,
+        "tags": [
+          "semis",
+          "AI",
+          "networking",
+          "tech"
+        ],
+        "currency": "USD",
+        "maxWeightPercent": 8,
+        "noBuyOverride": false,
+        "manualThesisRisk": "none"
+      },
+      "currentPrice": 54.62,
+      "avgPrice": 75,
+      "unrealizedPnlPct": -27.17333333333334,
+      "drawdown": {
+        "drawdown30d": 10.385561936013135,
+        "drawdown60d": 10.473692837239797,
+        "drawdown90d": 10.473692837239797,
+        "maxDrawdown": 10.473692837239797,
+        "primaryWindow": "90d"
+      },
+      "state": "BUY_PARTIAL",
+      "suggestedAmountEur": {
+        "min": 150,
+        "max": 300
+      },
+      "reasons": [
+        "10.5% drawdown from 90d high (10.4% / 10.5% / 10.5% over 30/60/90d)"
+      ],
+      "concentrationPenalty": 0.5,
+      "confidence": "medium"
+    },
+    {
+      "holding": {
+        "id": "ftnt",
+        "name": "Fortinet Inc.",
+        "ticker": "FTNT",
+        "isin": "US34959E1091",
+        "type": "stock",
+        "dcaMonthlyEur": 0,
+        "avgPrice": 80,
+        "units": 5,
+        "core": false,
+        "convictionScore": 7,
+        "tags": [
+          "cybersecurity",
+          "software",
+          "tech"
+        ],
+        "currency": "USD",
+        "maxWeightPercent": 8,
+        "noBuyOverride": false,
+        "manualThesisRisk": "none"
+      },
+      "currentPrice": 83.12,
+      "avgPrice": 80,
+      "unrealizedPnlPct": 3.9000000000000057,
+      "drawdown": {
+        "drawdown30d": 3.179965055329051,
+        "drawdown60d": 3.179965055329051,
+        "drawdown90d": 3.179965055329051,
+        "maxDrawdown": 3.179965055329051,
+        "primaryWindow": "90d"
+      },
+      "state": "DO_NOTHING",
+      "suggestedAmountEur": {
+        "min": 0,
+        "max": 0
+      },
+      "reasons": [
+        "3.2% drawdown from 90d high (3.2% / 3.2% / 3.2% over 30/60/90d)",
+        "Price close to recent highs — no action needed"
+      ],
+      "concentrationPenalty": 0,
+      "confidence": "medium"
+    },
+    {
+      "holding": {
+        "id": "smci",
+        "name": "Super Micro Computer Inc.",
+        "ticker": "SMCI",
+        "isin": "US86800U1016",
+        "type": "stock",
+        "dcaMonthlyEur": 0,
+        "avgPrice": 45,
+        "units": 10,
+        "core": false,
+        "convictionScore": 6,
+        "tags": [
+          "semis",
+          "AI",
+          "infrastructure",
+          "tech"
+        ],
+        "currency": "USD",
+        "maxWeightPercent": 6,
+        "noBuyOverride": false,
+        "manualThesisRisk": "medium"
+      },
+      "currentPrice": 31.92,
+      "avgPrice": 45,
+      "unrealizedPnlPct": -29.066666666666663,
+      "drawdown": {
+        "drawdown30d": 14.675220529270236,
+        "drawdown60d": 14.99334221038614,
+        "drawdown90d": 14.99334221038614,
+        "maxDrawdown": 14.99334221038614,
+        "primaryWindow": "90d"
+      },
+      "state": "BUY_SMALL",
+      "suggestedAmountEur": {
+        "min": 90,
+        "max": 150
+      },
+      "reasons": [
+        "15.0% drawdown from 90d high (14.7% / 15.0% / 15.0% over 30/60/90d)",
+        "Manual thesis risk flag: medium"
+      ],
+      "concentrationPenalty": 0.5,
+      "confidence": "low"
+    }
+  ],
+  "concentration": {
+    "totalPortfolioValue": 15426.800000000001,
+    "sectorWeights": {
+      "asset:msci-world": 34.06305909196982,
+      "broad-index": 45.509373298415746,
+      "growth": 51.70936292685456,
+      "global": 45.509373298415746,
+      "diversification": 45.509373298415746,
+      "asset:nvda": 7.041641818134674,
+      "semis": 15.143516477817823,
+      "AI": 47.53416132963414,
+      "tech": 43.88596468483418,
+      "asset:asml": 4.262452355640832,
+      "infrastructure": 6.33157881090051,
+      "europe": 4.262452355640832,
+      "asset:msci-world-value": 11.446314206445924,
+      "value": 11.446314206445924,
+      "asset:msft": 7.588093447766224,
+      "software": 33.00490056265719,
+      "cloud": 26.167384032981563,
+      "asset:amzn": 6.342209661109238,
+      "ecommerce": 6.342209661109238,
+      "asset:googl": 5.255140405009463,
+      "asset:orcl": 3.720473461767833,
+      "asset:adbe": 4.700521170949257,
+      "creative": 4.700521170949257,
+      "asset:crm": 3.261467057328804,
+      "asset:now": 5.785192003526331,
+      "enterprise": 5.785192003526331,
+      "asset:mrvl": 1.7702958487826377,
+      "networking": 1.7702958487826377,
+      "asset:ftnt": 2.69401301630928,
+      "cybersecurity": 2.69401301630928,
+      "asset:smci": 2.069126455259678
+    },
+    "themeWeights": {
+      "broad-index": 45.509373298415746,
+      "growth": 51.70936292685456,
+      "global": 45.509373298415746,
+      "diversification": 45.509373298415746,
+      "semis": 15.143516477817823,
+      "AI": 47.53416132963414,
+      "tech": 43.88596468483418,
+      "infrastructure": 6.33157881090051,
+      "europe": 4.262452355640832,
+      "value": 11.446314206445924,
+      "software": 33.00490056265719,
+      "cloud": 26.167384032981563,
+      "ecommerce": 6.342209661109238,
+      "creative": 4.700521170949257,
+      "enterprise": 5.785192003526331,
+      "networking": 1.7702958487826377,
+      "cybersecurity": 2.69401301630928
+    },
+    "stockVsEtfRatio": {
+      "stocks": 54.49062670158427,
+      "etfs": 45.509373298415746
+    },
+    "highConcentrationWarnings": []
+  },
+  "stockOpportunities": [
+    {
+      "ticker": "AMD",
+      "name": "Advanced Micro Devices",
+      "type": "stock",
+      "tags": [
+        "semis",
+        "AI",
+        "growth"
+      ],
+      "isSeedUniverse": true,
+      "score": {
+        "total": 6.8,
+        "breakdown": {
+          "assetQuality": 9,
+          "drawdownOpportunity": 7,
+          "trendQuality": 8,
+          "relativeStrength": 3,
+          "diversificationFit": 3.5,
+          "sectorFit": 8,
+          "riskReward": 8,
+          "portfolioFit": 7.5,
+          "marketRegimeFit": 5
+        }
+      },
+      "state": "READY_TO_BUY",
+      "currentPrice": 95.54,
+      "currency": "USD",
+      "drawdown": {
+        "drawdown30d": 11.075949367088601,
+        "drawdown60d": 11.282384622527617,
+        "drawdown90d": 11.282384622527617,
+        "maxDrawdown": 11.282384622527617,
+        "primaryWindow": "90d"
+      },
+      "reasons": [
+        "Drawdown: -11.3% (30d: -11.1%, 60d: -11.3%, 90d: -11.3%)",
+        "High-quality asset (quality score 9/10)",
+        "Adds to already-elevated AI, growth exposure",
+        "Favorable risk-reward: meaningful upside vs controlled downside"
+      ],
+      "suggestedAmountEur": {
+        "min": 160,
+        "max": 256
+      },
+      "confidence": "medium",
+      "qualityGates": {
+        "liquidity": true,
+        "quality": true,
+        "volatility": true,
+        "portfolioFit": true,
+        "riskReward": true,
+        "notSpeculative": true
+      }
+    },
+    {
+      "ticker": "TSM",
+      "name": "Taiwan Semiconductor",
+      "type": "stock",
+      "tags": [
+        "semis",
+        "infrastructure",
+        "growth"
+      ],
+      "isSeedUniverse": true,
+      "score": {
+        "total": 6.5,
+        "breakdown": {
+          "assetQuality": 10,
+          "drawdownOpportunity": 4,
+          "trendQuality": 5,
+          "relativeStrength": 6,
+          "diversificationFit": 5,
+          "sectorFit": 8,
+          "riskReward": 8,
+          "portfolioFit": 7.5,
+          "marketRegimeFit": 5
+        }
+      },
+      "state": "READY_TO_BUY",
+      "currentPrice": 155.43,
+      "currency": "USD",
+      "drawdown": {
+        "drawdown30d": 6.850053937432582,
+        "drawdown60d": 6.850053937432582,
+        "drawdown90d": 6.850053937432582,
+        "maxDrawdown": 6.850053937432582,
+        "primaryWindow": "90d"
+      },
+      "reasons": [
+        "Drawdown: -6.9% (30d: -6.9%, 60d: -6.9%, 90d: -6.9%)",
+        "High-quality asset (quality score 10/10)",
+        "Favorable risk-reward: meaningful upside vs controlled downside"
+      ],
+      "suggestedAmountEur": {
+        "min": 200,
+        "max": 320
+      },
+      "confidence": "medium",
+      "qualityGates": {
+        "liquidity": true,
+        "quality": true,
+        "volatility": true,
+        "portfolioFit": true,
+        "riskReward": true,
+        "notSpeculative": true
+      }
+    },
+    {
+      "ticker": "NVDA",
+      "name": "NVIDIA Corporation",
+      "type": "stock",
+      "tags": [
+        "semis",
+        "AI",
+        "growth",
+        "tech"
+      ],
+      "isSeedUniverse": true,
+      "score": {
+        "total": 6.4,
+        "breakdown": {
+          "assetQuality": 10,
+          "drawdownOpportunity": 4,
+          "trendQuality": 8,
+          "relativeStrength": 4.5,
+          "diversificationFit": 3.5,
+          "sectorFit": 8,
+          "riskReward": 8,
+          "portfolioFit": 5,
+          "marketRegimeFit": 5
+        }
+      },
+      "state": "WATCH",
+      "currentPrice": 108.63,
+      "currency": "USD",
+      "drawdown": {
+        "drawdown30d": 7.776551489939731,
+        "drawdown60d": 8.02641605283211,
+        "drawdown90d": 8.02641605283211,
+        "maxDrawdown": 8.02641605283211,
+        "primaryWindow": "90d"
+      },
+      "reasons": [
+        "Drawdown: -8.0% (30d: -7.8%, 60d: -8.0%, 90d: -8.0%)",
+        "High-quality asset (quality score 10/10)",
+        "Adds to already-elevated AI, growth, tech exposure",
+        "Favorable risk-reward: meaningful upside vs controlled downside"
+      ],
+      "suggestedAmountEur": {
+        "min": 0,
+        "max": 0
+      },
+      "confidence": "medium",
+      "qualityGates": {
+        "liquidity": true,
+        "quality": true,
+        "volatility": true,
+        "portfolioFit": true,
+        "riskReward": true,
+        "notSpeculative": true
+      }
+    },
+    {
+      "ticker": "ASML",
+      "name": "ASML Holding N.V.",
+      "type": "stock",
+      "tags": [
+        "semis",
+        "infrastructure",
+        "europe"
+      ],
+      "isSeedUniverse": true,
+      "score": {
+        "total": 6.3,
+        "breakdown": {
+          "assetQuality": 10,
+          "drawdownOpportunity": 4,
+          "trendQuality": 5,
+          "relativeStrength": 6,
+          "diversificationFit": 5,
+          "sectorFit": 7,
+          "riskReward": 8,
+          "portfolioFit": 5,
+          "marketRegimeFit": 5
+        }
+      },
+      "state": "WATCH",
+      "currentPrice": 657.56,
+      "currency": "EUR",
+      "drawdown": {
+        "drawdown30d": 6.325146732007535,
+        "drawdown60d": 6.325146732007535,
+        "drawdown90d": 6.325146732007535,
+        "maxDrawdown": 6.325146732007535,
+        "primaryWindow": "90d"
+      },
+      "reasons": [
+        "Drawdown: -6.3% (30d: -6.3%, 60d: -6.3%, 90d: -6.3%)",
+        "High-quality asset (quality score 10/10)",
+        "Favorable risk-reward: meaningful upside vs controlled downside"
+      ],
+      "suggestedAmountEur": {
+        "min": 0,
+        "max": 0
+      },
+      "confidence": "medium",
+      "qualityGates": {
+        "liquidity": true,
+        "quality": true,
+        "volatility": true,
+        "portfolioFit": true,
+        "riskReward": true,
+        "notSpeculative": true
+      }
+    },
+    {
+      "ticker": "MSFT",
+      "name": "Microsoft Corporation",
+      "type": "stock",
+      "tags": [
+        "software",
+        "AI",
+        "cloud"
+      ],
+      "isSeedUniverse": true,
+      "score": {
+        "total": 6.3,
+        "breakdown": {
+          "assetQuality": 10,
+          "drawdownOpportunity": 4,
+          "trendQuality": 5,
+          "relativeStrength": 7.5,
+          "diversificationFit": 3.5,
+          "sectorFit": 8,
+          "riskReward": 8,
+          "portfolioFit": 5,
+          "marketRegimeFit": 5
+        }
+      },
+      "state": "WATCH",
+      "currentPrice": 390.2,
+      "currency": "USD",
+      "drawdown": {
+        "drawdown30d": 4.7153915655295355,
+        "drawdown60d": 5.632542504050889,
+        "drawdown90d": 5.632542504050889,
+        "maxDrawdown": 5.632542504050889,
+        "primaryWindow": "90d"
+      },
+      "reasons": [
+        "Drawdown: -5.6% (30d: -4.7%, 60d: -5.6%, 90d: -5.6%)",
+        "High-quality asset (quality score 10/10)",
+        "Adds to already-elevated software, AI exposure",
+        "Favorable risk-reward: meaningful upside vs controlled downside"
+      ],
+      "suggestedAmountEur": {
+        "min": 0,
+        "max": 0
+      },
+      "confidence": "medium",
+      "qualityGates": {
+        "liquidity": true,
+        "quality": true,
+        "volatility": true,
+        "portfolioFit": true,
+        "riskReward": true,
+        "notSpeculative": true
+      }
+    },
+    {
+      "ticker": "PANW",
+      "name": "Palo Alto Networks",
+      "type": "stock",
+      "tags": [
+        "cybersecurity",
+        "software",
+        "AI"
+      ],
+      "isSeedUniverse": true,
+      "score": {
+        "total": 6.2,
+        "breakdown": {
+          "assetQuality": 9,
+          "drawdownOpportunity": 4,
+          "trendQuality": 5,
+          "relativeStrength": 7.5,
+          "diversificationFit": 3.5,
+          "sectorFit": 8,
+          "riskReward": 8,
+          "portfolioFit": 7.5,
+          "marketRegimeFit": 5
+        }
+      },
+      "state": "WATCH",
+      "currentPrice": 178.63,
+      "currency": "USD",
+      "drawdown": {
+        "drawdown30d": 5.501772205470034,
+        "drawdown60d": 5.501772205470034,
+        "drawdown90d": 5.501772205470034,
+        "maxDrawdown": 5.501772205470034,
+        "primaryWindow": "90d"
+      },
+      "reasons": [
+        "Drawdown: -5.5% (30d: -5.5%, 60d: -5.5%, 90d: -5.5%)",
+        "High-quality asset (quality score 9/10)",
+        "Adds to already-elevated software, AI exposure",
+        "Favorable risk-reward: meaningful upside vs controlled downside"
+      ],
+      "suggestedAmountEur": {
+        "min": 0,
+        "max": 0
+      },
+      "confidence": "medium",
+      "qualityGates": {
+        "liquidity": true,
+        "quality": true,
+        "volatility": true,
+        "portfolioFit": true,
+        "riskReward": true,
+        "notSpeculative": true
+      }
+    },
+    {
+      "ticker": "AVGO",
+      "name": "Broadcom Inc.",
+      "type": "stock",
+      "tags": [
+        "semis",
+        "AI",
+        "networking"
+      ],
+      "isSeedUniverse": true,
+      "score": {
+        "total": 5.9,
+        "breakdown": {
+          "assetQuality": 9,
+          "drawdownOpportunity": 2,
+          "trendQuality": 5,
+          "relativeStrength": 9,
+          "diversificationFit": 3.5,
+          "sectorFit": 8,
+          "riskReward": 8,
+          "portfolioFit": 7.5,
+          "marketRegimeFit": 5
+        }
+      },
+      "state": "WATCH",
+      "currentPrice": 197.27,
+      "currency": "USD",
+      "drawdown": {
+        "drawdown30d": 4.0608890185779565,
+        "drawdown60d": 4.0608890185779565,
+        "drawdown90d": 4.0608890185779565,
+        "maxDrawdown": 4.0608890185779565,
+        "primaryWindow": "90d"
+      },
+      "reasons": [
+        "Drawdown: -4.1% (30d: -4.1%, 60d: -4.1%, 90d: -4.1%)",
+        "High-quality asset (quality score 9/10)",
+        "Adds to already-elevated AI exposure",
+        "Favorable risk-reward: meaningful upside vs controlled downside",
+        "Relative strength: holding up better than broader market"
+      ],
+      "suggestedAmountEur": {
+        "min": 0,
+        "max": 0
+      },
+      "confidence": "low",
+      "qualityGates": {
+        "liquidity": true,
+        "quality": true,
+        "volatility": true,
+        "portfolioFit": true,
+        "riskReward": true,
+        "notSpeculative": true
+      }
+    },
+    {
+      "ticker": "GOOGL",
+      "name": "Alphabet Inc.",
+      "type": "stock",
+      "tags": [
+        "AI",
+        "software",
+        "cloud"
+      ],
+      "isSeedUniverse": true,
+      "score": {
+        "total": 5.9,
+        "breakdown": {
+          "assetQuality": 10,
+          "drawdownOpportunity": 2,
+          "trendQuality": 5,
+          "relativeStrength": 9,
+          "diversificationFit": 3.5,
+          "sectorFit": 8,
+          "riskReward": 8,
+          "portfolioFit": 5,
+          "marketRegimeFit": 5
+        }
+      },
+      "state": "WATCH",
+      "currentPrice": 162.14,
+      "currency": "USD",
+      "drawdown": {
+        "drawdown30d": 3.842960502905953,
+        "drawdown60d": 3.894256416335737,
+        "drawdown90d": 3.894256416335737,
+        "maxDrawdown": 3.894256416335737,
+        "primaryWindow": "90d"
+      },
+      "reasons": [
+        "Drawdown: -3.9% (30d: -3.8%, 60d: -3.9%, 90d: -3.9%)",
+        "High-quality asset (quality score 10/10)",
+        "Adds to already-elevated AI, software exposure",
+        "Favorable risk-reward: meaningful upside vs controlled downside",
+        "Relative strength: holding up better than broader market"
+      ],
+      "suggestedAmountEur": {
+        "min": 0,
+        "max": 0
+      },
+      "confidence": "low",
+      "qualityGates": {
+        "liquidity": true,
+        "quality": true,
+        "volatility": true,
+        "portfolioFit": true,
+        "riskReward": true,
+        "notSpeculative": true
+      }
+    },
+    {
+      "ticker": "META",
+      "name": "Meta Platforms Inc.",
+      "type": "stock",
+      "tags": [
+        "social",
+        "AI",
+        "advertising"
+      ],
+      "isSeedUniverse": true,
+      "score": {
+        "total": 5.9,
+        "breakdown": {
+          "assetQuality": 9,
+          "drawdownOpportunity": 2,
+          "trendQuality": 5,
+          "relativeStrength": 9,
+          "diversificationFit": 3.5,
+          "sectorFit": 8,
+          "riskReward": 8,
+          "portfolioFit": 7.5,
+          "marketRegimeFit": 5
+        }
+      },
+      "state": "WATCH",
+      "currentPrice": 564.61,
+      "currency": "USD",
+      "drawdown": {
+        "drawdown30d": 3.6534589263165023,
+        "drawdown60d": 4.087179574294588,
+        "drawdown90d": 4.087179574294588,
+        "maxDrawdown": 4.087179574294588,
+        "primaryWindow": "90d"
+      },
+      "reasons": [
+        "Drawdown: -4.1% (30d: -3.7%, 60d: -4.1%, 90d: -4.1%)",
+        "High-quality asset (quality score 9/10)",
+        "Adds to already-elevated AI exposure",
+        "Favorable risk-reward: meaningful upside vs controlled downside",
+        "Relative strength: holding up better than broader market"
+      ],
+      "suggestedAmountEur": {
+        "min": 0,
+        "max": 0
+      },
+      "confidence": "low",
+      "qualityGates": {
+        "liquidity": true,
+        "quality": true,
+        "volatility": true,
+        "portfolioFit": true,
+        "riskReward": true,
+        "notSpeculative": true
+      }
+    },
+    {
+      "ticker": "NOW",
+      "name": "ServiceNow Inc.",
+      "type": "stock",
+      "tags": [
+        "software",
+        "AI",
+        "enterprise"
+      ],
+      "isSeedUniverse": true,
+      "score": {
+        "total": 5.9,
+        "breakdown": {
+          "assetQuality": 9,
+          "drawdownOpportunity": 4,
+          "trendQuality": 5,
+          "relativeStrength": 6,
+          "diversificationFit": 3.5,
+          "sectorFit": 8,
+          "riskReward": 8,
+          "portfolioFit": 5,
+          "marketRegimeFit": 5
+        }
+      },
+      "state": "WATCH",
+      "currentPrice": 892.47,
+      "currency": "USD",
+      "drawdown": {
+        "drawdown30d": 6.406518729812484,
+        "drawdown60d": 6.406518729812484,
+        "drawdown90d": 6.406518729812484,
+        "maxDrawdown": 6.406518729812484,
+        "primaryWindow": "90d"
+      },
+      "reasons": [
+        "Drawdown: -6.4% (30d: -6.4%, 60d: -6.4%, 90d: -6.4%)",
+        "High-quality asset (quality score 9/10)",
+        "Adds to already-elevated software, AI exposure",
+        "Favorable risk-reward: meaningful upside vs controlled downside"
+      ],
+      "suggestedAmountEur": {
+        "min": 0,
+        "max": 0
+      },
+      "confidence": "low",
+      "qualityGates": {
+        "liquidity": true,
+        "quality": true,
+        "volatility": true,
+        "portfolioFit": true,
+        "riskReward": true,
+        "notSpeculative": true
+      }
+    },
+    {
+      "ticker": "ADBE",
+      "name": "Adobe Inc.",
+      "type": "stock",
+      "tags": [
+        "software",
+        "AI",
+        "creative"
+      ],
+      "isSeedUniverse": true,
+      "score": {
+        "total": 5.9,
+        "breakdown": {
+          "assetQuality": 9,
+          "drawdownOpportunity": 4,
+          "trendQuality": 5,
+          "relativeStrength": 6,
+          "diversificationFit": 3.5,
+          "sectorFit": 8,
+          "riskReward": 8,
+          "portfolioFit": 5,
+          "marketRegimeFit": 5
+        }
+      },
+      "state": "WATCH",
+      "currentPrice": 362.57,
+      "currency": "USD",
+      "drawdown": {
+        "drawdown30d": 7.3350883021954125,
+        "drawdown60d": 7.3350883021954125,
+        "drawdown90d": 7.3350883021954125,
+        "maxDrawdown": 7.3350883021954125,
+        "primaryWindow": "90d"
+      },
+      "reasons": [
+        "Drawdown: -7.3% (30d: -7.3%, 60d: -7.3%, 90d: -7.3%)",
+        "High-quality asset (quality score 9/10)",
+        "Adds to already-elevated software, AI exposure",
+        "Favorable risk-reward: meaningful upside vs controlled downside"
+      ],
+      "suggestedAmountEur": {
+        "min": 0,
+        "max": 0
+      },
+      "confidence": "low",
+      "qualityGates": {
+        "liquidity": true,
+        "quality": true,
+        "volatility": true,
+        "portfolioFit": true,
+        "riskReward": true,
+        "notSpeculative": true
+      }
+    },
+    {
+      "ticker": "AMZN",
+      "name": "Amazon.com Inc.",
+      "type": "stock",
+      "tags": [
+        "cloud",
+        "ecommerce",
+        "AI"
+      ],
+      "isSeedUniverse": true,
+      "score": {
+        "total": 5.8,
+        "breakdown": {
+          "assetQuality": 10,
+          "drawdownOpportunity": 2,
+          "trendQuality": 5,
+          "relativeStrength": 7.5,
+          "diversificationFit": 3.5,
+          "sectorFit": 8,
+          "riskReward": 8,
+          "portfolioFit": 5,
+          "marketRegimeFit": 5
+        }
+      },
+      "state": "WATCH",
+      "currentPrice": 195.68,
+      "currency": "USD",
+      "drawdown": {
+        "drawdown30d": 4.58357714062805,
+        "drawdown60d": 4.58357714062805,
+        "drawdown90d": 4.58357714062805,
+        "maxDrawdown": 4.58357714062805,
+        "primaryWindow": "90d"
+      },
+      "reasons": [
+        "Drawdown: -4.6% (30d: -4.6%, 60d: -4.6%, 90d: -4.6%)",
+        "High-quality asset (quality score 10/10)",
+        "Adds to already-elevated AI exposure",
+        "Favorable risk-reward: meaningful upside vs controlled downside"
+      ],
+      "suggestedAmountEur": {
+        "min": 0,
+        "max": 0
+      },
+      "confidence": "low",
+      "qualityGates": {
+        "liquidity": true,
+        "quality": true,
+        "volatility": true,
+        "portfolioFit": true,
+        "riskReward": true,
+        "notSpeculative": true
+      }
+    },
+    {
+      "ticker": "FTNT",
+      "name": "Fortinet Inc.",
+      "type": "stock",
+      "tags": [
+        "cybersecurity",
+        "software"
+      ],
+      "isSeedUniverse": true,
+      "score": {
+        "total": 5.7,
+        "breakdown": {
+          "assetQuality": 8,
+          "drawdownOpportunity": 2,
+          "trendQuality": 5,
+          "relativeStrength": 9,
+          "diversificationFit": 5,
+          "sectorFit": 8,
+          "riskReward": 8,
+          "portfolioFit": 5,
+          "marketRegimeFit": 5
+        }
+      },
+      "state": "WATCH",
+      "currentPrice": 83.12,
+      "currency": "USD",
+      "drawdown": {
+        "drawdown30d": 3.179965055329051,
+        "drawdown60d": 3.179965055329051,
+        "drawdown90d": 3.179965055329051,
+        "maxDrawdown": 3.179965055329051,
+        "primaryWindow": "90d"
+      },
+      "reasons": [
+        "Drawdown: -3.2% (30d: -3.2%, 60d: -3.2%, 90d: -3.2%)",
+        "Favorable risk-reward: meaningful upside vs controlled downside",
+        "Relative strength: holding up better than broader market"
+      ],
+      "suggestedAmountEur": {
+        "min": 0,
+        "max": 0
+      },
+      "confidence": "low",
+      "qualityGates": {
+        "liquidity": true,
+        "quality": true,
+        "volatility": true,
+        "portfolioFit": true,
+        "riskReward": true,
+        "notSpeculative": true
+      }
+    },
+    {
+      "ticker": "CRWD",
+      "name": "CrowdStrike Holdings",
+      "type": "stock",
+      "tags": [
+        "cybersecurity",
+        "software",
+        "AI"
+      ],
+      "isSeedUniverse": true,
+      "score": {
+        "total": 5.7,
+        "breakdown": {
+          "assetQuality": 9,
+          "drawdownOpportunity": 2,
+          "trendQuality": 5,
+          "relativeStrength": 7.5,
+          "diversificationFit": 3.5,
+          "sectorFit": 8,
+          "riskReward": 8,
+          "portfolioFit": 7.5,
+          "marketRegimeFit": 5
+        }
+      },
+      "state": "WATCH",
+      "currentPrice": 379.32,
+      "currency": "USD",
+      "drawdown": {
+        "drawdown30d": 4.918032786885247,
+        "drawdown60d": 4.99423934278415,
+        "drawdown90d": 4.99423934278415,
+        "maxDrawdown": 4.99423934278415,
+        "primaryWindow": "90d"
+      },
+      "reasons": [
+        "Drawdown: -5.0% (30d: -4.9%, 60d: -5.0%, 90d: -5.0%)",
+        "High-quality asset (quality score 9/10)",
+        "Adds to already-elevated software, AI exposure",
+        "Favorable risk-reward: meaningful upside vs controlled downside"
+      ],
+      "suggestedAmountEur": {
+        "min": 0,
+        "max": 0
+      },
+      "confidence": "low",
+      "qualityGates": {
+        "liquidity": true,
+        "quality": true,
+        "volatility": true,
+        "portfolioFit": true,
+        "riskReward": true,
+        "notSpeculative": true
+      }
+    },
+    {
+      "ticker": "ORCL",
+      "name": "Oracle Corporation",
+      "type": "stock",
+      "tags": [
+        "cloud",
+        "software",
+        "AI"
+      ],
+      "isSeedUniverse": true,
+      "score": {
+        "total": 5.7,
+        "breakdown": {
+          "assetQuality": 8,
+          "drawdownOpportunity": 4,
+          "trendQuality": 5,
+          "relativeStrength": 6,
+          "diversificationFit": 3.5,
+          "sectorFit": 8,
+          "riskReward": 8,
+          "portfolioFit": 5,
+          "marketRegimeFit": 5
+        }
+      },
+      "state": "WATCH",
+      "currentPrice": 114.79,
+      "currency": "USD",
+      "drawdown": {
+        "drawdown30d": 6.7278784431624175,
+        "drawdown60d": 6.81117064458516,
+        "drawdown90d": 6.81117064458516,
+        "maxDrawdown": 6.81117064458516,
+        "primaryWindow": "90d"
+      },
+      "reasons": [
+        "Drawdown: -6.8% (30d: -6.7%, 60d: -6.8%, 90d: -6.8%)",
+        "Adds to already-elevated software, AI exposure",
+        "Favorable risk-reward: meaningful upside vs controlled downside"
+      ],
+      "suggestedAmountEur": {
+        "min": 0,
+        "max": 0
+      },
+      "confidence": "low",
+      "qualityGates": {
+        "liquidity": true,
+        "quality": true,
+        "volatility": true,
+        "portfolioFit": true,
+        "riskReward": true,
+        "notSpeculative": true
+      }
+    }
+  ],
+  "etfOpportunities": [
+    {
+      "ticker": "SOXX",
+      "name": "iShares Semiconductor ETF",
+      "type": "etf",
+      "tags": [
+        "semis",
+        "sector",
+        "growth"
+      ],
+      "isSeedUniverse": true,
+      "score": {
+        "total": 7.2,
+        "breakdown": {
+          "assetQuality": 9,
+          "drawdownOpportunity": 7,
+          "trendQuality": 8,
+          "relativeStrength": 3,
+          "diversificationFit": 6,
+          "sectorFit": 8,
+          "riskReward": 8,
+          "portfolioFit": 7.5,
+          "marketRegimeFit": 5
+        }
+      },
+      "state": "READY_TO_BUY",
+      "currentPrice": 192.32,
+      "currency": "USD",
+      "drawdown": {
+        "drawdown30d": 10.909343586417757,
+        "drawdown60d": 10.909343586417757,
+        "drawdown90d": 10.909343586417757,
+        "maxDrawdown": 10.909343586417757,
+        "primaryWindow": "90d"
+      },
+      "reasons": [
+        "Drawdown: -10.9% (30d: -10.9%, 60d: -10.9%, 90d: -10.9%)",
+        "High-quality asset (quality score 9/10)",
+        "Favorable risk-reward: meaningful upside vs controlled downside"
+      ],
+      "suggestedAmountEur": {
+        "min": 300,
+        "max": 520
+      },
+      "confidence": "medium",
+      "qualityGates": {
+        "liquidity": true,
+        "quality": true,
+        "volatility": true,
+        "portfolioFit": true,
+        "riskReward": true,
+        "notSpeculative": true
+      }
+    },
+    {
+      "ticker": "SMH",
+      "name": "VanEck Semiconductor ETF",
+      "type": "etf",
+      "tags": [
+        "semis",
+        "sector",
+        "growth"
+      ],
+      "isSeedUniverse": true,
+      "score": {
+        "total": 7.2,
+        "breakdown": {
+          "assetQuality": 9,
+          "drawdownOpportunity": 7,
+          "trendQuality": 8,
+          "relativeStrength": 3,
+          "diversificationFit": 6,
+          "sectorFit": 8,
+          "riskReward": 8,
+          "portfolioFit": 7.5,
+          "marketRegimeFit": 5
+        }
+      },
+      "state": "READY_TO_BUY",
+      "currentPrice": 200.03,
+      "currency": "USD",
+      "drawdown": {
+        "drawdown30d": 9.965341855336,
+        "drawdown60d": 10.549145872462214,
+        "drawdown90d": 10.549145872462214,
+        "maxDrawdown": 10.549145872462214,
+        "primaryWindow": "90d"
+      },
+      "reasons": [
+        "Drawdown: -10.5% (30d: -10.0%, 60d: -10.5%, 90d: -10.5%)",
+        "High-quality asset (quality score 9/10)",
+        "Favorable risk-reward: meaningful upside vs controlled downside"
+      ],
+      "suggestedAmountEur": {
+        "min": 300,
+        "max": 520
+      },
+      "confidence": "medium",
+      "qualityGates": {
+        "liquidity": true,
+        "quality": true,
+        "volatility": true,
+        "portfolioFit": true,
+        "riskReward": true,
+        "notSpeculative": true
+      }
+    },
+    {
+      "ticker": "QQQ",
+      "name": "Invesco QQQ Trust (Nasdaq 100)",
+      "type": "etf",
+      "tags": [
+        "broad-index",
+        "growth",
+        "tech",
+        "nasdaq"
+      ],
+      "isSeedUniverse": true,
+      "score": {
+        "total": 7.1,
+        "breakdown": {
+          "assetQuality": 10,
+          "drawdownOpportunity": 4,
+          "trendQuality": 5,
+          "relativeStrength": 7.5,
+          "diversificationFit": 8,
+          "sectorFit": 9,
+          "riskReward": 8,
+          "portfolioFit": 7.5,
+          "marketRegimeFit": 5
+        }
+      },
+      "state": "READY_TO_BUY",
+      "currentPrice": 476.86,
+      "currency": "USD",
+      "drawdown": {
+        "drawdown30d": 5.002290973564159,
+        "drawdown60d": 5.002290973564159,
+        "drawdown90d": 5.002290973564159,
+        "maxDrawdown": 5.002290973564159,
+        "primaryWindow": "90d"
+      },
+      "reasons": [
+        "Drawdown: -5.0% (30d: -5.0%, 60d: -5.0%, 90d: -5.0%)",
+        "High-quality asset (quality score 10/10)",
+        "ETF improves portfolio diversification (current tech: 44%)",
+        "Favorable risk-reward: meaningful upside vs controlled downside"
+      ],
+      "suggestedAmountEur": {
+        "min": 300,
+        "max": 520
+      },
+      "confidence": "medium",
+      "qualityGates": {
+        "liquidity": true,
+        "quality": true,
+        "volatility": true,
+        "portfolioFit": true,
+        "riskReward": true,
+        "notSpeculative": true
+      }
+    },
+    {
+      "ticker": "SPY",
+      "name": "SPDR S&P 500 ETF Trust",
+      "type": "etf",
+      "tags": [
+        "broad-index",
+        "diversification",
+        "sp500"
+      ],
+      "isSeedUniverse": true,
+      "score": {
+        "total": 6.9,
+        "breakdown": {
+          "assetQuality": 10,
+          "drawdownOpportunity": 4,
+          "trendQuality": 5,
+          "relativeStrength": 6,
+          "diversificationFit": 8,
+          "sectorFit": 9,
+          "riskReward": 8,
+          "portfolioFit": 7.5,
+          "marketRegimeFit": 5
+        }
+      },
+      "state": "READY_TO_BUY",
+      "currentPrice": 534.91,
+      "currency": "USD",
+      "drawdown": {
+        "drawdown30d": 5.578012744700009,
+        "drawdown60d": 6.1709554631724925,
+        "drawdown90d": 6.1709554631724925,
+        "maxDrawdown": 6.1709554631724925,
+        "primaryWindow": "90d"
+      },
+      "reasons": [
+        "Drawdown: -6.2% (30d: -5.6%, 60d: -6.2%, 90d: -6.2%)",
+        "High-quality asset (quality score 10/10)",
+        "ETF improves portfolio diversification (current tech: 44%)",
+        "Favorable risk-reward: meaningful upside vs controlled downside"
+      ],
+      "suggestedAmountEur": {
+        "min": 300,
+        "max": 520
+      },
+      "confidence": "medium",
+      "qualityGates": {
+        "liquidity": true,
+        "quality": true,
+        "volatility": true,
+        "portfolioFit": true,
+        "riskReward": true,
+        "notSpeculative": true
+      }
+    },
+    {
+      "ticker": "VT",
+      "name": "Vanguard Total World Stock ETF",
+      "type": "etf",
+      "tags": [
+        "broad-index",
+        "global",
+        "diversification"
+      ],
+      "isSeedUniverse": true,
+      "score": {
+        "total": 6.9,
+        "breakdown": {
+          "assetQuality": 9,
+          "drawdownOpportunity": 4,
+          "trendQuality": 5,
+          "relativeStrength": 7.5,
+          "diversificationFit": 8,
+          "sectorFit": 9,
+          "riskReward": 8,
+          "portfolioFit": 7.5,
+          "marketRegimeFit": 5
+        }
+      },
+      "state": "READY_TO_BUY",
+      "currentPrice": 106.09,
+      "currency": "USD",
+      "drawdown": {
+        "drawdown30d": 5.047883290074286,
+        "drawdown60d": 5.689394612854469,
+        "drawdown90d": 5.689394612854469,
+        "maxDrawdown": 5.689394612854469,
+        "primaryWindow": "90d"
+      },
+      "reasons": [
+        "Drawdown: -5.7% (30d: -5.0%, 60d: -5.7%, 90d: -5.7%)",
+        "High-quality asset (quality score 9/10)",
+        "ETF improves portfolio diversification (current tech: 44%)",
+        "Favorable risk-reward: meaningful upside vs controlled downside"
+      ],
+      "suggestedAmountEur": {
+        "min": 300,
+        "max": 520
+      },
+      "confidence": "medium",
+      "qualityGates": {
+        "liquidity": true,
+        "quality": true,
+        "volatility": true,
+        "portfolioFit": true,
+        "riskReward": true,
+        "notSpeculative": true
+      }
+    },
+    {
+      "ticker": "CSPX",
+      "name": "iShares Core S&P 500 UCITS ETF (EUR)",
+      "type": "etf",
+      "tags": [
+        "broad-index",
+        "sp500",
+        "diversification"
+      ],
+      "isSeedUniverse": true,
+      "score": {
+        "total": 6.9,
+        "breakdown": {
+          "assetQuality": 10,
+          "drawdownOpportunity": 4,
+          "trendQuality": 5,
+          "relativeStrength": 6,
+          "diversificationFit": 8,
+          "sectorFit": 9,
+          "riskReward": 8,
+          "portfolioFit": 7.5,
+          "marketRegimeFit": 5
+        }
+      },
+      "state": "READY_TO_BUY",
+      "currentPrice": 528.79,
+      "currency": "EUR",
+      "drawdown": {
+        "drawdown30d": 4.933211081746769,
+        "drawdown60d": 6.64677635760188,
+        "drawdown90d": 6.64677635760188,
+        "maxDrawdown": 6.64677635760188,
+        "primaryWindow": "90d"
+      },
+      "reasons": [
+        "Drawdown: -6.6% (30d: -4.9%, 60d: -6.6%, 90d: -6.6%)",
+        "High-quality asset (quality score 10/10)",
+        "ETF improves portfolio diversification (current tech: 44%)",
+        "Favorable risk-reward: meaningful upside vs controlled downside"
+      ],
+      "suggestedAmountEur": {
+        "min": 300,
+        "max": 520
+      },
+      "confidence": "medium",
+      "qualityGates": {
+        "liquidity": true,
+        "quality": true,
+        "volatility": true,
+        "portfolioFit": true,
+        "riskReward": true,
+        "notSpeculative": true
+      }
+    },
+    {
+      "ticker": "IWDA",
+      "name": "iShares Core MSCI World UCITS ETF",
+      "type": "etf",
+      "tags": [
+        "broad-index",
+        "global",
+        "growth"
+      ],
+      "isSeedUniverse": true,
+      "score": {
+        "total": 6.8,
+        "breakdown": {
+          "assetQuality": 10,
+          "drawdownOpportunity": 4,
+          "trendQuality": 5,
+          "relativeStrength": 6,
+          "diversificationFit": 8,
+          "sectorFit": 9,
+          "riskReward": 8,
+          "portfolioFit": 5,
+          "marketRegimeFit": 5
+        }
+      },
+      "state": "READY_TO_BUY",
+      "currentPrice": 1313.71,
+      "currency": "EUR",
+      "drawdown": {
+        "drawdown30d": 5.780637017592925,
+        "drawdown60d": 6.526116562190933,
+        "drawdown90d": 6.526116562190933,
+        "maxDrawdown": 6.526116562190933,
+        "primaryWindow": "90d"
+      },
+      "reasons": [
+        "Drawdown: -6.5% (30d: -5.8%, 60d: -6.5%, 90d: -6.5%)",
+        "High-quality asset (quality score 10/10)",
+        "ETF improves portfolio diversification (current tech: 44%)",
+        "Favorable risk-reward: meaningful upside vs controlled downside"
+      ],
+      "suggestedAmountEur": {
+        "min": 300,
+        "max": 520
+      },
+      "confidence": "medium",
+      "qualityGates": {
+        "liquidity": true,
+        "quality": true,
+        "volatility": true,
+        "portfolioFit": true,
+        "riskReward": true,
+        "notSpeculative": true
+      }
+    },
+    {
+      "ticker": "VIG",
+      "name": "Vanguard Dividend Appreciation ETF",
+      "type": "etf",
+      "tags": [
+        "dividend",
+        "value",
+        "defensive"
+      ],
+      "isSeedUniverse": true,
+      "score": {
+        "total": 6.7,
+        "breakdown": {
+          "assetQuality": 9,
+          "drawdownOpportunity": 4,
+          "trendQuality": 5,
+          "relativeStrength": 6,
+          "diversificationFit": 8,
+          "sectorFit": 8,
+          "riskReward": 8,
+          "portfolioFit": 7.5,
+          "marketRegimeFit": 5
+        }
+      },
+      "state": "READY_TO_BUY",
+      "currentPrice": 190.72,
+      "currency": "USD",
+      "drawdown": {
+        "drawdown30d": 6.118631553039629,
+        "drawdown60d": 6.358324741002597,
+        "drawdown90d": 6.358324741002597,
+        "maxDrawdown": 6.358324741002597,
+        "primaryWindow": "90d"
+      },
+      "reasons": [
+        "Drawdown: -6.4% (30d: -6.1%, 60d: -6.4%, 90d: -6.4%)",
+        "High-quality asset (quality score 9/10)",
+        "ETF improves portfolio diversification (current tech: 44%)",
+        "Favorable risk-reward: meaningful upside vs controlled downside"
+      ],
+      "suggestedAmountEur": {
+        "min": 300,
+        "max": 520
+      },
+      "confidence": "medium",
+      "qualityGates": {
+        "liquidity": true,
+        "quality": true,
+        "volatility": true,
+        "portfolioFit": true,
+        "riskReward": true,
+        "notSpeculative": true
+      }
+    },
+    {
+      "ticker": "VTV",
+      "name": "Vanguard Value ETF",
+      "type": "etf",
+      "tags": [
+        "value",
+        "diversification",
+        "broad-index"
+      ],
+      "isSeedUniverse": true,
+      "score": {
+        "total": 6.5,
+        "breakdown": {
+          "assetQuality": 9,
+          "drawdownOpportunity": 2,
+          "trendQuality": 5,
+          "relativeStrength": 9,
+          "diversificationFit": 8,
+          "sectorFit": 9,
+          "riskReward": 8,
+          "portfolioFit": 7.5,
+          "marketRegimeFit": 5
+        }
+      },
+      "state": "READY_TO_BUY",
+      "currentPrice": 150.72,
+      "currency": "USD",
+      "drawdown": {
+        "drawdown30d": 3.347441323585994,
+        "drawdown60d": 3.760934806206509,
+        "drawdown90d": 3.760934806206509,
+        "maxDrawdown": 3.760934806206509,
+        "primaryWindow": "90d"
+      },
+      "reasons": [
+        "Drawdown: -3.8% (30d: -3.3%, 60d: -3.8%, 90d: -3.8%)",
+        "High-quality asset (quality score 9/10)",
+        "ETF improves portfolio diversification (current tech: 44%)",
+        "Favorable risk-reward: meaningful upside vs controlled downside",
+        "Relative strength: holding up better than broader market"
+      ],
+      "suggestedAmountEur": {
+        "min": 300,
+        "max": 520
+      },
+      "confidence": "medium",
+      "qualityGates": {
+        "liquidity": true,
+        "quality": true,
+        "volatility": true,
+        "portfolioFit": true,
+        "riskReward": true,
+        "notSpeculative": true
+      }
+    },
+    {
+      "ticker": "SCHD",
+      "name": "Schwab US Dividend Equity ETF",
+      "type": "etf",
+      "tags": [
+        "value",
+        "dividend",
+        "defensive"
+      ],
+      "isSeedUniverse": true,
+      "score": {
+        "total": 6.5,
+        "breakdown": {
+          "assetQuality": 9,
+          "drawdownOpportunity": 2,
+          "trendQuality": 5,
+          "relativeStrength": 9,
+          "diversificationFit": 8,
+          "sectorFit": 8,
+          "riskReward": 8,
+          "portfolioFit": 7.5,
+          "marketRegimeFit": 5
+        }
+      },
+      "state": "READY_TO_BUY",
+      "currentPrice": 26.23,
+      "currency": "USD",
+      "drawdown": {
+        "drawdown30d": 2.454444031238379,
+        "drawdown60d": 3.0314232902033282,
+        "drawdown90d": 3.0314232902033282,
+        "maxDrawdown": 3.0314232902033282,
+        "primaryWindow": "90d"
+      },
+      "reasons": [
+        "Drawdown: -3.0% (30d: -2.5%, 60d: -3.0%, 90d: -3.0%)",
+        "High-quality asset (quality score 9/10)",
+        "ETF improves portfolio diversification (current tech: 44%)",
+        "Favorable risk-reward: meaningful upside vs controlled downside",
+        "Relative strength: holding up better than broader market"
+      ],
+      "suggestedAmountEur": {
+        "min": 300,
+        "max": 520
+      },
+      "confidence": "medium",
+      "qualityGates": {
+        "liquidity": true,
+        "quality": true,
+        "volatility": true,
+        "portfolioFit": true,
+        "riskReward": true,
+        "notSpeculative": true
+      }
+    }
+  ],
+  "discoveredOpportunities": [
+    {
+      "ticker": "AMAT",
+      "name": "Applied Materials",
+      "type": "stock",
+      "tags": [
+        "semis",
+        "infrastructure"
+      ],
+      "isSeedUniverse": false,
+      "score": {
+        "total": 7,
+        "breakdown": {
+          "assetQuality": 9,
+          "drawdownOpportunity": 7,
+          "trendQuality": 8,
+          "relativeStrength": 3,
+          "diversificationFit": 5,
+          "sectorFit": 7,
+          "riskReward": 8,
+          "portfolioFit": 7.5,
+          "marketRegimeFit": 5
+        }
+      },
+      "state": "READY_TO_BUY",
+      "currentPrice": 160.67,
+      "currency": "USD",
+      "drawdown": {
+        "drawdown30d": 10.460320998662512,
+        "drawdown60d": 10.460320998662512,
+        "drawdown90d": 10.460320998662512,
+        "maxDrawdown": 10.460320998662512,
+        "primaryWindow": "90d"
+      },
+      "reasons": [
+        "Drawdown: -10.5% (30d: -10.5%, 60d: -10.5%, 90d: -10.5%)",
+        "High-quality asset (quality score 9/10)",
+        "Favorable risk-reward: meaningful upside vs controlled downside",
+        "Discovered via extended quality universe — passed all quality gates"
+      ],
+      "suggestedAmountEur": {
+        "min": 200,
+        "max": 320
+      },
+      "confidence": "low",
+      "qualityGates": {
+        "liquidity": true,
+        "quality": true,
+        "volatility": true,
+        "portfolioFit": true,
+        "riskReward": true,
+        "notSpeculative": true
+      }
+    },
+    {
+      "ticker": "MRVL",
+      "name": "Marvell Technology",
+      "type": "stock",
+      "tags": [
+        "semis",
+        "AI",
+        "networking"
+      ],
+      "isSeedUniverse": false,
+      "score": {
+        "total": 6.5,
+        "breakdown": {
+          "assetQuality": 8,
+          "drawdownOpportunity": 7,
+          "trendQuality": 8,
+          "relativeStrength": 3,
+          "diversificationFit": 3.5,
+          "sectorFit": 8,
+          "riskReward": 8,
+          "portfolioFit": 5,
+          "marketRegimeFit": 5
+        }
+      },
+      "state": "WATCH",
+      "currentPrice": 54.62,
+      "currency": "USD",
+      "drawdown": {
+        "drawdown30d": 10.385561936013135,
+        "drawdown60d": 10.473692837239797,
+        "drawdown90d": 10.473692837239797,
+        "maxDrawdown": 10.473692837239797,
+        "primaryWindow": "90d"
+      },
+      "reasons": [
+        "Drawdown: -10.5% (30d: -10.4%, 60d: -10.5%, 90d: -10.5%)",
+        "Adds to already-elevated AI exposure",
+        "Favorable risk-reward: meaningful upside vs controlled downside",
+        "Discovered via extended quality universe — passed all quality gates"
+      ],
+      "suggestedAmountEur": {
+        "min": 0,
+        "max": 0
+      },
+      "confidence": "low",
+      "qualityGates": {
+        "liquidity": true,
+        "quality": true,
+        "volatility": true,
+        "portfolioFit": true,
+        "riskReward": true,
+        "notSpeculative": true
+      }
+    }
+  ],
+  "allocationRecommendations": [
+    {
+      "forAmount": 500,
+      "deployableAmount": 4000,
+      "options": [
+        {
+          "rank": 1,
+          "asset": "IWDA",
+          "assetName": "iShares MSCI World UCITS ETF",
+          "type": "etf",
+          "state": "BUY_SMALL",
+          "score": 15,
+          "allocationState": "BEST_USE_OF_CASH",
+          "isExistingHolding": true,
+          "amountEur": 50,
+          "percentOfDeployable": 10,
+          "reason": "Add to existing position — state: BUY_SMALL, conviction-weighted rank #1"
+        },
+        {
+          "rank": 2,
+          "asset": "NVDA",
+          "assetName": "NVIDIA Corporation",
+          "type": "stock",
+          "state": "BUY_SMALL",
+          "score": 15,
+          "allocationState": "SECOND_BEST",
+          "isExistingHolding": true,
+          "amountEur": 50,
+          "percentOfDeployable": 10,
+          "reason": "Add to existing position — state: BUY_SMALL, conviction-weighted rank #2"
+        },
+        {
+          "rank": 3,
+          "asset": "MRVL",
+          "assetName": "Marvell Technology Inc.",
+          "type": "stock",
+          "state": "BUY_PARTIAL",
+          "score": 14.5,
+          "allocationState": "HOLD_CASH",
+          "isExistingHolding": true,
+          "amountEur": 50,
+          "percentOfDeployable": 10,
+          "reason": "Add to existing position — state: BUY_PARTIAL, conviction-weighted rank #3"
+        },
+        {
+          "rank": 4,
+          "asset": "ASML",
+          "assetName": "ASML Holding N.V.",
+          "type": "stock",
+          "state": "BUY_SMALL",
+          "score": 14,
+          "allocationState": "HOLD_CASH",
+          "isExistingHolding": true,
+          "amountEur": 50,
+          "percentOfDeployable": 10,
+          "reason": "Add to existing position — state: BUY_SMALL, conviction-weighted rank #4"
+        },
+        {
+          "rank": 5,
+          "asset": "MSFT",
+          "assetName": "Microsoft Corporation",
+          "type": "stock",
+          "state": "BUY_SMALL",
+          "score": 14,
+          "allocationState": "HOLD_CASH",
+          "isExistingHolding": true,
+          "amountEur": 50,
+          "percentOfDeployable": 10,
+          "reason": "Add to existing position — state: BUY_SMALL, conviction-weighted rank #5"
+        }
+      ],
+      "holdCash": false,
+      "summary": "Best use of €500: IWDA (ETF) — BUY_SMALL — suggested €50. Also consider: NVDA (ETF in top 2 for concentration benefit)"
+    },
+    {
+      "forAmount": 1000,
+      "deployableAmount": 4000,
+      "options": [
+        {
+          "rank": 1,
+          "asset": "IWDA",
+          "assetName": "iShares MSCI World UCITS ETF",
+          "type": "etf",
+          "state": "BUY_SMALL",
+          "score": 15,
+          "allocationState": "BEST_USE_OF_CASH",
+          "isExistingHolding": true,
+          "amountEur": 62,
+          "percentOfDeployable": 6,
+          "reason": "Add to existing position — state: BUY_SMALL, conviction-weighted rank #1"
+        },
+        {
+          "rank": 2,
+          "asset": "NVDA",
+          "assetName": "NVIDIA Corporation",
+          "type": "stock",
+          "state": "BUY_SMALL",
+          "score": 15,
+          "allocationState": "SECOND_BEST",
+          "isExistingHolding": true,
+          "amountEur": 50,
+          "percentOfDeployable": 5,
+          "reason": "Add to existing position — state: BUY_SMALL, conviction-weighted rank #2"
+        },
+        {
+          "rank": 3,
+          "asset": "MRVL",
+          "assetName": "Marvell Technology Inc.",
+          "type": "stock",
+          "state": "BUY_PARTIAL",
+          "score": 14.5,
+          "allocationState": "HOLD_CASH",
+          "isExistingHolding": true,
+          "amountEur": 57,
+          "percentOfDeployable": 6,
+          "reason": "Add to existing position — state: BUY_PARTIAL, conviction-weighted rank #3"
+        },
+        {
+          "rank": 4,
+          "asset": "ASML",
+          "assetName": "ASML Holding N.V.",
+          "type": "stock",
+          "state": "BUY_SMALL",
+          "score": 14,
+          "allocationState": "HOLD_CASH",
+          "isExistingHolding": true,
+          "amountEur": 50,
+          "percentOfDeployable": 5,
+          "reason": "Add to existing position — state: BUY_SMALL, conviction-weighted rank #4"
+        },
+        {
+          "rank": 5,
+          "asset": "MSFT",
+          "assetName": "Microsoft Corporation",
+          "type": "stock",
+          "state": "BUY_SMALL",
+          "score": 14,
+          "allocationState": "HOLD_CASH",
+          "isExistingHolding": true,
+          "amountEur": 50,
+          "percentOfDeployable": 5,
+          "reason": "Add to existing position — state: BUY_SMALL, conviction-weighted rank #5"
+        }
+      ],
+      "holdCash": false,
+      "summary": "Best use of €1000: IWDA (ETF) — BUY_SMALL — suggested €62. Also consider: NVDA (ETF in top 2 for concentration benefit)"
+    },
+    {
+      "forAmount": 2000,
+      "deployableAmount": 4000,
+      "options": [
+        {
+          "rank": 1,
+          "asset": "IWDA",
+          "assetName": "iShares MSCI World UCITS ETF",
+          "type": "etf",
+          "state": "BUY_SMALL",
+          "score": 15,
+          "allocationState": "BEST_USE_OF_CASH",
+          "isExistingHolding": true,
+          "amountEur": 124,
+          "percentOfDeployable": 6,
+          "reason": "Add to existing position — state: BUY_SMALL, conviction-weighted rank #1"
+        },
+        {
+          "rank": 2,
+          "asset": "NVDA",
+          "assetName": "NVIDIA Corporation",
+          "type": "stock",
+          "state": "BUY_SMALL",
+          "score": 15,
+          "allocationState": "SECOND_BEST",
+          "isExistingHolding": true,
+          "amountEur": 68,
+          "percentOfDeployable": 3,
+          "reason": "Add to existing position — state: BUY_SMALL, conviction-weighted rank #2"
+        },
+        {
+          "rank": 3,
+          "asset": "MRVL",
+          "assetName": "Marvell Technology Inc.",
+          "type": "stock",
+          "state": "BUY_PARTIAL",
+          "score": 14.5,
+          "allocationState": "HOLD_CASH",
+          "isExistingHolding": true,
+          "amountEur": 113,
+          "percentOfDeployable": 6,
+          "reason": "Add to existing position — state: BUY_PARTIAL, conviction-weighted rank #3"
+        },
+        {
+          "rank": 4,
+          "asset": "ASML",
+          "assetName": "ASML Holding N.V.",
+          "type": "stock",
+          "state": "BUY_SMALL",
+          "score": 14,
+          "allocationState": "HOLD_CASH",
+          "isExistingHolding": true,
+          "amountEur": 60,
+          "percentOfDeployable": 3,
+          "reason": "Add to existing position — state: BUY_SMALL, conviction-weighted rank #4"
+        },
+        {
+          "rank": 5,
+          "asset": "MSFT",
+          "assetName": "Microsoft Corporation",
+          "type": "stock",
+          "state": "BUY_SMALL",
+          "score": 14,
+          "allocationState": "HOLD_CASH",
+          "isExistingHolding": true,
+          "amountEur": 60,
+          "percentOfDeployable": 3,
+          "reason": "Add to existing position — state: BUY_SMALL, conviction-weighted rank #5"
+        }
+      ],
+      "holdCash": false,
+      "summary": "Best use of €2000: IWDA (ETF) — BUY_SMALL — suggested €124. Also consider: NVDA (ETF in top 2 for concentration benefit)"
+    }
+  ],
+  "alertsGenerated": [
+    {
+      "type": "portfolio_state_change",
+      "asset": "IWDA",
+      "assetName": "iShares MSCI World UCITS ETF",
+      "assetType": "etf",
+      "newState": "BUY_SMALL",
+      "message": "📊 *IWDA* — Portfolio Alert\nMode: CORE_PORTFOLIO | Type: ETF\nState: `BUY_SMALL`\nPrice: €1313.71 | Drawdown: -6.5% from 90d high\n\n*Why:*\n• 6.5% drawdown from 90d high (5.8% / 6.5% / 6.5% over 30/60/90d)\n• Core long-term holding with high conviction\n• Active DCA of €500/month already running\n\n*Suggested:* Consider adding €165–€330\n*Confidence:* MEDIUM",
+      "id": "moa4k98fcx60lc",
+      "timestamp": "2026-04-22T14:05:11.487Z",
+      "telegramSent": false
+    },
+    {
+      "type": "portfolio_state_change",
+      "asset": "NVDA",
+      "assetName": "NVIDIA Corporation",
+      "assetType": "stock",
+      "newState": "BUY_SMALL",
+      "message": "📊 *NVDA* — Portfolio Alert\nMode: CORE_PORTFOLIO | Type: STOCK\nState: `BUY_SMALL`\nPrice: $108.63 | Drawdown: -8.0% from 90d high\n\n*Why:*\n• 8.0% drawdown from 90d high (7.8% / 8.0% / 8.0% over 30/60/90d)\n• Core long-term holding with high conviction\n• Active DCA of €128/month already running\n\n*Suggested:* Consider adding €90–€180\n*Confidence:* MEDIUM",
+      "id": "moa4k98f8lfewl",
+      "timestamp": "2026-04-22T14:05:11.487Z",
+      "telegramSent": false
+    },
+    {
+      "type": "portfolio_state_change",
+      "asset": "ASML",
+      "assetName": "ASML Holding N.V.",
+      "assetType": "stock",
+      "newState": "BUY_SMALL",
+      "message": "📊 *ASML* — Portfolio Alert\nMode: CORE_PORTFOLIO | Type: STOCK\nState: `BUY_SMALL`\nPrice: €657.56 | Drawdown: -6.3% from 90d high\n\n*Why:*\n• 6.3% drawdown from 90d high (6.3% / 6.3% / 6.3% over 30/60/90d)\n• Core long-term holding with high conviction\n• Active DCA of €128/month already running\n\n*Suggested:* Consider adding €90–€150\n*Confidence:* MEDIUM",
+      "id": "moa4k98f2fh25m",
+      "timestamp": "2026-04-22T14:05:11.487Z",
+      "telegramSent": false
+    },
+    {
+      "type": "portfolio_state_change",
+      "asset": "MSFT",
+      "assetName": "Microsoft Corporation",
+      "assetType": "stock",
+      "newState": "BUY_SMALL",
+      "message": "📊 *MSFT* — Portfolio Alert\nMode: CORE_PORTFOLIO | Type: STOCK\nState: `BUY_SMALL`\nPrice: $390.20 | Drawdown: -5.6% from 90d high\n\n*Why:*\n• 5.6% drawdown from 90d high (4.7% / 5.6% / 5.6% over 30/60/90d)\n\n*Suggested:* Consider adding €90–€150\n*Confidence:* MEDIUM",
+      "id": "moa4k98fxkx82h",
+      "timestamp": "2026-04-22T14:05:11.487Z",
+      "telegramSent": false
+    },
+    {
+      "type": "portfolio_state_change",
+      "asset": "NOW",
+      "assetName": "ServiceNow Inc.",
+      "assetType": "stock",
+      "newState": "BUY_SMALL",
+      "message": "📊 *NOW* — Portfolio Alert\nMode: CORE_PORTFOLIO | Type: STOCK\nState: `BUY_SMALL`\nPrice: $892.47 | Drawdown: -6.4% from 90d high\n\n*Why:*\n• 6.4% drawdown from 90d high (6.4% / 6.4% / 6.4% over 30/60/90d)\n\n*Suggested:* Consider adding €90–€150\n*Confidence:* MEDIUM",
+      "id": "moa4k98ghu4cb1",
+      "timestamp": "2026-04-22T14:05:11.488Z",
+      "telegramSent": false
+    },
+    {
+      "type": "portfolio_state_change",
+      "asset": "MRVL",
+      "assetName": "Marvell Technology Inc.",
+      "assetType": "stock",
+      "newState": "BUY_PARTIAL",
+      "message": "📊 *MRVL* — Portfolio Alert\nMode: CORE_PORTFOLIO | Type: STOCK\nState: `BUY_PARTIAL`\nPrice: $54.62 | Drawdown: -10.5% from 90d high\n\n*Why:*\n• 10.5% drawdown from 90d high (10.4% / 10.5% / 10.5% over 30/60/90d)\n\n*Suggested:* Consider adding €150–€300\n*Confidence:* MEDIUM",
+      "id": "moa4k98g126vxz",
+      "timestamp": "2026-04-22T14:05:11.488Z",
+      "telegramSent": false
+    },
+    {
+      "type": "portfolio_state_change",
+      "asset": "SMCI",
+      "assetName": "Super Micro Computer Inc.",
+      "assetType": "stock",
+      "newState": "BUY_SMALL",
+      "message": "📊 *SMCI* — Portfolio Alert\nMode: CORE_PORTFOLIO | Type: STOCK\nState: `BUY_SMALL`\nPrice: $31.92 | Drawdown: -15.0% from 90d high\n\n*Why:*\n• 15.0% drawdown from 90d high (14.7% / 15.0% / 15.0% over 30/60/90d)\n• Manual thesis risk flag: medium\n\n*Suggested:* Consider adding €90–€150\n*Confidence:* LOW",
+      "id": "moa4k98gfmpmy7",
+      "timestamp": "2026-04-22T14:05:11.488Z",
+      "telegramSent": false
+    },
+    {
+      "type": "new_opportunity",
+      "asset": "AMD",
+      "assetName": "Advanced Micro Devices",
+      "assetType": "stock",
+      "newState": "READY_TO_BUY",
+      "message": "📈 *AMD* — Advanced Micro Devices\nMode: OPPORTUNITY_SCANNER | Type: STOCK\nState: `READY_TO_BUY`\nScore: 6.8/10 | Price: $95.54 | Drawdown: -11.3%\n\n*Why:*\n• Drawdown: -11.3% (30d: -11.1%, 60d: -11.3%, 90d: -11.3%)\n• High-quality asset (quality score 9/10)\n• Adds to already-elevated AI, growth exposure\n\n*Suggested:* Consider €160–€256\n*Confidence:* MEDIUM",
+      "score": 6.8,
+      "id": "moa4k98g958oak",
+      "timestamp": "2026-04-22T14:05:11.488Z",
+      "telegramSent": false
+    },
+    {
+      "type": "new_opportunity",
+      "asset": "TSM",
+      "assetName": "Taiwan Semiconductor",
+      "assetType": "stock",
+      "newState": "READY_TO_BUY",
+      "message": "📈 *TSM* — Taiwan Semiconductor\nMode: OPPORTUNITY_SCANNER | Type: STOCK\nState: `READY_TO_BUY`\nScore: 6.5/10 | Price: $155.43 | Drawdown: -6.9%\n\n*Why:*\n• Drawdown: -6.9% (30d: -6.9%, 60d: -6.9%, 90d: -6.9%)\n• High-quality asset (quality score 10/10)\n• Favorable risk-reward: meaningful upside vs controlled downside\n\n*Suggested:* Consider €200–€320\n*Confidence:* MEDIUM",
+      "score": 6.5,
+      "id": "moa4k98g741oaj",
+      "timestamp": "2026-04-22T14:05:11.488Z",
+      "telegramSent": false
+    },
+    {
+      "type": "etf_opportunity",
+      "asset": "SOXX",
+      "assetName": "iShares Semiconductor ETF",
+      "assetType": "etf",
+      "newState": "READY_TO_BUY",
+      "message": "📦 *SOXX* — iShares Semiconductor ETF\nMode: OPPORTUNITY_SCANNER | Type: ETF\nState: `READY_TO_BUY`\nScore: 7.2/10 | Price: $192.32 | Drawdown: -10.9%\n\n*Why:*\n• Drawdown: -10.9% (30d: -10.9%, 60d: -10.9%, 90d: -10.9%)\n• High-quality asset (quality score 9/10)\n• Favorable risk-reward: meaningful upside vs controlled downside\n\n*Suggested:* Consider €300–€520\n*Confidence:* MEDIUM",
+      "score": 7.2,
+      "id": "moa4k98g6w7roc",
+      "timestamp": "2026-04-22T14:05:11.488Z",
+      "telegramSent": false
+    },
+    {
+      "type": "etf_opportunity",
+      "asset": "SMH",
+      "assetName": "VanEck Semiconductor ETF",
+      "assetType": "etf",
+      "newState": "READY_TO_BUY",
+      "message": "📦 *SMH* — VanEck Semiconductor ETF\nMode: OPPORTUNITY_SCANNER | Type: ETF\nState: `READY_TO_BUY`\nScore: 7.2/10 | Price: $200.03 | Drawdown: -10.5%\n\n*Why:*\n• Drawdown: -10.5% (30d: -10.0%, 60d: -10.5%, 90d: -10.5%)\n• High-quality asset (quality score 9/10)\n• Favorable risk-reward: meaningful upside vs controlled downside\n\n*Suggested:* Consider €300–€520\n*Confidence:* MEDIUM",
+      "score": 7.2,
+      "id": "moa4k98gry2ir6",
+      "timestamp": "2026-04-22T14:05:11.488Z",
+      "telegramSent": false
+    },
+    {
+      "type": "etf_opportunity",
+      "asset": "QQQ",
+      "assetName": "Invesco QQQ Trust (Nasdaq 100)",
+      "assetType": "etf",
+      "newState": "READY_TO_BUY",
+      "message": "📦 *QQQ* — Invesco QQQ Trust (Nasdaq 100)\nMode: OPPORTUNITY_SCANNER | Type: ETF\nState: `READY_TO_BUY`\nScore: 7.1/10 | Price: $476.86 | Drawdown: -5.0%\n\n*Why:*\n• Drawdown: -5.0% (30d: -5.0%, 60d: -5.0%, 90d: -5.0%)\n• High-quality asset (quality score 10/10)\n• ETF improves portfolio diversification (current tech: 44%)\n\n*Suggested:* Consider €300–€520\n*Confidence:* MEDIUM",
+      "score": 7.1,
+      "id": "moa4k98gzwwiha",
+      "timestamp": "2026-04-22T14:05:11.488Z",
+      "telegramSent": false
+    },
+    {
+      "type": "etf_opportunity",
+      "asset": "SPY",
+      "assetName": "SPDR S&P 500 ETF Trust",
+      "assetType": "etf",
+      "newState": "READY_TO_BUY",
+      "message": "📦 *SPY* — SPDR S&P 500 ETF Trust\nMode: OPPORTUNITY_SCANNER | Type: ETF\nState: `READY_TO_BUY`\nScore: 6.9/10 | Price: $534.91 | Drawdown: -6.2%\n\n*Why:*\n• Drawdown: -6.2% (30d: -5.6%, 60d: -6.2%, 90d: -6.2%)\n• High-quality asset (quality score 10/10)\n• ETF improves portfolio diversification (current tech: 44%)\n\n*Suggested:* Consider €300–€520\n*Confidence:* MEDIUM",
+      "score": 6.9,
+      "id": "moa4k98gvp06t4",
+      "timestamp": "2026-04-22T14:05:11.488Z",
+      "telegramSent": false
+    },
+    {
+      "type": "etf_opportunity",
+      "asset": "VT",
+      "assetName": "Vanguard Total World Stock ETF",
+      "assetType": "etf",
+      "newState": "READY_TO_BUY",
+      "message": "📦 *VT* — Vanguard Total World Stock ETF\nMode: OPPORTUNITY_SCANNER | Type: ETF\nState: `READY_TO_BUY`\nScore: 6.9/10 | Price: $106.09 | Drawdown: -5.7%\n\n*Why:*\n• Drawdown: -5.7% (30d: -5.0%, 60d: -5.7%, 90d: -5.7%)\n• High-quality asset (quality score 9/10)\n• ETF improves portfolio diversification (current tech: 44%)\n\n*Suggested:* Consider €300–€520\n*Confidence:* MEDIUM",
+      "score": 6.9,
+      "id": "moa4k98gjf4s9a",
+      "timestamp": "2026-04-22T14:05:11.488Z",
+      "telegramSent": false
+    },
+    {
+      "type": "etf_opportunity",
+      "asset": "CSPX",
+      "assetName": "iShares Core S&P 500 UCITS ETF (EUR)",
+      "assetType": "etf",
+      "newState": "READY_TO_BUY",
+      "message": "📦 *CSPX* — iShares Core S&P 500 UCITS ETF (EUR)\nMode: OPPORTUNITY_SCANNER | Type: ETF\nState: `READY_TO_BUY`\nScore: 6.9/10 | Price: €528.79 | Drawdown: -6.6%\n\n*Why:*\n• Drawdown: -6.6% (30d: -4.9%, 60d: -6.6%, 90d: -6.6%)\n• High-quality asset (quality score 10/10)\n• ETF improves portfolio diversification (current tech: 44%)\n\n*Suggested:* Consider €300–€520\n*Confidence:* MEDIUM",
+      "score": 6.9,
+      "id": "moa4k98ghhmlrg",
+      "timestamp": "2026-04-22T14:05:11.488Z",
+      "telegramSent": false
+    },
+    {
+      "type": "etf_opportunity",
+      "asset": "IWDA",
+      "assetName": "iShares Core MSCI World UCITS ETF",
+      "assetType": "etf",
+      "newState": "READY_TO_BUY",
+      "message": "📦 *IWDA* — iShares Core MSCI World UCITS ETF\nMode: OPPORTUNITY_SCANNER | Type: ETF\nState: `READY_TO_BUY`\nScore: 6.8/10 | Price: €1313.71 | Drawdown: -6.5%\n\n*Why:*\n• Drawdown: -6.5% (30d: -5.8%, 60d: -6.5%, 90d: -6.5%)\n• High-quality asset (quality score 10/10)\n• ETF improves portfolio diversification (current tech: 44%)\n\n*Suggested:* Consider €300–€520\n*Confidence:* MEDIUM",
+      "score": 6.8,
+      "id": "moa4k98glp3ynl",
+      "timestamp": "2026-04-22T14:05:11.488Z",
+      "telegramSent": false
+    },
+    {
+      "type": "etf_opportunity",
+      "asset": "VIG",
+      "assetName": "Vanguard Dividend Appreciation ETF",
+      "assetType": "etf",
+      "newState": "READY_TO_BUY",
+      "message": "📦 *VIG* — Vanguard Dividend Appreciation ETF\nMode: OPPORTUNITY_SCANNER | Type: ETF\nState: `READY_TO_BUY`\nScore: 6.7/10 | Price: $190.72 | Drawdown: -6.4%\n\n*Why:*\n• Drawdown: -6.4% (30d: -6.1%, 60d: -6.4%, 90d: -6.4%)\n• High-quality asset (quality score 9/10)\n• ETF improves portfolio diversification (current tech: 44%)\n\n*Suggested:* Consider €300–€520\n*Confidence:* MEDIUM",
+      "score": 6.7,
+      "id": "moa4k98g4shy3k",
+      "timestamp": "2026-04-22T14:05:11.488Z",
+      "telegramSent": false
+    },
+    {
+      "type": "etf_opportunity",
+      "asset": "VTV",
+      "assetName": "Vanguard Value ETF",
+      "assetType": "etf",
+      "newState": "READY_TO_BUY",
+      "message": "📦 *VTV* — Vanguard Value ETF\nMode: OPPORTUNITY_SCANNER | Type: ETF\nState: `READY_TO_BUY`\nScore: 6.5/10 | Price: $150.72 | Drawdown: -3.8%\n\n*Why:*\n• Drawdown: -3.8% (30d: -3.3%, 60d: -3.8%, 90d: -3.8%)\n• High-quality asset (quality score 9/10)\n• ETF improves portfolio diversification (current tech: 44%)\n\n*Suggested:* Consider €300–€520\n*Confidence:* MEDIUM",
+      "score": 6.5,
+      "id": "moa4k98gx0b0g1",
+      "timestamp": "2026-04-22T14:05:11.488Z",
+      "telegramSent": false
+    },
+    {
+      "type": "etf_opportunity",
+      "asset": "SCHD",
+      "assetName": "Schwab US Dividend Equity ETF",
+      "assetType": "etf",
+      "newState": "READY_TO_BUY",
+      "message": "📦 *SCHD* — Schwab US Dividend Equity ETF\nMode: OPPORTUNITY_SCANNER | Type: ETF\nState: `READY_TO_BUY`\nScore: 6.5/10 | Price: $26.23 | Drawdown: -3.0%\n\n*Why:*\n• Drawdown: -3.0% (30d: -2.5%, 60d: -3.0%, 90d: -3.0%)\n• High-quality asset (quality score 9/10)\n• ETF improves portfolio diversification (current tech: 44%)\n\n*Suggested:* Consider €300–€520\n*Confidence:* MEDIUM",
+      "score": 6.5,
+      "id": "moa4k98gw2p1op",
+      "timestamp": "2026-04-22T14:05:11.488Z",
+      "telegramSent": false
+    },
+    {
+      "type": "discovery",
+      "asset": "AMAT",
+      "assetName": "Applied Materials",
+      "assetType": "stock",
+      "newState": "READY_TO_BUY",
+      "message": "🔍 *AMAT* — New Discovery\nMode: OPPORTUNITY_SCANNER | Type: STOCK | *Extended Universe*\nState: `READY_TO_BUY`\nScore: 7/10 | Price: $160.67 | Drawdown: -10.5%\n\n*Why:*\n• Drawdown: -10.5% (30d: -10.5%, 60d: -10.5%, 90d: -10.5%)\n• High-quality asset (quality score 9/10)\n• Favorable risk-reward: meaningful upside vs controlled downside\n\n*Suggested:* Consider €200–€320\n*Confidence:* LOW\n\n*Quality gates passed:* liquidity ✓ quality ✓ volatility ✓ portfolio-fit ✓",
+      "score": 7,
+      "id": "moa4k98gh5xo57",
+      "timestamp": "2026-04-22T14:05:11.488Z",
+      "telegramSent": false
+    }
+  ],
+  "errors": []
+}

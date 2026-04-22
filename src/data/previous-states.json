@@ -1,0 +1,239 @@
+{
+  "updatedAt": "2026-04-22T14:05:11.489Z",
+  "portfolio": {
+    "msci-world": {
+      "assetId": "msci-world",
+      "state": "BUY_SMALL",
+      "lastAlertAt": "2026-04-22T14:05:11.488Z"
+    },
+    "nvda": {
+      "assetId": "nvda",
+      "state": "BUY_SMALL",
+      "lastAlertAt": "2026-04-22T14:05:11.488Z"
+    },
+    "asml": {
+      "assetId": "asml",
+      "state": "BUY_SMALL",
+      "lastAlertAt": "2026-04-22T14:05:11.488Z"
+    },
+    "msci-world-value": {
+      "assetId": "msci-world-value",
+      "state": "DO_NOTHING",
+      "lastAlertAt": ""
+    },
+    "msft": {
+      "assetId": "msft",
+      "state": "BUY_SMALL",
+      "lastAlertAt": "2026-04-22T14:05:11.488Z"
+    },
+    "amzn": {
+      "assetId": "amzn",
+      "state": "DO_NOTHING",
+      "lastAlertAt": ""
+    },
+    "googl": {
+      "assetId": "googl",
+      "state": "DO_NOTHING",
+      "lastAlertAt": ""
+    },
+    "orcl": {
+      "assetId": "orcl",
+      "state": "WAIT",
+      "lastAlertAt": ""
+    },
+    "adbe": {
+      "assetId": "adbe",
+      "state": "WAIT",
+      "lastAlertAt": ""
+    },
+    "crm": {
+      "assetId": "crm",
+      "state": "WAIT",
+      "lastAlertAt": ""
+    },
+    "now": {
+      "assetId": "now",
+      "state": "BUY_SMALL",
+      "lastAlertAt": "2026-04-22T14:05:11.488Z"
+    },
+    "mrvl": {
+      "assetId": "mrvl",
+      "state": "BUY_PARTIAL",
+      "lastAlertAt": "2026-04-22T14:05:11.488Z"
+    },
+    "ftnt": {
+      "assetId": "ftnt",
+      "state": "DO_NOTHING",
+      "lastAlertAt": ""
+    },
+    "smci": {
+      "assetId": "smci",
+      "state": "BUY_SMALL",
+      "lastAlertAt": "2026-04-22T14:05:11.488Z"
+    }
+  },
+  "opportunities": {
+    "amd": {
+      "assetId": "amd",
+      "state": "READY_TO_BUY",
+      "score": 6.8,
+      "lastAlertAt": "2026-04-22T14:05:11.488Z"
+    },
+    "tsm": {
+      "assetId": "tsm",
+      "state": "READY_TO_BUY",
+      "score": 6.5,
+      "lastAlertAt": "2026-04-22T14:05:11.488Z"
+    },
+    "nvda": {
+      "assetId": "nvda",
+      "state": "WATCH",
+      "score": 6.4,
+      "lastAlertAt": "2026-04-22T14:05:11.488Z"
+    },
+    "asml": {
+      "assetId": "asml",
+      "state": "WATCH",
+      "score": 6.3,
+      "lastAlertAt": "2026-04-22T14:05:11.488Z"
+    },
+    "msft": {
+      "assetId": "msft",
+      "state": "WATCH",
+      "score": 6.3,
+      "lastAlertAt": "2026-04-22T14:05:11.488Z"
+    },
+    "panw": {
+      "assetId": "panw",
+      "state": "WATCH",
+      "score": 6.2,
+      "lastAlertAt": ""
+    },
+    "avgo": {
+      "assetId": "avgo",
+      "state": "WATCH",
+      "score": 5.9,
+      "lastAlertAt": ""
+    },
+    "googl": {
+      "assetId": "googl",
+      "state": "WATCH",
+      "score": 5.9,
+      "lastAlertAt": ""
+    },
+    "meta": {
+      "assetId": "meta",
+      "state": "WATCH",
+      "score": 5.9,
+      "lastAlertAt": ""
+    },
+    "now": {
+      "assetId": "now",
+      "state": "WATCH",
+      "score": 5.9,
+      "lastAlertAt": "2026-04-22T14:05:11.488Z"
+    },
+    "adbe": {
+      "assetId": "adbe",
+      "state": "WATCH",
+      "score": 5.9,
+      "lastAlertAt": ""
+    },
+    "amzn": {
+      "assetId": "amzn",
+      "state": "WATCH",
+      "score": 5.8,
+      "lastAlertAt": ""
+    },
+    "ftnt": {
+      "assetId": "ftnt",
+      "state": "WATCH",
+      "score": 5.7,
+      "lastAlertAt": ""
+    },
+    "crwd": {
+      "assetId": "crwd",
+      "state": "WATCH",
+      "score": 5.7,
+      "lastAlertAt": ""
+    },
+    "orcl": {
+      "assetId": "orcl",
+      "state": "WATCH",
+      "score": 5.7,
+      "lastAlertAt": ""
+    },
+    "soxx": {
+      "assetId": "soxx",
+      "state": "READY_TO_BUY",
+      "score": 7.2,
+      "lastAlertAt": "2026-04-22T14:05:11.488Z"
+    },
+    "smh": {
+      "assetId": "smh",
+      "state": "READY_TO_BUY",
+      "score": 7.2,
+      "lastAlertAt": "2026-04-22T14:05:11.488Z"
+    },
+    "qqq": {
+      "assetId": "qqq",
+      "state": "READY_TO_BUY",
+      "score": 7.1,
+      "lastAlertAt": "2026-04-22T14:05:11.488Z"
+    },
+    "spy": {
+      "assetId": "spy",
+      "state": "READY_TO_BUY",
+      "score": 6.9,
+      "lastAlertAt": "2026-04-22T14:05:11.488Z"
+    },
+    "vt": {
+      "assetId": "vt",
+      "state": "READY_TO_BUY",
+      "score": 6.9,
+      "lastAlertAt": "2026-04-22T14:05:11.488Z"
+    },
+    "cspx": {
+      "assetId": "cspx",
+      "state": "READY_TO_BUY",
+      "score": 6.9,
+      "lastAlertAt": "2026-04-22T14:05:11.488Z"
+    },
+    "iwda": {
+      "assetId": "iwda",
+      "state": "READY_TO_BUY",
+      "score": 6.8,
+      "lastAlertAt": "2026-04-22T14:05:11.488Z"
+    },
+    "vig": {
+      "assetId": "vig",
+      "state": "READY_TO_BUY",
+      "score": 6.7,
+      "lastAlertAt": "2026-04-22T14:05:11.488Z"
+    },
+    "vtv": {
+      "assetId": "vtv",
+      "state": "READY_TO_BUY",
+      "score": 6.5,
+      "lastAlertAt": "2026-04-22T14:05:11.488Z"
+    },
+    "schd": {
+      "assetId": "schd",
+      "state": "READY_TO_BUY",
+      "score": 6.5,
+      "lastAlertAt": "2026-04-22T14:05:11.489Z"
+    },
+    "amat": {
+      "assetId": "amat",
+      "state": "READY_TO_BUY",
+      "score": 7,
+      "lastAlertAt": "2026-04-22T14:05:11.489Z"
+    },
+    "mrvl": {
+      "assetId": "mrvl",
+      "state": "WATCH",
+      "score": 6.5,
+      "lastAlertAt": "2026-04-22T14:05:11.489Z"
+    }
+  }
+}

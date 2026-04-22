@@ -1,0 +1,35 @@
+{
+  "_comment": "Scoring weights for the opportunity scanner. All weights must sum to 1.0. Adjust to change how opportunities are ranked.",
+  "weights": {
+    "assetQuality": 0.20,
+    "drawdownOpportunity": 0.22,
+    "trendQuality": 0.12,
+    "relativeStrength": 0.08,
+    "diversificationFit": 0.14,
+    "sectorFit": 0.06,
+    "riskReward": 0.10,
+    "portfolioFit": 0.05,
+    "marketRegimeFit": 0.03
+  },
+  "_note_weights": "Total = 1.00. diversificationFit rewards ETFs that reduce concentration. Increase it to favor ETF rebalancing.",
+  "stateThresholds": {
+    "avoid": 3.0,
+    "watch": 5.0,
+    "readyToBuy": 6.5,
+    "buy": 7.5,
+    "hold": 6.0,
+    "reviewForTrim": 8.5
+  },
+  "_note_thresholds": "Opportunities scoring >= buy threshold get BUY state. Discovered (non-seed) assets need +0.5 above seed threshold.",
+  "drawdownScoring": {
+    "0_5": 2.0,
+    "5_10": 4.0,
+    "10_15": 7.0,
+    "15_25": 9.0,
+    "25_40": 8.0,
+    "40_plus": 4.0
+  },
+  "_note_drawdown": "Drawdown 15-25% gets highest score. Above 40% is penalized as potential structural break.",
+  "discoveryScorePenalty": 0.5,
+  "_note_discovery": "Non-seed assets get this score penalty to require them to be clearly better to surface."
+}
