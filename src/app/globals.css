@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-primary: #0f1117;
+  --bg-secondary: #161b27;
+  --bg-card: #1c2333;
+}
+
+body {
+  background-color: var(--bg-primary);
+  color: #e2e8f0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track { background: #161b27; }
+::-webkit-scrollbar-thumb { background: #2a3445; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #3a4a60; }
+
+/* State badge colors */
+.state-buy-more     { @apply bg-green-500 text-black; }
+.state-buy-partial  { @apply bg-green-400 text-black; }
+.state-buy-small    { @apply bg-emerald-600 text-white; }
+.state-wait         { @apply bg-yellow-600 text-white; }
+.state-do-nothing   { @apply bg-slate-600 text-white; }
+.state-review       { @apply bg-orange-500 text-white; }
+.state-reduce       { @apply bg-red-600 text-white; }
+.state-buy          { @apply bg-green-500 text-black; }
+.state-ready        { @apply bg-green-700 text-white; }
+.state-watch        { @apply bg-blue-700 text-white; }
+.state-hold         { @apply bg-slate-600 text-white; }
+.state-review-trim  { @apply bg-orange-600 text-white; }
+.state-exit         { @apply bg-red-700 text-white; }
+.state-avoid        { @apply bg-red-900 text-white; }
+
+/* Score bar */
+.score-bar { @apply h-1.5 rounded-full bg-bg-border; }
+.score-bar-fill { @apply h-full rounded-full transition-all duration-500; }

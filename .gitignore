@@ -1,0 +1,44 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# testing
+coverage/
+
+# next.js
+.next/
+out/
+
+# production
+build/
+dist/
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# local env files — never commit these
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# but DO commit .env.example (no secrets)
+!.env.example
+
+# TypeScript build artifacts
+tsconfig.tsbuildinfo
+.scripts-out/
+
+# next-env is auto-generated
+next-env.d.ts
+
+# editor
+.vscode/
+.idea/

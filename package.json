@@ -1,0 +1,45 @@
+{
+  "name": "app-finanzas",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "engine": "npx ts-node --project tsconfig.scripts.json scripts/run-engine.ts",
+    "scheduler": "npx ts-node --project tsconfig.scripts.json scripts/scheduler.ts",
+    "test:local": "npx ts-node --project tsconfig.scripts.json scripts/test-local.ts"
+  },
+  "dependencies": {
+    "axios": "^1.7.7",
+    "date-fns": "^3.6.0",
+    "lodash": "^4.17.21",
+    "lucide-react": "^0.441.0",
+    "next": "^16.2.4",
+    "node-cron": "^3.0.3",
+    "node-telegram-bot-api": "^0.66.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "recharts": "^2.12.7",
+    "yahoo-finance2": "^2.11.3",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/dotenv": "^6.1.1",
+    "@types/lodash": "^4.17.9",
+    "@types/node": "^20.16.10",
+    "@types/node-cron": "^3.0.11",
+    "@types/node-telegram-bot-api": "^0.64.7",
+    "@types/react": "^18.3.9",
+    "@types/react-dom": "^18.3.0",
+    "autoprefixer": "^10.4.20",
+    "dotenv": "^17.4.2",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "^16.2.4",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.13",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.6.2"
+  }
+}

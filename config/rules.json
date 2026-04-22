@@ -1,0 +1,65 @@
+{
+  "_comment": "Core engine rules. Adjust drawdown zones, concentration limits, and behavior thresholds here.",
+  "drawdownZones": [
+    {
+      "minPct": 0,
+      "maxPct": 5,
+      "baseState": "DO_NOTHING",
+      "highConvictionState": "DO_NOTHING"
+    },
+    {
+      "minPct": 5,
+      "maxPct": 10,
+      "baseState": "WAIT",
+      "highConvictionState": "BUY_SMALL"
+    },
+    {
+      "minPct": 10,
+      "maxPct": 15,
+      "baseState": "BUY_PARTIAL",
+      "highConvictionState": "BUY_PARTIAL"
+    },
+    {
+      "minPct": 15,
+      "maxPct": 25,
+      "baseState": "BUY_MORE",
+      "highConvictionState": "BUY_MORE"
+    },
+    {
+      "minPct": 25,
+      "maxPct": 100,
+      "baseState": "BUY_MORE",
+      "highConvictionState": "BUY_MORE"
+    }
+  ],
+  "concentration": {
+    "maxSingleStockWeightPct": 20,
+    "maxSingleEtfWeightPct": 35,
+    "maxSectorWeightPct": 45,
+    "maxThemeWeightPct": 55,
+    "maxSemisWeightPct": 35,
+    "maxAiWeightPct": 50,
+    "maxTechWeightPct": 65,
+    "highConcentrationPenaltyThreshold": 0.75
+  },
+  "minDrawdownForOpportunity": 8,
+  "maxDrawdownForBuy": 50,
+  "trendBreakdownPenalty": 2.0,
+  "relativeStrengthBonus": 1.0,
+  "thesisRiskAdjustment": {
+    "none": 0,
+    "low": 0.5,
+    "medium": 1.5,
+    "high": 3.0
+  },
+  "marketRegimeAdjustment": {
+    "bullish": 0.5,
+    "neutral": 0,
+    "bearish": -1.5
+  },
+  "highConvictionThreshold": 8,
+  "dcaActiveBonus": 0.5,
+  "etfDiversificationBonus": 1.0,
+  "maxDrawdownForBuyMore": 45,
+  "reviewDrawdownThreshold": 50
+}
