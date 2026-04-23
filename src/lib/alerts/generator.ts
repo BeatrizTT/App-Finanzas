@@ -34,12 +34,13 @@ function generatePortfolioAlerts(
     const currentState = analysis.state;
     const prevState = prevEntry?.state as PortfolioState | undefined;
 
-    // Determine if alert is warranted
-    const stateChanged = prevState && prevState !== currentState;
-    const newlyActionable = !prevState && ALERT_PORTFOLIO_STATES.includes(currentState);
-    const isActionable = ALERT_PORTFOLIO_STATES.includes(currentState);
+    // Alert only when state actually changes into an actionable state,
+    // or when this asset has no previous record at all (first run).
+    const stateChanged = prevState !== undefined && prevState !== currentState;
+    const newlyActionable = prevState === undefined && ALERT_PORTFOLIO_STATES.includes(currentState);
 
-    if (!isActionable && !stateChanged) continue;
+    if (!stateChanged && !newlyActionable) continue;
+    if (!ALERT_PORTFOLIO_STATES.includes(currentState) && !stateChanged) continue;
     if (!shouldSendAlert(assetId, prev)) continue;
 
     const ticker = analysis.holding.ticker ?? analysis.holding.id.toUpperCase();
@@ -206,10 +207,12 @@ export function generateAlerts(
   };
 
   for (const analysis of portfolioAnalyses) {
+    // Use the same ticker derivation used when creating the alert
+    const ticker = analysis.holding.ticker ?? analysis.holding.id.toUpperCase();
     newPrev.portfolio[analysis.holding.id] = {
       assetId: analysis.holding.id,
       state: analysis.state,
-      lastAlertAt: allAlerts.some((a) => a.asset === (analysis.holding.ticker ?? analysis.holding.id))
+      lastAlertAt: allAlerts.some((a) => a.asset === ticker)
         ? new Date().toISOString()
         : (prev.portfolio[analysis.holding.id]?.lastAlertAt ?? ''),
     };

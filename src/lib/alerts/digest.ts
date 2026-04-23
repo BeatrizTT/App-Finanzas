@@ -160,7 +160,7 @@ export async function sendDailyDigest(
     type: 'daily_digest',
     message,
     telegramSent: sent,
-  } as any);
+  });
 
   saveAlert(alert);
   return alert;
