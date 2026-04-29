@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
 export async function GET() {
   try {
     const { readJsonFile } = await import('@/lib/utils/file-store');
-    const output = readJsonFile('engine-output.json', null);
+    const output = readJsonFile<Record<string, unknown>>('engine-output.json', null as unknown as Record<string, unknown>);
     if (!output) {
       return NextResponse.json({ error: 'No engine output yet. Run the engine first.' }, { status: 404 });
     }
