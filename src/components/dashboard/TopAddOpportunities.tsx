@@ -46,11 +46,16 @@ export function TopAddOpportunities({ analyses }: Props) {
           <SectionEmpty message="Sin oportunidades claras — tus posiciones están cerca de sus máximos recientes" />
         ) : (
           <>
-            <div className="px-4 pt-3 pb-2 bg-[#1a2233]/50 border-b border-[#2a3445]/30">
+            <div className="px-4 pt-3 pb-2 bg-[#1a2233]/50 border-b border-[#2a3445]/30 space-y-1.5">
               <p className="text-xs text-slate-500">
                 Estas son las acciones y ETFs que <strong className="text-slate-400">ya tienes</strong> y que han bajado más desde su precio más alto reciente.
                 Si el motor dice <strong className="text-slate-400">COMPRAR</strong>, es una buena oportunidad para añadir más cantidad.
                 El importe en verde es lo que el motor sugiere invertir.
+              </p>
+              <p className="text-xs text-slate-600">
+                <strong className="text-slate-500">¿Y el DCA?</strong> El DCA es tu aportación mensual fija y automática (ej. €128/mes en NVDA).
+                Esta sección recomienda una compra <em>extra</em> puntual cuando el precio baja mucho — puedes hacer las dos cosas a la vez.
+                El DCA no sustituye a una compra oportunista cuando hay una caída significativa.
               </p>
             </div>
             <div className="divide-y divide-[#2a3445]/50">

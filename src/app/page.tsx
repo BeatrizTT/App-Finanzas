@@ -215,6 +215,26 @@ export default function Dashboard() {
 
       {/* Main content */}
       <main className="max-w-screen-2xl mx-auto px-4 py-6">
+
+        {/* Tab description */}
+        {{
+          portfolio:      { icon: '📊', text: 'Todo lo que tienes invertido ahora mismo, cuánto vale, cuánto ganaste o perdiste en papel, y qué recomienda el motor para cada posición.' },
+          opportunities:  { icon: '🔍', text: 'Acciones y ETFs que el motor vigila y que ahora están en buen momento para comprar por primera vez (o añadir si ya los tienes). Ordenadas por puntuación.' },
+          cash:           { icon: '💰', text: '¿Tienes efectivo y no sabes en qué ponerlo? El motor te dice exactamente en qué invertir y en qué orden, dependiendo de cuánto tengas disponible.' },
+          concentration:  { icon: '⚖️', text: '¿Estás demasiado concentrada en un sector? Aquí ves si tu cartera está equilibrada o si tienes demasiado en tecnología/IA/semiconductores.' },
+          discovery:      { icon: '🌐', text: 'El motor escanea un universo más amplio de empresas que no tienes todavía. Si encuentra algo interesante con buen precio, aparece aquí con ISIN para que lo busques en Trade Republic.' },
+          alerts:         { icon: '🔔', text: 'Historial de avisos automáticos. Una alerta se genera cuando una posición cambia de estado (ej: pasa de ESPERAR a COMPRAR). Si configuras Telegram, te llega al móvil.' },
+          settings:       { icon: '⚙️', text: 'Actualiza tu cartera importando el CSV de Trade Republic, ejecuta el análisis manualmente, y ve el estado del sistema.' },
+        }[activeTab] && (
+          <div className="mb-4 flex items-start gap-2 text-xs text-slate-500 bg-[#161b27] border border-[#2a3445]/40 rounded-lg px-3 py-2">
+            <span className="text-base shrink-0">
+              {({ portfolio: '📊', opportunities: '🔍', cash: '💰', concentration: '⚖️', discovery: '🌐', alerts: '🔔', settings: '⚙️' } as Record<string,string>)[activeTab]}
+            </span>
+            <span>
+              {({ portfolio: 'Todo lo que tienes invertido ahora mismo, cuánto vale, cuánto ganaste o perdiste en papel, y qué recomienda el motor para cada posición.', opportunities: 'Acciones y ETFs que el motor vigila y que ahora están en buen momento para comprar por primera vez. El motor puntúa cada una del 0 al 10 y ordena las mejores oportunidades arriba.', cash: '¿Tienes efectivo y no sabes en qué ponerlo? El motor te dice exactamente en qué invertir y en qué orden dependiendo de cuánto tengas disponible.', concentration: '¿Estás demasiado concentrada en un sector? Aquí ves si tu cartera está equilibrada o si tienes demasiado en tecnología, IA o semiconductores, y qué hacer.', discovery: 'El motor escanea un universo más amplio de empresas que no tienes todavía. Si encuentra algo interesante con buen precio y buenas métricas, aparece aquí con ISIN para buscarlo en Trade Republic.', alerts: 'Historial de avisos automáticos del motor. Una alerta se genera cuando una posición cambia de estado (ej: ESPERAR → COMPRAR). Con Telegram configurado, te llega al móvil al instante.', settings: 'Actualiza tu cartera importando el CSV de Trade Republic, ejecuta el análisis manualmente y ve el estado del sistema.' } as Record<string,string>)[activeTab]}
+            </span>
+          </div>
+        )}
         {isLoading ? (
           <div className="flex items-center justify-center py-20">
             <div className="text-center">

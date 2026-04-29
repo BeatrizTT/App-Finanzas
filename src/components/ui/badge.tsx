@@ -15,8 +15,8 @@ export const STATE_DESCRIPTIONS: Record<string, { es: string; explain: string }>
   REDUCE:          { es: 'REDUCIR',          explain: 'Considera vender una parte. La posición puede estar sobredimensionada o la tesis ha cambiado.' },
   // Opportunity states
   BUY:             { es: 'COMPRAR',          explain: 'Señal fuerte de entrada. El precio es muy atractivo y el activo supera todos los filtros de calidad.' },
-  READY_TO_BUY:    { es: 'CASI LISTO',       explain: 'Muy cerca de zona de compra. Vigila el precio — si sigue bajando un poco más, será momento de entrar.' },
-  WATCH:           { es: 'VIGILAR',          explain: 'Activo interesante pero sin señal de entrada ahora. Está en tu radar para cuando baje más.' },
+  READY_TO_BUY:    { es: 'CASI LISTO',       explain: 'El precio está casi en zona de compra pero no del todo. No compres todavía — espera a que baje un poco más y el motor cambie a COMPRAR. Actúa cuando veas COMPRAR, no antes.' },
+  WATCH:           { es: 'VIGILAR',          explain: 'Este activo es interesante pero el precio aún no es lo suficientemente atractivo. El motor lo está vigilando por ti. Cuando el precio caiga lo suficiente, el estado cambiará automáticamente a COMPRAR.' },
   HOLD:            { es: 'MANTENER',         explain: 'Posición abierta. No hay señal de compra adicional ni de venta. Deja que trabaje.' },
   REVIEW_FOR_TRIM: { es: '¿REDUCIR?',        explain: 'La posición puede estar cerca de objetivo o sobrecomprada. Valora si vender una parte para recoger beneficios.' },
   EXIT:            { es: 'SALIR',            explain: 'Señal de venta. El activo ha perdido su tesis o hay mejores oportunidades donde mover el capital.' },
