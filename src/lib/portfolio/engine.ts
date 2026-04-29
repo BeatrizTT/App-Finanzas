@@ -161,30 +161,32 @@ function buildReasons(
 ): string[] {
   const reasons: string[] = [];
 
+  const windowLabel = drawdown.primaryWindow === '90d' ? '90 días' : drawdown.primaryWindow === '60d' ? '60 días' : '30 días';
   reasons.push(
-    `${drawdown.maxDrawdown.toFixed(1)}% drawdown from ${drawdown.primaryWindow} high (${drawdown.drawdown30d.toFixed(1)}% / ${drawdown.drawdown60d.toFixed(1)}% / ${drawdown.drawdown90d.toFixed(1)}% over 30/60/90d)`
+    `Bajó un ${drawdown.maxDrawdown.toFixed(1)}% desde el máximo de ${windowLabel} (${drawdown.drawdown30d.toFixed(1)}% / ${drawdown.drawdown60d.toFixed(1)}% / ${drawdown.drawdown90d.toFixed(1)}% en 30/60/90d)`
   );
 
-  if (holding.core) reasons.push('Core long-term holding with high conviction');
-  if (holding.dcaMonthlyEur > 0) reasons.push(`Active DCA of €${holding.dcaMonthlyEur}/month already running`);
-  if (holding.type === 'etf') reasons.push('ETF provides built-in diversification');
+  if (holding.core) reasons.push('Posición central a largo plazo con alta convicción');
+  if (holding.dcaMonthlyEur > 0) reasons.push(`Aportación DCA de €${holding.dcaMonthlyEur}/mes ya activa`);
+  if (holding.type === 'etf') reasons.push('ETF con diversificación incorporada');
 
   if (concentrationPenalty > 0.5) {
     const heavyTags = holding.tags.filter((t) =>
       (concentration.themeWeights[t] ?? 0) > 30 || (concentration.sectorWeights[t] ?? 0) > 40
     );
     if (heavyTags.length > 0) {
-      reasons.push(`High concentration in ${heavyTags.join(', ')} — position size reduced`);
+      reasons.push(`Alta concentración en ${heavyTags.join(', ')} — posición reducida`);
     }
   }
 
   if (holding.manualThesisRisk && holding.manualThesisRisk !== 'none') {
-    reasons.push(`Manual thesis risk flag: ${holding.manualThesisRisk}`);
+    const riskLabel = holding.manualThesisRisk === 'high' ? 'alta' : holding.manualThesisRisk === 'medium' ? 'media' : holding.manualThesisRisk;
+    reasons.push(`Riesgo en tesis de inversión: ${riskLabel}`);
   }
 
-  if (state === 'REVIEW') reasons.push('Recommend reviewing thesis before adding');
-  if (state === 'REDUCE') reasons.push('Consider reducing exposure');
-  if (state === 'DO_NOTHING') reasons.push('Price close to recent highs — no action needed');
+  if (state === 'REVIEW') reasons.push('Revisa tu tesis antes de añadir más');
+  if (state === 'REDUCE') reasons.push('Considera reducir la exposición');
+  if (state === 'DO_NOTHING') reasons.push('Precio cercano a máximos recientes — sin acción');
 
   return reasons;
 }
