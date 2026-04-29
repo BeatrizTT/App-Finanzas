@@ -1,21 +1,6 @@
 // Trade Republic CSV transaction importer
 // Parses the exported CSV and computes current holdings (shares + avg cost)
 
-export interface TradeRepublicRow {
-  datetime: string;
-  date: string;
-  category: string;
-  type: string;
-  asset_class: string;
-  name: string;
-  symbol: string; // ISIN
-  shares: string;
-  price: string;
-  amount: string;
-  fee: string;
-  currency: string;
-}
-
 export interface ComputedHolding {
   isin: string;
   name: string;
@@ -28,34 +13,44 @@ export interface ComputedHolding {
 
 function parseNum(s: string): number {
   if (!s || s.trim() === '') return 0;
+  // Handle both "1.234,56" (European) and "1234.56" (US) formats
+  const cleaned = s.trim().replace(/\./g, '').replace(',', '.');
+  const v = parseFloat(cleaned);
+  if (!isNaN(v)) return v;
   return parseFloat(s.replace(',', '.')) || 0;
+}
+
+// Auto-detect delimiter: Trade Republic Spain/EU exports use semicolons
+function detectDelimiter(headerLine: string): ',' | ';' {
+  const semicolons = (headerLine.match(/;/g) || []).length;
+  const commas = (headerLine.match(/,/g) || []).length;
+  return semicolons > commas ? ';' : ',';
 }
 
 export function parseTradeRepublicCsv(csvText: string): ComputedHolding[] {
   const lines = csvText.trim().split('\n');
   if (lines.length < 2) return [];
 
-  // Parse header — handle quoted fields
-  const header = parseCsvLine(lines[0]);
+  const delim = detectDelimiter(lines[0]);
+
+  const header = parseCsvLine(lines[0], delim);
   const idxOf = (name: string) => header.findIndex(h => h.toLowerCase().includes(name.toLowerCase()));
 
-  const iDate = idxOf('date');
   const iType = idxOf('type');
   const iAsset = idxOf('asset_class');
   const iName = idxOf('name');
   const iSymbol = idxOf('symbol');
   const iShares = idxOf('shares');
-  const iPrice = idxOf('price');
   const iAmount = idxOf('amount');
   const iFee = idxOf('fee');
 
-  // Per-ISIN state: shares held and cost basis (FIFO approximation via weighted avg)
+  // Per-ISIN state: shares held and cost basis (weighted avg)
   const holdings = new Map<string, { name: string; assetClass: string; shares: number; totalCost: number; realizedPnl: number }>();
 
   for (let i = 1; i < lines.length; i++) {
     const raw = lines[i].trim();
     if (!raw) continue;
-    const cols = parseCsvLine(raw);
+    const cols = parseCsvLine(raw, delim);
 
     const type = cols[iType]?.trim().toUpperCase();
     const assetClass = cols[iAsset]?.trim().toUpperCase();
@@ -65,7 +60,7 @@ export function parseTradeRepublicCsv(csvText: string): ComputedHolding[] {
     const amount = parseNum(cols[iAmount]); // negative for buys, positive for sells
     const fee = Math.abs(parseNum(cols[iFee]));
 
-    // Only process equity/fund trades (not bonds, cash transfers, dividends)
+    // Only process equity/fund trades
     if (!isin || !['STOCK', 'FUND', 'ETF', 'PRIVATE_FUND'].includes(assetClass)) continue;
     if (!['BUY', 'SELL'].includes(type)) continue;
     if (shares === 0) continue;
@@ -77,7 +72,7 @@ export function parseTradeRepublicCsv(csvText: string): ComputedHolding[] {
     if (h.name === '' && name) h.name = name;
 
     if (type === 'BUY') {
-      const cost = Math.abs(amount) + fee; // total cash out
+      const cost = Math.abs(amount) + fee;
       h.totalCost += cost;
       h.shares += shares;
     } else if (type === 'SELL') {
@@ -98,7 +93,7 @@ export function parseTradeRepublicCsv(csvText: string): ComputedHolding[] {
 
   const result: ComputedHolding[] = [];
   for (const [isin, h] of holdings.entries()) {
-    if (h.shares < 0.0001) continue; // fully sold
+    if (h.shares < 0.0001) continue;
     result.push({
       isin,
       name: h.name,
@@ -113,8 +108,7 @@ export function parseTradeRepublicCsv(csvText: string): ComputedHolding[] {
   return result.sort((a, b) => b.totalCostEur - a.totalCostEur);
 }
 
-// Simple CSV line parser that handles quoted fields
-function parseCsvLine(line: string): string[] {
+function parseCsvLine(line: string, delim: ',' | ';' = ','): string[] {
   const result: string[] = [];
   let current = '';
   let inQuotes = false;
@@ -123,7 +117,7 @@ function parseCsvLine(line: string): string[] {
     const ch = line[i];
     if (ch === '"') {
       inQuotes = !inQuotes;
-    } else if (ch === ',' && !inQuotes) {
+    } else if (ch === delim && !inQuotes) {
       result.push(current.trim().replace(/^"|"$/g, ''));
       current = '';
     } else {

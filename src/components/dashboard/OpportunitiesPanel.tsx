@@ -1,8 +1,54 @@
 'use client';
 
+import { useState } from 'react';
 import { Card, CardHeader, CardTitle, CardBody, DrawdownDisplay, SectionEmpty } from '@/components/ui/card';
 import { StateBadge, TypeBadge, ConfidenceBadge, ScoreBar } from '@/components/ui/badge';
 import type { Opportunity } from '@/lib/types';
+
+// Known ISINs for display/copy in Trade Republic
+const TICKER_ISIN: Record<string, string> = {
+  NVDA: 'US67066G1040',
+  ASML: 'NL0010273215',
+  MSFT: 'US5949181045',
+  AMZN: 'US0231351067',
+  SMCI: 'US86800U3023',
+  CRM:  'US79466L3024',
+  NOW:  'US81762P1021',
+  ADBE: 'US00724F1012',
+  ORCL: 'US68389X1054',
+  TSLA: 'US88160R1014',
+  MU:   'US5951121038',
+  CNDX: 'IE00B53SZB19',
+  IWVL: 'IE00BP3QZB59',
+  IWDA: 'IE00B4L5Y983',
+  GOOGL:'US02079K3059',
+  META: 'US30303M1027',
+  AMD:  'US0079031078',
+  INTC: 'US4581401001',
+  QCOM: 'US7475251036',
+  AVGO: 'US11135F1012',
+};
+
+function IsinCopy({ ticker }: { ticker: string }) {
+  const [copied, setCopied] = useState(false);
+  const isin = TICKER_ISIN[ticker];
+  if (!isin) return null;
+  const copy = () => {
+    navigator.clipboard.writeText(isin).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+  return (
+    <button
+      onClick={copy}
+      className="text-xs text-slate-600 hover:text-blue-400 font-mono transition-colors cursor-pointer block mt-0.5"
+      title="ISIN: código único que identifica este activo en Trade Republic. Haz clic para copiar."
+    >
+      {copied ? '✓ copiado' : isin}
+    </button>
+  );
+}
 
 function OpportunityRow({ opp, showDiscoveryBadge = false }: { opp: Opportunity; showDiscoveryBadge?: boolean }) {
   const currency = opp.currency === 'EUR' ? '€' : '$';
@@ -13,12 +59,13 @@ function OpportunityRow({ opp, showDiscoveryBadge = false }: { opp: Opportunity;
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-mono text-slate-200 font-medium">{opp.ticker}</span>
             <TypeBadge type={opp.type} />
-            <StateBadge state={opp.state} />
+            <StateBadge state={opp.state} showTooltip />
             {showDiscoveryBadge && !opp.isSeedUniverse && (
-              <span className="text-xs bg-indigo-900/60 text-indigo-300 px-1.5 py-0.5 rounded">DISCOVERED</span>
+              <span className="text-xs bg-indigo-900/60 text-indigo-300 px-1.5 py-0.5 rounded">DESCUBIERTO</span>
             )}
           </div>
           <div className="text-xs text-slate-500 mt-0.5 truncate">{opp.name}</div>
+          <IsinCopy ticker={opp.ticker} />
           <div className="mt-1">
             <ScoreBar score={opp.score.total} />
           </div>
@@ -60,12 +107,12 @@ export function StockOpportunities({ opportunities }: StockPanelProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Stock Opportunities</CardTitle>
-        <span className="text-xs text-slate-500">{actionable.length} active</span>
+        <CardTitle>Oportunidades en Acciones</CardTitle>
+        <span className="text-xs text-slate-500">{actionable.length} activas</span>
       </CardHeader>
       <CardBody className="p-0">
         {actionable.length === 0 ? (
-          <SectionEmpty message="No strong stock entries detected" />
+          <SectionEmpty message="Sin oportunidades destacadas en acciones ahora mismo" />
         ) : (
           <div className="divide-y divide-[#2a3445]/50">
             {actionable.map((o) => <OpportunityRow key={o.ticker} opp={o} />)}
@@ -81,12 +128,12 @@ export function EtfOpportunities({ opportunities }: EtfPanelProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>ETF Opportunities</CardTitle>
-        <span className="text-xs text-slate-500">{actionable.length} active</span>
+        <CardTitle>Oportunidades en ETFs</CardTitle>
+        <span className="text-xs text-slate-500">{actionable.length} activos</span>
       </CardHeader>
       <CardBody className="p-0">
         {actionable.length === 0 ? (
-          <SectionEmpty message="No strong ETF entries detected" />
+          <SectionEmpty message="Sin oportunidades destacadas en ETFs ahora mismo" />
         ) : (
           <div className="divide-y divide-[#2a3445]/50">
             {actionable.map((o) => <OpportunityRow key={o.ticker} opp={o} />)}
@@ -101,12 +148,12 @@ export function DiscoveryMonitor({ opportunities }: DiscoveryPanelProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Discovery Monitor</CardTitle>
-        <span className="text-xs text-slate-500">Extended universe finds</span>
+        <CardTitle>Descubrimientos</CardTitle>
+        <span className="text-xs text-slate-500">Activos fuera de tu cartera</span>
       </CardHeader>
       <CardBody className="p-0">
         {opportunities.length === 0 ? (
-          <SectionEmpty message="No external discoveries today — all seed universe names checked" />
+          <SectionEmpty message="Sin descubrimientos hoy — todos los activos del universo extendido analizados" />
         ) : (
           <div className="divide-y divide-[#2a3445]/50">
             {opportunities.map((o) => (

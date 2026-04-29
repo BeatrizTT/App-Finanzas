@@ -65,6 +65,79 @@ interface Props {
   lastRunAt: string | null;
 }
 
+function PortfolioSummary({ analyses, totalValue }: { analyses: PortfolioAnalysis[]; totalValue: number }) {
+  const withPrice = analyses.filter(a => a.currentPrice > 0 && (a.holding.units ?? 0) > 0);
+  const inProfit = withPrice.filter(a => a.unrealizedPnlPct > 0);
+  const inLoss = withPrice.filter(a => a.unrealizedPnlPct < 0);
+
+  // Approximate invested: back-calculate from currentValue and pnlPct per position
+  let sumCurrent = 0, sumInvested = 0;
+  for (const a of withPrice) {
+    const cur = a.currentPrice * (a.holding.units ?? 0);
+    const inv = cur / (1 + a.unrealizedPnlPct / 100);
+    sumCurrent += cur;
+    sumInvested += inv;
+  }
+  const investedEur = sumCurrent > 0 && totalValue > 0 ? (sumInvested / sumCurrent) * totalValue : 0;
+  const unrealizedEur = totalValue - investedEur;
+
+  const best = withPrice.length > 0 ? withPrice.reduce((a, b) => b.unrealizedPnlPct > a.unrealizedPnlPct ? b : a) : null;
+  const worst = withPrice.length > 0 ? withPrice.reduce((a, b) => b.unrealizedPnlPct < a.unrealizedPnlPct ? b : a) : null;
+
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+      <div className="bg-[#1a2233] rounded-lg p-3">
+        <div className="text-xs text-slate-500 mb-1" title="Valor actual de mercado de todos tus activos">Valor actual</div>
+        <div className="text-lg font-mono font-semibold text-slate-200">
+          €{totalValue.toLocaleString('es-ES', { maximumFractionDigits: 0 })}
+        </div>
+        {investedEur > 0 && (
+          <div className="text-xs text-slate-500 mt-0.5" title="Total invertido: lo que pagaste en total por tus posiciones actuales">
+            Invertido: €{investedEur.toLocaleString('es-ES', { maximumFractionDigits: 0 })}
+          </div>
+        )}
+      </div>
+      <div className="bg-[#1a2233] rounded-lg p-3">
+        <div className="text-xs text-slate-500 mb-1" title="Ganancia o pérdida no realizada — lo que ganarías o perderías si vendieras todo ahora">G/P no realizada</div>
+        <div className={`text-lg font-mono font-semibold ${unrealizedEur >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+          {unrealizedEur >= 0 ? '+' : ''}€{unrealizedEur.toLocaleString('es-ES', { maximumFractionDigits: 0 })}
+        </div>
+        {investedEur > 0 && (
+          <div className={`text-xs mt-0.5 ${unrealizedEur >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+            {unrealizedEur >= 0 ? '+' : ''}{((unrealizedEur / investedEur) * 100).toFixed(1)}% sobre invertido
+          </div>
+        )}
+      </div>
+      <div className="bg-[#1a2233] rounded-lg p-3">
+        <div className="text-xs text-slate-500 mb-1">Posiciones</div>
+        <div className="text-lg font-mono font-semibold text-slate-200">{withPrice.length}</div>
+        <div className="text-xs mt-0.5">
+          <span className="text-green-400">{inProfit.length} en ganancia</span>
+          {' · '}
+          <span className="text-red-400">{inLoss.length} en pérdida</span>
+        </div>
+      </div>
+      <div className="bg-[#1a2233] rounded-lg p-3">
+        <div className="text-xs text-slate-500 mb-1">Mejor / Peor posición</div>
+        {best && (
+          <div className="text-xs font-mono">
+            <span className="text-green-400">
+              {best.holding.ticker ?? best.holding.id.toUpperCase()} {best.unrealizedPnlPct >= 0 ? '+' : ''}{best.unrealizedPnlPct.toFixed(1)}%
+            </span>
+          </div>
+        )}
+        {worst && worst.holding.id !== best?.holding.id && (
+          <div className="text-xs font-mono mt-0.5">
+            <span className="text-red-400">
+              {worst.holding.ticker ?? worst.holding.id.toUpperCase()} {worst.unrealizedPnlPct.toFixed(1)}%
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function PortfolioOverview({ analyses, concentration, lastRunAt }: Props) {
   if (!analyses || analyses.length === 0) {
     return (
@@ -101,6 +174,9 @@ export function PortfolioOverview({ analyses, concentration, lastRunAt }: Props)
         </div>
       </CardHeader>
       <CardBody className="p-0">
+        <div className="px-4 pt-4">
+          <PortfolioSummary analyses={analyses} totalValue={totalValue} />
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
