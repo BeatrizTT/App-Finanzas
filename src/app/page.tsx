@@ -8,6 +8,7 @@ import { BestUseOfCash } from '@/components/dashboard/BestUseOfCash';
 import { ConcentrationBalance } from '@/components/dashboard/ConcentrationBalance';
 import { AlertsHistory } from '@/components/dashboard/AlertsHistory';
 import { Settings } from '@/components/dashboard/Settings';
+import { GlossaryButton } from '@/components/Glossary';
 import type {
   PortfolioAnalysis,
   Opportunity,
@@ -26,13 +27,13 @@ type Tab =
   | 'settings';
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: 'portfolio', label: 'Portfolio' },
-  { id: 'opportunities', label: 'Opportunities' },
-  { id: 'cash', label: 'Cash Allocator' },
+  { id: 'portfolio', label: 'Mi Cartera' },
+  { id: 'opportunities', label: 'Oportunidades' },
+  { id: 'cash', label: 'Usar Efectivo' },
   { id: 'concentration', label: 'Balance' },
-  { id: 'discovery', label: 'Discovery' },
-  { id: 'alerts', label: 'Alerts' },
-  { id: 'settings', label: 'Settings' },
+  { id: 'discovery', label: 'Descubrimientos' },
+  { id: 'alerts', label: 'Alertas' },
+  { id: 'settings', label: 'Configuración' },
 ];
 
 interface DashboardData {
@@ -110,7 +111,7 @@ export default function Dashboard() {
 
   const handleRunEngine = async () => {
     setIsRunning(true);
-    setStatusMessage('Running engine...');
+    setStatusMessage('Analizando...');
     try {
       const res = await fetch('/api/engine/run', {
         method: 'POST',
@@ -119,13 +120,13 @@ export default function Dashboard() {
       });
       const result = await res.json();
       if (result.success) {
-        setStatusMessage(`Done! ${result.alertsCount} alerts generated.`);
+        setStatusMessage(`¡Listo! ${result.alertsCount} alertas generadas.`);
         await fetchData();
       } else {
         setStatusMessage(`Error: ${result.error}`);
       }
     } catch (err) {
-      setStatusMessage('Failed to run engine');
+      setStatusMessage('Error al ejecutar el análisis');
     } finally {
       setIsRunning(false);
       setTimeout(() => setStatusMessage(''), 5000);
@@ -158,9 +159,10 @@ export default function Dashboard() {
             )}
             {data.lastRunAt && (
               <span className="text-xs text-slate-500 hidden sm:block">
-                Last run: {new Date(data.lastRunAt).toLocaleString()}
+                Último análisis: {new Date(data.lastRunAt).toLocaleString('es-ES')}
               </span>
             )}
+            <GlossaryButton />
             <button
               onClick={handleRunEngine}
               disabled={isRunning}
@@ -170,7 +172,7 @@ export default function Dashboard() {
                   : 'bg-green-700 hover:bg-green-600 text-white cursor-pointer'
               }`}
             >
-              {isRunning ? 'Running...' : 'Run Engine'}
+              {isRunning ? 'Analizando...' : '▶ Analizar'}
             </button>
           </div>
         </div>
@@ -208,9 +210,9 @@ export default function Dashboard() {
         {isLoading ? (
           <div className="flex items-center justify-center py-20">
             <div className="text-center">
-              <div className="text-slate-500 text-lg mb-2">Loading dashboard...</div>
+              <div className="text-slate-500 text-lg mb-2">Cargando...</div>
               <div className="text-slate-600 text-sm">
-                {data.lastRunAt ? 'Fetching latest engine data' : 'No engine data yet — click "Run Engine" to start'}
+                {data.lastRunAt ? 'Obteniendo datos del análisis' : 'Sin datos todavía — pulsa "▶ Analizar" para empezar'}
               </div>
             </div>
           </div>
@@ -219,10 +221,10 @@ export default function Dashboard() {
             {/* No data state */}
             {!data.lastRunAt && activeTab !== 'settings' && (
               <div className="mb-6 bg-blue-900/20 border border-blue-800/50 rounded-lg px-4 py-3">
-                <div className="text-sm text-blue-300 font-medium">No engine data yet</div>
+                <div className="text-sm text-blue-300 font-medium">Sin datos de análisis</div>
                 <div className="text-xs text-blue-400 mt-1">
-                  Click <strong>Run Engine</strong> (top right) to fetch prices and generate your first analysis.
-                  In MOCK mode, no internet is needed — real prices require <code>PRICE_PROVIDER=yahoo</code> in .env.local.
+                  Pulsa <strong>▶ Analizar</strong> (arriba a la derecha) para obtener precios y generar tu primer análisis.
+                  En modo MOCK no hace falta internet — para precios reales añade <code>PRICE_PROVIDER=yahoo</code> en .env.local.
                 </div>
               </div>
             )}
@@ -281,6 +283,7 @@ export default function Dashboard() {
                 providerName={priceProvider}
                 marketRegime={data.marketRegime}
                 isTelegramConfigured={false}
+                onImportDone={fetchData}
               />
             )}
           </>
