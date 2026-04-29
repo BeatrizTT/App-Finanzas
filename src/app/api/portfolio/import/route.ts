@@ -3,7 +3,6 @@ import { parseTradeRepublicCsv } from '@/lib/portfolio/csv-importer';
 import { readJsonFile, writeJsonFile } from '@/lib/utils/file-store';
 import type { PortfolioConfig, PortfolioHolding } from '@/lib/types';
 
-// Known ticker map by ISIN (for display purposes)
 const ISIN_TO_TICKER: Record<string, { ticker: string; name?: string; currency: string; type: 'stock' | 'etf'; tags: string[] }> = {
   'US67066G1040': { ticker: 'NVDA',  currency: 'USD', type: 'stock', tags: ['semis', 'AI', 'growth', 'tech'] },
   'NL0010273215': { ticker: 'ASML',  currency: 'EUR', type: 'stock', tags: ['semis', 'infrastructure', 'europe'] },
@@ -19,6 +18,9 @@ const ISIN_TO_TICKER: Record<string, { ticker: string; name?: string; currency: 
   'IE00B53SZB19': { ticker: 'CNDX',  name: 'iShares NASDAQ 100 UCITS ETF (Acc)', currency: 'EUR', type: 'etf', tags: ['growth', 'tech', 'nasdaq', 'broad-index'] },
   'IE00BP3QZB59': { ticker: 'IWVL',  name: 'iShares MSCI World Value Factor UCITS ETF (Acc)', currency: 'EUR', type: 'etf', tags: ['value', 'broad-index', 'diversification', 'global'] },
   'IE00B4L5Y983': { ticker: 'IWDA',  name: 'iShares Core MSCI World UCITS ETF (Acc)', currency: 'EUR', type: 'etf', tags: ['broad-index', 'global', 'diversification'] },
+  'US02079K3059': { ticker: 'GOOGL', currency: 'USD', type: 'stock', tags: ['tech', 'AI', 'cloud'] },
+  'US5765811026': { ticker: 'MRVL',  currency: 'USD', type: 'stock', tags: ['semis', 'AI'] },
+  'US34959E1091': { ticker: 'FTNT',  currency: 'USD', type: 'stock', tags: ['cybersecurity'] },
 };
 
 export async function POST(req: NextRequest) {
@@ -31,13 +33,14 @@ export async function POST(req: NextRequest) {
     }
 
     const text = await file.text();
-    const computed = parseTradeRepublicCsv(text);
+    const { open: computed, closed: closedPositions } = parseTradeRepublicCsv(text);
 
     if (computed.length === 0) {
-      return NextResponse.json({ error: 'No se encontraron posiciones en el CSV. Asegúrate de que es el archivo de transacciones de Trade Republic.' }, { status: 400 });
+      return NextResponse.json({
+        error: 'No se encontraron posiciones en el CSV. Asegúrate de que es el archivo de transacciones de Trade Republic (no el extracto de cuenta, sino el historial de transacciones).',
+      }, { status: 400 });
     }
 
-    // Load existing portfolio config to preserve DCA, conviction, etc.
     const existing = readJsonFile<PortfolioConfig>('../../config/portfolio.json', {
       cashAvailableEur: 2000,
       targetCashReserveEur: 500,
@@ -49,7 +52,6 @@ export async function POST(req: NextRequest) {
     const updatedHoldings: PortfolioHolding[] = computed.map((c) => {
       const known = ISIN_TO_TICKER[c.isin];
       const prev = existingMap.get(c.isin);
-
       return {
         id: prev?.id ?? (known?.ticker?.toLowerCase() ?? c.isin.toLowerCase()),
         name: known?.name ?? prev?.name ?? c.name,
@@ -69,16 +71,34 @@ export async function POST(req: NextRequest) {
       } as PortfolioHolding;
     });
 
+    const totalRealizedPnl = closedPositions.reduce((sum, c) => sum + c.realizedPnl, 0);
+
     const updated: PortfolioConfig = {
       ...existing,
       holdings: updatedHoldings,
+      closedPositions: closedPositions.map(c => ({
+        isin: c.isin,
+        ticker: ISIN_TO_TICKER[c.isin]?.ticker ?? c.isin,
+        name: ISIN_TO_TICKER[c.isin]?.name ?? c.name,
+        realizedPnl: c.realizedPnl,
+      })),
+      totalRealizedPnl: Math.round(totalRealizedPnl * 100) / 100,
     };
 
-    writeJsonFile('../../config/portfolio.json', updated);
+    // Try to persist — may fail on read-only filesystems (e.g. Vercel preview)
+    let saved = false;
+    try {
+      writeJsonFile('../../config/portfolio.json', updated);
+      saved = true;
+    } catch {
+      // Preview/serverless env: data cannot be persisted but parsing still works
+    }
 
     return NextResponse.json({
       success: true,
+      saved,
       holdingsUpdated: updatedHoldings.length,
+      totalRealizedPnl: updated.totalRealizedPnl,
       holdings: computed.map(c => ({
         isin: c.isin,
         name: c.name,
@@ -86,6 +106,12 @@ export async function POST(req: NextRequest) {
         shares: c.shares,
         avgCostEur: c.avgCostEur,
         totalCostEur: c.totalCostEur,
+        realizedPnl: c.realizedPnl,
+      })),
+      closedPositions: closedPositions.map(c => ({
+        isin: c.isin,
+        ticker: ISIN_TO_TICKER[c.isin]?.ticker ?? c.isin,
+        name: ISIN_TO_TICKER[c.isin]?.name ?? c.name,
         realizedPnl: c.realizedPnl,
       })),
     });

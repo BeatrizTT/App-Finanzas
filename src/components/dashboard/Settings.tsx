@@ -5,7 +5,10 @@ import { Card, CardHeader, CardTitle, CardBody } from '@/components/ui/card';
 
 interface ImportResult {
   holdingsUpdated: number;
+  saved: boolean;
+  totalRealizedPnl?: number;
   holdings: { ticker: string; shares: number; avgCostEur: number; realizedPnl: number }[];
+  closedPositions?: { ticker: string; name: string; realizedPnl: number }[];
 }
 
 interface Props {
@@ -159,17 +162,23 @@ export function Settings({
 
           {importResult && (
             <div className="mt-3 p-3 bg-green-900/20 border border-green-700/50 rounded">
-              <div className="text-xs text-green-400 font-semibold mb-2">
-                ✅ Cartera actualizada — {importResult.holdingsUpdated} posiciones importadas
+              <div className="text-xs text-green-400 font-semibold mb-1">
+                ✅ CSV leído — {importResult.holdingsUpdated} posiciones activas encontradas
               </div>
-              <div className="overflow-x-auto">
+              {!importResult.saved && (
+                <div className="text-xs text-yellow-500 mb-2">
+                  ⚠️ En modo preview los datos no se guardan. En Railway/producción sí se guardan permanentemente.
+                </div>
+              )}
+              {/* Open positions */}
+              <div className="overflow-x-auto mt-2">
+                <div className="text-xs text-slate-500 mb-1 font-medium">Posiciones que tienes ahora:</div>
                 <table className="w-full text-xs text-slate-400">
                   <thead>
                     <tr className="text-slate-500 border-b border-[#2a3445]">
-                      <th className="text-left py-1">Ticker / ISIN</th>
+                      <th className="text-left py-1">Ticker</th>
                       <th className="text-right py-1">Acciones</th>
-                      <th className="text-right py-1">Precio medio</th>
-                      <th className="text-right py-1">G/P realizada</th>
+                      <th className="text-right py-1">Pagaste (media)</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -178,16 +187,43 @@ export function Settings({
                         <td className="py-1 font-mono text-slate-300">{h.ticker}</td>
                         <td className="py-1 text-right font-mono">{h.shares.toFixed(4)}</td>
                         <td className="py-1 text-right font-mono">€{h.avgCostEur.toFixed(2)}</td>
-                        <td className={`py-1 text-right font-mono ${h.realizedPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                          {h.realizedPnl >= 0 ? '+' : ''}€{h.realizedPnl.toFixed(2)}
-                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
+              {/* Closed positions */}
+              {importResult.closedPositions && importResult.closedPositions.length > 0 && (
+                <div className="mt-3">
+                  <div className="text-xs text-slate-500 mb-1 font-medium">Lo que ya vendiste:</div>
+                  <table className="w-full text-xs text-slate-400">
+                    <thead>
+                      <tr className="text-slate-500 border-b border-[#2a3445]">
+                        <th className="text-left py-1">Ticker</th>
+                        <th className="text-right py-1">Ganaste / Perdiste al vender</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {importResult.closedPositions.map((p) => (
+                        <tr key={p.ticker} className="border-b border-[#2a3445]/30">
+                          <td className="py-1 font-mono text-slate-300">{p.ticker}</td>
+                          <td className={`py-1 text-right font-mono ${p.realizedPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                            {p.realizedPnl >= 0 ? '+' : ''}€{p.realizedPnl.toFixed(2)}
+                          </td>
+                        </tr>
+                      ))}
+                      <tr className="font-semibold border-t border-[#2a3445]">
+                        <td className="py-1 text-slate-300">Total</td>
+                        <td className={`py-1 text-right font-mono ${(importResult.totalRealizedPnl ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {(importResult.totalRealizedPnl ?? 0) >= 0 ? '+' : ''}€{(importResult.totalRealizedPnl ?? 0).toFixed(2)}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              )}
               <p className="mt-2 text-xs text-slate-600">
-                Pulsa "Ejecutar análisis" para ver las recomendaciones actualizadas con estos datos.
+                Pulsa "▶ Ejecutar análisis ahora" para ver las recomendaciones con estos datos.
               </p>
             </div>
           )}

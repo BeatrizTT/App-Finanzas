@@ -36,6 +36,8 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'settings', label: 'Configuración' },
 ];
 
+interface ClosedPos { isin: string; ticker?: string; name: string; realizedPnl: number }
+
 interface DashboardData {
   portfolioAnalyses: PortfolioAnalysis[];
   concentration: ConcentrationData | null;
@@ -47,6 +49,8 @@ interface DashboardData {
   lastRunAt: string | null;
   marketRegime: string;
   errors: string[];
+  closedPositions: ClosedPos[];
+  totalRealizedPnl: number | null;
 }
 
 const EMPTY_DATA: DashboardData = {
@@ -60,6 +64,8 @@ const EMPTY_DATA: DashboardData = {
   lastRunAt: null,
   marketRegime: 'neutral',
   errors: [],
+  closedPositions: [],
+  totalRealizedPnl: null,
 };
 
 export default function Dashboard() {
@@ -91,6 +97,8 @@ export default function Dashboard() {
           lastRunAt: engineData.runAt,
           marketRegime: engineData.marketRegime ?? 'neutral',
           errors: engineData.errors ?? [],
+          closedPositions: engineData.closedPositions ?? [],
+          totalRealizedPnl: engineData.totalRealizedPnl ?? null,
         });
       } else {
         setData({ ...EMPTY_DATA, alerts: alertsData.alerts ?? [] });
@@ -247,6 +255,8 @@ export default function Dashboard() {
                   analyses={data.portfolioAnalyses}
                   concentration={data.concentration}
                   lastRunAt={data.lastRunAt}
+                  closedPositions={data.closedPositions}
+                  totalRealizedPnl={data.totalRealizedPnl}
                 />
                 <TopAddOpportunities analyses={data.portfolioAnalyses} />
               </div>

@@ -47,7 +47,13 @@ export async function GET() {
     if (!output) {
       return NextResponse.json({ error: 'No engine output yet. Run the engine first.' }, { status: 404 });
     }
-    return NextResponse.json(output);
+    // Merge in realized P&L from portfolio config (written by CSV import)
+    const portfolioConfig = readJsonFile<any>('../../config/portfolio.json', {});
+    return NextResponse.json({
+      ...output,
+      closedPositions: portfolioConfig.closedPositions ?? [],
+      totalRealizedPnl: portfolioConfig.totalRealizedPnl ?? null,
+    });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: msg }, { status: 500 });

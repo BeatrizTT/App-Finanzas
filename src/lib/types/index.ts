@@ -97,10 +97,19 @@ export interface PortfolioHolding {
   currency?: string;        // asset currency (USD, EUR) - defaults to USD
 }
 
+export interface ClosedPosition {
+  isin: string;
+  ticker?: string;
+  name: string;
+  realizedPnl: number;
+}
+
 export interface PortfolioConfig {
   holdings: PortfolioHolding[];
   cashAvailableEur: number;
   targetCashReserveEur: number;
+  closedPositions?: ClosedPosition[];
+  totalRealizedPnl?: number;
 }
 
 // --- Universe Config (from config/universe.json) ---

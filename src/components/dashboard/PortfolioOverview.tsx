@@ -2,13 +2,18 @@
 
 import { useState } from 'react';
 import { Card, CardHeader, CardTitle, CardBody, DrawdownDisplay } from '@/components/ui/card';
-import { StateBadge, TypeBadge, ConfidenceBadge, STATE_DESCRIPTIONS } from '@/components/ui/badge';
+import { StateBadge, TypeBadge, STATE_DESCRIPTIONS } from '@/components/ui/badge';
 import type { PortfolioAnalysis, ConcentrationData } from '@/lib/types';
+
+interface ClosedPos { isin: string; ticker?: string; name: string; realizedPnl: number }
 
 function PnlColor({ pct }: { pct: number }) {
   const color = pct >= 0 ? 'text-green-400' : 'text-red-400';
   return (
-    <span className={`${color} text-xs font-mono`} title="P&L = Ganancia o pérdida no realizada. Es la diferencia entre el precio actual y tu precio medio de compra, en porcentaje.">
+    <span
+      className={`${color} text-xs font-mono`}
+      title="Diferencia entre el precio actual y lo que pagaste tú. Si es positivo, vas ganando. Si es negativo, ahora vale menos de lo que pagaste. Es 'en papel' porque no has vendido."
+    >
       {pct >= 0 ? '+' : ''}{pct.toFixed(1)}%
     </span>
   );
@@ -63,14 +68,22 @@ interface Props {
   analyses: PortfolioAnalysis[];
   concentration: ConcentrationData | null;
   lastRunAt: string | null;
+  closedPositions?: ClosedPos[];
+  totalRealizedPnl?: number | null;
 }
 
-function PortfolioSummary({ analyses, totalValue }: { analyses: PortfolioAnalysis[]; totalValue: number }) {
+function PortfolioSummary({
+  analyses, totalValue, totalRealizedPnl,
+}: {
+  analyses: PortfolioAnalysis[];
+  totalValue: number;
+  totalRealizedPnl?: number | null;
+}) {
   const withPrice = analyses.filter(a => a.currentPrice > 0 && (a.holding.units ?? 0) > 0);
   const inProfit = withPrice.filter(a => a.unrealizedPnlPct > 0);
-  const inLoss = withPrice.filter(a => a.unrealizedPnlPct < 0);
+  const inLoss   = withPrice.filter(a => a.unrealizedPnlPct < 0);
 
-  // Approximate invested: back-calculate from currentValue and pnlPct per position
+  // Approximate invested from pnlPct (currency-agnostic ratio)
   let sumCurrent = 0, sumInvested = 0;
   for (const a of withPrice) {
     const cur = a.currentPrice * (a.holding.units ?? 0);
@@ -78,73 +91,93 @@ function PortfolioSummary({ analyses, totalValue }: { analyses: PortfolioAnalysi
     sumCurrent += cur;
     sumInvested += inv;
   }
-  const investedEur = sumCurrent > 0 && totalValue > 0 ? (sumInvested / sumCurrent) * totalValue : 0;
-  const unrealizedEur = totalValue - investedEur;
+  const investedEur    = sumCurrent > 0 && totalValue > 0 ? (sumInvested / sumCurrent) * totalValue : 0;
+  const paperGainEur   = totalValue - investedEur;
+  const paperGainPct   = investedEur > 0 ? (paperGainEur / investedEur) * 100 : 0;
+  const totalReturnEur = paperGainEur + (totalRealizedPnl ?? 0);
 
-  const best = withPrice.length > 0 ? withPrice.reduce((a, b) => b.unrealizedPnlPct > a.unrealizedPnlPct ? b : a) : null;
+  const best  = withPrice.length > 0 ? withPrice.reduce((a, b) => b.unrealizedPnlPct > a.unrealizedPnlPct ? b : a) : null;
   const worst = withPrice.length > 0 ? withPrice.reduce((a, b) => b.unrealizedPnlPct < a.unrealizedPnlPct ? b : a) : null;
 
+  const hasSold = totalRealizedPnl != null;
+
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+    <div className={`grid gap-3 mb-4 ${hasSold ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2 sm:grid-cols-3'}`}>
+      {/* Card 1: what it's worth now */}
       <div className="bg-[#1a2233] rounded-lg p-3">
-        <div className="text-xs text-slate-500 mb-1" title="Valor actual de mercado de todos tus activos">Valor actual</div>
+        <div className="text-xs text-slate-500 mb-1">Vale ahora</div>
         <div className="text-lg font-mono font-semibold text-slate-200">
           €{totalValue.toLocaleString('es-ES', { maximumFractionDigits: 0 })}
         </div>
         {investedEur > 0 && (
-          <div className="text-xs text-slate-500 mt-0.5" title="Total invertido: lo que pagaste en total por tus posiciones actuales">
-            Invertido: €{investedEur.toLocaleString('es-ES', { maximumFractionDigits: 0 })}
+          <div className="text-xs text-slate-500 mt-0.5">
+            Pusiste: €{investedEur.toLocaleString('es-ES', { maximumFractionDigits: 0 })}
           </div>
         )}
       </div>
+
+      {/* Card 2: paper gain/loss */}
       <div className="bg-[#1a2233] rounded-lg p-3">
-        <div className="text-xs text-slate-500 mb-1" title="Ganancia o pérdida no realizada — lo que ganarías o perderías si vendieras todo ahora">G/P no realizada</div>
-        <div className={`text-lg font-mono font-semibold ${unrealizedEur >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-          {unrealizedEur >= 0 ? '+' : ''}€{unrealizedEur.toLocaleString('es-ES', { maximumFractionDigits: 0 })}
+        <div
+          className="text-xs text-slate-500 mb-1"
+          title="Cuánto ganarías o perderías si vendieras todo ahora mismo. No es dinero real hasta que vendas."
+        >
+          Si vendieras hoy
+        </div>
+        <div className={`text-lg font-mono font-semibold ${paperGainEur >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+          {paperGainEur >= 0 ? '+' : ''}€{paperGainEur.toLocaleString('es-ES', { maximumFractionDigits: 0 })}
         </div>
         {investedEur > 0 && (
-          <div className={`text-xs mt-0.5 ${unrealizedEur >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-            {unrealizedEur >= 0 ? '+' : ''}{((unrealizedEur / investedEur) * 100).toFixed(1)}% sobre invertido
+          <div className={`text-xs mt-0.5 ${paperGainPct >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+            {paperGainPct >= 0 ? '+' : ''}{paperGainPct.toFixed(1)}% de lo que pusiste
           </div>
         )}
       </div>
-      <div className="bg-[#1a2233] rounded-lg p-3">
-        <div className="text-xs text-slate-500 mb-1">Posiciones</div>
-        <div className="text-lg font-mono font-semibold text-slate-200">{withPrice.length}</div>
-        <div className="text-xs mt-0.5">
-          <span className="text-green-400">{inProfit.length} en ganancia</span>
-          {' · '}
-          <span className="text-red-400">{inLoss.length} en pérdida</span>
+
+      {/* Card 3: realized (only if CSV was imported) */}
+      {hasSold && (
+        <div className="bg-[#1a2233] rounded-lg p-3">
+          <div
+            className="text-xs text-slate-500 mb-1"
+            title="Ganancia o pérdida real de acciones que ya vendiste. Este dinero ya es tuyo (o ya lo perdiste)."
+          >
+            Ya vendiste y ganaste
+          </div>
+          <div className={`text-lg font-mono font-semibold ${(totalRealizedPnl ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {(totalRealizedPnl ?? 0) >= 0 ? '+' : ''}€{(totalRealizedPnl ?? 0).toLocaleString('es-ES', { maximumFractionDigits: 0 })}
+          </div>
+          <div className="text-xs text-slate-500 mt-0.5">ganancia real</div>
         </div>
-      </div>
+      )}
+
+      {/* Card 4: positions / best+worst */}
       <div className="bg-[#1a2233] rounded-lg p-3">
-        <div className="text-xs text-slate-500 mb-1">Mejor / Peor posición</div>
-        {best && (
-          <div className="text-xs font-mono">
-            <span className="text-green-400">
-              {best.holding.ticker ?? best.holding.id.toUpperCase()} {best.unrealizedPnlPct >= 0 ? '+' : ''}{best.unrealizedPnlPct.toFixed(1)}%
-            </span>
-          </div>
-        )}
-        {worst && worst.holding.id !== best?.holding.id && (
-          <div className="text-xs font-mono mt-0.5">
-            <span className="text-red-400">
-              {worst.holding.ticker ?? worst.holding.id.toUpperCase()} {worst.unrealizedPnlPct.toFixed(1)}%
-            </span>
-          </div>
-        )}
+        <div className="text-xs text-slate-500 mb-1">Posiciones abiertas</div>
+        <div className="text-lg font-mono font-semibold text-slate-200">{withPrice.length}</div>
+        <div className="text-xs mt-0.5 space-y-0.5">
+          {best && (
+            <div className="text-green-400 font-mono">
+              ↑ {best.holding.ticker ?? best.holding.id.toUpperCase()} {best.unrealizedPnlPct >= 0 ? '+' : ''}{best.unrealizedPnlPct.toFixed(1)}%
+            </div>
+          )}
+          {worst && worst.holding.id !== best?.holding.id && (
+            <div className="text-red-400 font-mono">
+              ↓ {worst.holding.ticker ?? worst.holding.id.toUpperCase()} {worst.unrealizedPnlPct.toFixed(1)}%
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
-export function PortfolioOverview({ analyses, concentration, lastRunAt }: Props) {
+export function PortfolioOverview({ analyses, concentration, lastRunAt, closedPositions, totalRealizedPnl }: Props) {
   if (!analyses || analyses.length === 0) {
     return (
       <Card>
         <CardHeader><CardTitle>Mi Cartera</CardTitle></CardHeader>
         <CardBody>
-          <p className="text-slate-500 text-sm">Sin datos todavía. Pulsa "Ejecutar motor" para analizar tu cartera.</p>
+          <p className="text-slate-500 text-sm">Sin datos todavía. Pulsa "▶ Analizar" para analizar tu cartera.</p>
         </CardBody>
       </Card>
     );
@@ -158,11 +191,6 @@ export function PortfolioOverview({ analyses, concentration, lastRunAt }: Props)
       <CardHeader>
         <CardTitle>Mi Cartera</CardTitle>
         <div className="flex items-center gap-3 flex-wrap">
-          {totalValue > 0 && (
-            <span className="text-xs text-slate-400" title="Valor estimado de tu cartera de acciones y ETFs (sin contar efectivo, bonos ni fondos privados)">
-              Valor estimado: €{totalValue.toLocaleString('es-ES', { maximumFractionDigits: 0 })}
-            </span>
-          )}
           <span className="text-xs text-slate-500" title="Proporción de tu cartera entre acciones individuales y ETFs">
             Acciones {stocks.toFixed(0)}% / ETFs {etfs.toFixed(0)}%
           </span>
@@ -175,7 +203,7 @@ export function PortfolioOverview({ analyses, concentration, lastRunAt }: Props)
       </CardHeader>
       <CardBody className="p-0">
         <div className="px-4 pt-4">
-          <PortfolioSummary analyses={analyses} totalValue={totalValue} />
+          <PortfolioSummary analyses={analyses} totalValue={totalValue} totalRealizedPnl={totalRealizedPnl} />
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -183,13 +211,13 @@ export function PortfolioOverview({ analyses, concentration, lastRunAt }: Props)
               <tr className="border-b border-[#2a3445] text-xs text-slate-500 uppercase">
                 <th className="text-left px-4 py-2">Activo / ISIN</th>
                 <th className="text-left px-4 py-2">Tipo</th>
-                <th className="text-right px-4 py-2" title="Precio actual de mercado">Precio actual</th>
-                <th className="text-right px-4 py-2" title="Tu precio medio de compra — la media ponderada de todas tus compras">Precio medio</th>
-                <th className="text-right px-4 py-2" title="Ganancia o pérdida no realizada desde tu precio medio de compra">G/P %</th>
-                <th className="text-left px-4 py-2" title="Cuánto ha caído el precio desde su máximo de los últimos 30, 60 y 90 días. Cuanto más haya caído, más atractivo suele ser el precio.">Caída desde máx (30/60/90d)</th>
-                <th className="text-left px-4 py-2" title="Recomendación del motor para esta posición">Acción</th>
-                <th className="text-right px-4 py-2" title="Cantidad sugerida a invertir si decides actuar">Importe (€)</th>
-                <th className="text-left px-4 py-2" title="Plan de aportación mensual automatizado">DCA mensual</th>
+                <th className="text-right px-4 py-2" title="Precio actual de mercado">Precio hoy</th>
+                <th className="text-right px-4 py-2" title="Media ponderada de todos los precios a los que compraste">Lo que pagaste</th>
+                <th className="text-right px-4 py-2" title="Si positivo: ahora vale más de lo que pagaste. Si negativo: ahora vale menos. No es real hasta que vendas.">Ganancia en papel</th>
+                <th className="text-left px-4 py-2" title="Cuánto ha bajado desde su precio más alto reciente. Cuanto más haya bajado, más barato está.">Bajada desde máximo</th>
+                <th className="text-left px-4 py-2" title="Qué hacer con esta posición según el motor">Qué hacer</th>
+                <th className="text-right px-4 py-2" title="Cuánto invertir si decides actuar">Cuánto invertir</th>
+                <th className="text-left px-4 py-2" title="Lo que aportas cada mes automáticamente">Aportación mensual</th>
               </tr>
             </thead>
             <tbody>
@@ -246,8 +274,52 @@ export function PortfolioOverview({ analyses, concentration, lastRunAt }: Props)
             </tbody>
           </table>
         </div>
+
+        {/* Closed / sold positions */}
+        {closedPositions && closedPositions.length > 0 && (
+          <div className="px-4 py-4 border-t border-[#2a3445]/50">
+            <div className="text-xs text-slate-500 uppercase tracking-wide mb-2 font-semibold">
+              Acciones que ya vendiste
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-slate-600 border-b border-[#2a3445]/40">
+                    <th className="text-left py-1">Activo</th>
+                    <th className="text-right py-1" title="Ganancia o pérdida real que obtuviste al vender. Este dinero ya entró (o salió) de tu cuenta.">Ganado / Perdido al vender</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {closedPositions.map(p => (
+                    <tr key={p.isin} className="border-b border-[#2a3445]/20">
+                      <td className="py-1.5">
+                        <span className="font-mono text-slate-300">{p.ticker ?? p.isin}</span>
+                        <span className="text-slate-600 ml-2">{p.name}</span>
+                      </td>
+                      <td className={`py-1.5 text-right font-mono ${p.realizedPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {p.realizedPnl >= 0 ? '+' : ''}€{p.realizedPnl.toFixed(2)}
+                      </td>
+                    </tr>
+                  ))}
+                  {closedPositions.length > 1 && (
+                    <tr className="font-semibold">
+                      <td className="py-1.5 text-slate-400">Total ganado al vender</td>
+                      <td className={`py-1.5 text-right font-mono ${(totalRealizedPnl ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {(totalRealizedPnl ?? 0) >= 0 ? '+' : ''}€{(totalRealizedPnl ?? 0).toFixed(2)}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-xs text-slate-600 mt-2">
+              Estas posiciones aparecen al importar tu CSV de Trade Republic. Las ganancias/pérdidas ya son reales.
+            </p>
+          </div>
+        )}
+
         <div className="px-4 py-2 text-xs text-slate-600 border-t border-[#2a3445]/30">
-          💡 Pasa el ratón por encima de cualquier término para ver su explicación. Haz clic en el ISIN para copiarlo — úsalo en Trade Republic para comprar el activo correcto.
+          💡 Pasa el ratón encima de cualquier título para ver su explicación. Haz clic en el ISIN para copiarlo y usarlo en Trade Republic.
         </div>
       </CardBody>
     </Card>

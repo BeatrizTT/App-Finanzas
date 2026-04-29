@@ -11,13 +11,17 @@ export interface ComputedHolding {
   realizedPnl: number;
 }
 
+export interface CsvImportResult {
+  open: ComputedHolding[];   // positions still held
+  closed: ComputedHolding[]; // positions fully sold
+}
+
 function parseNum(s: string): number {
   if (!s || s.trim() === '') return 0;
-  // Handle both "1.234,56" (European) and "1234.56" (US) formats
-  const cleaned = s.trim().replace(/\./g, '').replace(',', '.');
+  // Handle European format "1.234,56" → strip thousands dot, replace decimal comma
+  const cleaned = s.trim().replace(/\.(?=\d{3})/g, '').replace(',', '.');
   const v = parseFloat(cleaned);
-  if (!isNaN(v)) return v;
-  return parseFloat(s.replace(',', '.')) || 0;
+  return isNaN(v) ? 0 : v;
 }
 
 // Auto-detect delimiter: Trade Republic Spain/EU exports use semicolons
@@ -27,40 +31,46 @@ function detectDelimiter(headerLine: string): ',' | ';' {
   return semicolons > commas ? ';' : ',';
 }
 
-export function parseTradeRepublicCsv(csvText: string): ComputedHolding[] {
+export function parseTradeRepublicCsv(csvText: string): CsvImportResult {
   const lines = csvText.trim().split('\n');
-  if (lines.length < 2) return [];
+  if (lines.length < 2) return { open: [], closed: [] };
 
   const delim = detectDelimiter(lines[0]);
-
   const header = parseCsvLine(lines[0], delim);
-  const idxOf = (name: string) => header.findIndex(h => h.toLowerCase().includes(name.toLowerCase()));
 
-  const iType = idxOf('type');
-  const iAsset = idxOf('asset_class');
-  const iName = idxOf('name');
+  // Use EXACT match first, then fallback to includes — fixes account_type matching before type
+  const idxOf = (name: string) => {
+    const exact = header.findIndex(h => h.toLowerCase().trim() === name.toLowerCase());
+    if (exact !== -1) return exact;
+    return header.findIndex(h => h.toLowerCase().trim().includes(name.toLowerCase()));
+  };
+
+  const iType   = idxOf('type');
+  const iAsset  = idxOf('asset_class');
+  const iName   = idxOf('name');
   const iSymbol = idxOf('symbol');
   const iShares = idxOf('shares');
   const iAmount = idxOf('amount');
-  const iFee = idxOf('fee');
+  const iFee    = idxOf('fee');
 
-  // Per-ISIN state: shares held and cost basis (weighted avg)
-  const holdings = new Map<string, { name: string; assetClass: string; shares: number; totalCost: number; realizedPnl: number }>();
+  const holdings = new Map<string, {
+    name: string; assetClass: string;
+    shares: number; totalCost: number; realizedPnl: number;
+  }>();
 
   for (let i = 1; i < lines.length; i++) {
     const raw = lines[i].trim();
     if (!raw) continue;
     const cols = parseCsvLine(raw, delim);
 
-    const type = cols[iType]?.trim().toUpperCase();
+    const type      = cols[iType]?.trim().toUpperCase();
     const assetClass = cols[iAsset]?.trim().toUpperCase();
-    const name = cols[iName]?.trim() || '';
-    const isin = cols[iSymbol]?.trim() || '';
-    const shares = Math.abs(parseNum(cols[iShares]));
-    const amount = parseNum(cols[iAmount]); // negative for buys, positive for sells
-    const fee = Math.abs(parseNum(cols[iFee]));
+    const name      = cols[iName]?.trim() || '';
+    const isin      = cols[iSymbol]?.trim() || '';
+    const shares    = Math.abs(parseNum(cols[iShares]));
+    const amount    = parseNum(cols[iAmount]); // negative for buys, positive for sells
+    const fee       = Math.abs(parseNum(cols[iFee]));
 
-    // Only process equity/fund trades
     if (!isin || !['STOCK', 'FUND', 'ETF', 'PRIVATE_FUND'].includes(assetClass)) continue;
     if (!['BUY', 'SELL'].includes(type)) continue;
     if (shares === 0) continue;
@@ -83,29 +93,35 @@ export function parseTradeRepublicCsv(csvText: string): ComputedHolding[] {
         h.realizedPnl += proceeds - costOfSold;
         h.totalCost -= costOfSold;
         h.shares -= shares;
-        if (h.shares < 0.0001) {
-          h.shares = 0;
-          h.totalCost = 0;
-        }
+        if (h.shares < 0.0001) { h.shares = 0; h.totalCost = 0; }
       }
     }
   }
 
-  const result: ComputedHolding[] = [];
+  const open: ComputedHolding[] = [];
+  const closed: ComputedHolding[] = [];
+
   for (const [isin, h] of holdings.entries()) {
-    if (h.shares < 0.0001) continue;
-    result.push({
+    const holding: ComputedHolding = {
       isin,
       name: h.name,
       assetClass: h.assetClass,
       shares: Math.round(h.shares * 1e6) / 1e6,
       totalCostEur: Math.round(h.totalCost * 100) / 100,
-      avgCostEur: Math.round((h.totalCost / h.shares) * 100) / 100,
+      avgCostEur: h.shares > 0 ? Math.round((h.totalCost / h.shares) * 100) / 100 : 0,
       realizedPnl: Math.round(h.realizedPnl * 100) / 100,
-    });
+    };
+    if (h.shares >= 0.0001) {
+      open.push(holding);
+    } else if (Math.abs(h.realizedPnl) > 0.01) {
+      closed.push(holding); // fully sold, but had P&L
+    }
   }
 
-  return result.sort((a, b) => b.totalCostEur - a.totalCostEur);
+  open.sort((a, b) => b.totalCostEur - a.totalCostEur);
+  closed.sort((a, b) => b.realizedPnl - a.realizedPnl);
+
+  return { open, closed };
 }
 
 function parseCsvLine(line: string, delim: ',' | ';' = ','): string[] {
