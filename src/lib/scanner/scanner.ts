@@ -136,6 +136,7 @@ function scoreAsset(
     name: assetDef.name,
     type: assetDef.type,
     tags: assetDef.tags,
+    isin: assetDef.isin,
     isSeedUniverse: assetDef.isSeed,
     score,
     state,

@@ -5,33 +5,8 @@ import { Card, CardHeader, CardTitle, CardBody, DrawdownDisplay, SectionEmpty } 
 import { StateBadge, TypeBadge, ConfidenceBadge, ScoreBar } from '@/components/ui/badge';
 import type { Opportunity } from '@/lib/types';
 
-// Known ISINs for display/copy in Trade Republic
-const TICKER_ISIN: Record<string, string> = {
-  NVDA: 'US67066G1040',
-  ASML: 'NL0010273215',
-  MSFT: 'US5949181045',
-  AMZN: 'US0231351067',
-  SMCI: 'US86800U3023',
-  CRM:  'US79466L3024',
-  NOW:  'US81762P1021',
-  ADBE: 'US00724F1012',
-  ORCL: 'US68389X1054',
-  TSLA: 'US88160R1014',
-  MU:   'US5951121038',
-  CNDX: 'IE00B53SZB19',
-  IWVL: 'IE00BP3QZB59',
-  IWDA: 'IE00B4L5Y983',
-  GOOGL:'US02079K3059',
-  META: 'US30303M1027',
-  AMD:  'US0079031078',
-  INTC: 'US4581401001',
-  QCOM: 'US7475251036',
-  AVGO: 'US11135F1012',
-};
-
-function IsinCopy({ ticker }: { ticker: string }) {
+function IsinCopy({ isin }: { isin?: string }) {
   const [copied, setCopied] = useState(false);
-  const isin = TICKER_ISIN[ticker];
   if (!isin) return null;
   const copy = () => {
     navigator.clipboard.writeText(isin).then(() => {
@@ -65,7 +40,7 @@ function OpportunityRow({ opp, showDiscoveryBadge = false }: { opp: Opportunity;
             )}
           </div>
           <div className="text-xs text-slate-500 mt-0.5 truncate">{opp.name}</div>
-          <IsinCopy ticker={opp.ticker} />
+          <IsinCopy isin={opp.isin} />
           <div className="mt-1">
             <ScoreBar score={opp.score.total} />
           </div>

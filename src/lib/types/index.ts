@@ -121,6 +121,7 @@ export interface UniverseAsset {
   tags: string[];
   qualityScore: number;     // 1-10, used as base quality signal
   isSeed: boolean;          // true = priority seed, false = extended discovery
+  isin?: string;
   currency?: string;
   region?: string;          // 'us' | 'eu' | 'global'
   minMarketCapBillions?: number;
@@ -295,6 +296,7 @@ export interface Opportunity {
   name: string;
   type: AssetType;
   tags: string[];
+  isin?: string;
   isSeedUniverse: boolean;         // false = found via extended discovery
   score: OpportunityScore;
   state: OpportunityState;
