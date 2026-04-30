@@ -129,7 +129,27 @@ export default function Dashboard() {
       const result = await res.json();
       if (result.success) {
         setStatusMessage(`¡Listo! ${result.alertsCount} alertas generadas.`);
-        await fetchData();
+        // Use the full data returned by POST directly — no need for a second GET
+        if (result.runAt) {
+          setData({
+            portfolioAnalyses: result.portfolioAnalyses ?? [],
+            concentration: result.concentration ?? null,
+            stockOpportunities: result.stockOpportunities ?? [],
+            etfOpportunities: result.etfOpportunities ?? [],
+            discoveredOpportunities: result.discoveredOpportunities ?? [],
+            allocationRecommendations: result.allocationRecommendations ?? [],
+            alerts: data.alerts,
+            lastRunAt: result.runAt,
+            marketRegime: result.marketRegime ?? 'neutral',
+            errors: result.errors ?? [],
+            closedPositions: result.closedPositions ?? [],
+            totalRealizedPnl: result.totalRealizedPnl ?? null,
+          });
+        }
+        // Also refresh alerts separately
+        fetch('/api/alerts?limit=50')
+          .then(r => r.ok ? r.json() : { alerts: [] })
+          .then(a => setData(prev => ({ ...prev, alerts: a.alerts ?? [] })));
       } else {
         setStatusMessage(`Error: ${result.error}`);
       }

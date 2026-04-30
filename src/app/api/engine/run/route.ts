@@ -22,15 +22,25 @@ export async function POST(req: NextRequest) {
 
     const output = await runDailyEngine({ sendDigest, sendAlertMessages });
 
+    // Also merge realized P&L so the dashboard can use POST response directly
+    const { readJsonFile } = await import('@/lib/utils/file-store');
+    const portfolioConfig = readJsonFile<any>('../../config/portfolio.json', {});
+
     return NextResponse.json({
       success: true,
-      runAt: output.runAt,
-      portfolioCount: output.portfolioAnalyses.length,
-      stockOpportunitiesCount: output.stockOpportunities.length,
-      etfOpportunitiesCount: output.etfOpportunities.length,
-      discoveredCount: output.discoveredOpportunities.length,
       alertsCount: output.alertsGenerated.length,
+      // Full data — dashboard uses this directly, no second GET needed
+      runAt: output.runAt,
+      marketRegime: output.marketRegime,
+      portfolioAnalyses: output.portfolioAnalyses,
+      concentration: output.concentration,
+      stockOpportunities: output.stockOpportunities,
+      etfOpportunities: output.etfOpportunities,
+      discoveredOpportunities: output.discoveredOpportunities,
+      allocationRecommendations: output.allocationRecommendations,
       errors: output.errors,
+      closedPositions: portfolioConfig.closedPositions ?? [],
+      totalRealizedPnl: portfolioConfig.totalRealizedPnl ?? null,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
