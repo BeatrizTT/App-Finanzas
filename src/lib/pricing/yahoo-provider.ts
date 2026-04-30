@@ -1,16 +1,22 @@
 // Yahoo Finance price provider using yahoo-finance2 (free, no API key)
 // Set PRICE_PROVIDER=yahoo in .env.local or Vercel env vars to use real data
 // yahoo-finance2 is declared as serverExternalPackage so Next.js loads it at runtime
-
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const _yfModule = require('yahoo-finance2') as { default?: Record<string, (...a: unknown[]) => unknown> } & Record<string, (...a: unknown[]) => unknown>;
-// yahoo-finance2 may export the client as default (ESM) or directly (CJS)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const yahooFinance = (_yfModule.default ?? _yfModule) as any;
+// Dynamic import avoids Turbopack static-analysis failures with ESM-only packages
 
 import { calcDrawdownPct } from '../utils/math';
 import type { PriceProvider } from './interface';
 import type { PriceData, HistoricalPrices, RecentHighs, HistoricalPrice } from '../types';
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _client: any = null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function getClient(): Promise<any> {
+  if (_client) return _client;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const mod = await import('yahoo-finance2') as any;
+  _client = mod.default ?? mod;
+  return _client;
+}
 
 // European UCITS ETF ticker mapping for Yahoo Finance
 const TICKER_MAP: Record<string, string> = {
@@ -54,9 +60,10 @@ export class YahooPriceProvider implements PriceProvider {
   async getCurrentPrice(symbol: string): Promise<PriceData> {
     const ticker = resolveYahooTicker(symbol);
     await rateLimit();
+    const yf = await getClient();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const quote = await withRetry(() => yahooFinance.quote(ticker)) as any;
+    const quote = await withRetry(() => yf.quote(ticker)) as any;
 
     return {
       symbol,
@@ -72,13 +79,14 @@ export class YahooPriceProvider implements PriceProvider {
   async getHistoricalPrices(symbol: string, days: number): Promise<HistoricalPrices> {
     const ticker = resolveYahooTicker(symbol);
     await rateLimit();
+    const yf = await getClient();
 
     const endDate = new Date();
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days - 5);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const rows = await withRetry(() => yahooFinance.historical(ticker, {
+    const rows = await withRetry(() => yf.historical(ticker, {
       period1: startDate,
       period2: endDate,
       interval: '1d',
