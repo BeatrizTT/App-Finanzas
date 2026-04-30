@@ -1,62 +1,51 @@
 // Yahoo Finance price provider using yahoo-finance2 (free, no API key)
-// Set PRICE_PROVIDER=yahoo in .env.local to use real market data
-// Note: Yahoo Finance data may have delays and occasional failures
+// Set PRICE_PROVIDER=yahoo in .env.local or Vercel env vars to use real data
+// yahoo-finance2 is declared as serverExternalPackage so Next.js loads it at runtime
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const _yfModule = require('yahoo-finance2') as { default?: Record<string, (...a: unknown[]) => unknown> } & Record<string, (...a: unknown[]) => unknown>;
+// yahoo-finance2 may export the client as default (ESM) or directly (CJS)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const yahooFinance = (_yfModule.default ?? _yfModule) as any;
 
 import { calcDrawdownPct } from '../utils/math';
 import type { PriceProvider } from './interface';
 import type { PriceData, HistoricalPrices, RecentHighs, HistoricalPrice } from '../types';
 
-// Some tickers need a suffix for European exchanges
+// European UCITS ETF ticker mapping for Yahoo Finance
+const TICKER_MAP: Record<string, string> = {
+  ASML: 'ASML.AS',   // Euronext Amsterdam
+  CNDX: 'CNDX.AS',
+  IWDA: 'IWDA.AS',
+  IWVL: 'IWVL.AS',
+  CSPX: 'CSPX.L',   // London Stock Exchange
+  EMIM: 'EMIM.L',
+  VWCE: 'VWCE.DE',  // Xetra Frankfurt
+  SEMI: 'VSEM.L',   // VanEck Semiconductor UCITS
+};
+
 function resolveYahooTicker(symbol: string): string {
-  const europeMap: Record<string, string> = {
-    // Amsterdam (Euronext)
-    ASML: 'ASML.AS',
-    CNDX: 'CNDX.AS',
-    IWDA: 'IWDA.AS',
-    IWVL: 'IWVL.AS',
-    // London (LSE)
-    CSPX: 'CSPX.L',
-    SEMI: 'VSEM.L',   // VanEck Semiconductor UCITS on LSE
-    EMIM: 'EMIM.L',
-    // Frankfurt (Xetra)
-    VWCE: 'VWCE.DE',
-  };
-  return europeMap[symbol] ?? symbol;
+  return TICKER_MAP[symbol] ?? symbol;
 }
 
-// Exponential backoff retry helper
+// 200ms minimum between requests to avoid Yahoo rate limiting
+let _lastCall = 0;
+async function rateLimit(): Promise<void> {
+  const gap = 200 - (Date.now() - _lastCall);
+  if (gap > 0) await new Promise(r => setTimeout(r, gap));
+  _lastCall = Date.now();
+}
+
+// Exponential backoff: 1s, 2s, 4s
 async function withRetry<T>(fn: () => Promise<T>, retries = 3): Promise<T> {
   for (let i = 0; i < retries; i++) {
     try { return await fn(); }
     catch (err) {
       if (i === retries - 1) throw err;
-      await new Promise(r => setTimeout(r, 1000 * Math.pow(2, i)));
+      await new Promise(r => setTimeout(r, 1000 * 2 ** i));
     }
   }
   throw new Error('unreachable');
-}
-
-// Rate-limiting: track last call timestamp
-let lastCall = 0;
-
-async function rateLimit(): Promise<void> {
-  const now = Date.now();
-  const elapsed = now - lastCall;
-  if (elapsed < 200) {
-    await new Promise(r => setTimeout(r, 200 - elapsed));
-  }
-  lastCall = Date.now();
-}
-
-// Lazy-loaded module reference
-let _yf: Record<string, (...args: unknown[]) => unknown> | null = null;
-
-async function getYf(): Promise<Record<string, (...args: unknown[]) => unknown>> {
-  if (_yf) return _yf;
-  // Dynamic import handles ESM-only package correctly
-  const mod = await import('yahoo-finance2' as string);
-  _yf = (mod.default ?? mod) as Record<string, (...args: unknown[]) => unknown>;
-  return _yf;
 }
 
 export class YahooPriceProvider implements PriceProvider {
@@ -64,50 +53,42 @@ export class YahooPriceProvider implements PriceProvider {
 
   async getCurrentPrice(symbol: string): Promise<PriceData> {
     const ticker = resolveYahooTicker(symbol);
-    const yf = await getYf();
-
     await rateLimit();
-    const quote = await withRetry(() =>
-      (yf['quote'] as (ticker: string) => Promise<Record<string, unknown>>)(ticker)
-    );
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const quote = await withRetry(() => yahooFinance.quote(ticker)) as any;
 
     return {
       symbol,
-      currentPrice: (quote['regularMarketPrice'] as number) ?? 0,
-      currency: (quote['currency'] as string) ?? 'USD',
+      currentPrice: quote.regularMarketPrice ?? 0,
+      currency: quote.currency ?? 'USD',
       timestamp: new Date(),
-      change1d: (quote['regularMarketChangePercent'] as number) ?? 0,
-      marketCap: quote['marketCap'] as number | undefined,
-      volume: quote['regularMarketVolume'] as number | undefined,
+      change1d: quote.regularMarketChangePercent ?? 0,
+      marketCap: quote.marketCap,
+      volume: quote.regularMarketVolume,
     };
   }
 
   async getHistoricalPrices(symbol: string, days: number): Promise<HistoricalPrices> {
     const ticker = resolveYahooTicker(symbol);
-    const yf = await getYf();
+    await rateLimit();
 
     const endDate = new Date();
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days - 5);
 
-    type HistRow = { date: Date | string; close?: number; high?: number; low?: number; volume?: number };
-    await rateLimit();
-    const result = await withRetry(() =>
-      (yf['historical'] as (
-        ticker: string,
-        opts: Record<string, unknown>
-      ) => Promise<HistRow[]>)(ticker, {
-        period1: startDate,
-        period2: endDate,
-        interval: '1d',
-      })
-    );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows = await withRetry(() => yahooFinance.historical(ticker, {
+      period1: startDate,
+      period2: endDate,
+      interval: '1d',
+    })) as any[];
 
-    const prices: HistoricalPrice[] = result.map((row) => ({
+    const prices: HistoricalPrice[] = rows.map((row) => ({
       date: new Date(row.date).toISOString().split('T')[0],
       close: row.close ?? 0,
-      high: row.high ?? 0,
-      low: row.low ?? 0,
+      high:  row.high  ?? 0,
+      low:   row.low   ?? 0,
       volume: row.volume ?? 0,
     }));
 
@@ -116,27 +97,24 @@ export class YahooPriceProvider implements PriceProvider {
 
   async getRecentHighs(symbol: string, windows = [30, 60, 90]): Promise<RecentHighs> {
     const maxWindow = Math.max(...windows);
-    const historical = await this.getHistoricalPrices(symbol, maxWindow + 5);
-    const currentData = await this.getCurrentPrice(symbol);
-    const currentPrice = currentData.currentPrice;
+    const hist = await this.getHistoricalPrices(symbol, maxWindow + 5);
+    const current = await this.getCurrentPrice(symbol);
+    const currentPrice = current.currentPrice;
 
-    const allPrices = historical.prices;
     const now = new Date();
-
-    function getHighForWindow(days: number): number {
+    const getHigh = (days: number) => {
       const cutoff = new Date(now);
       cutoff.setDate(cutoff.getDate() - days);
-      const windowPrices = allPrices.filter((p) => new Date(p.date) >= cutoff);
-      return windowPrices.reduce((max, p) => Math.max(max, p.high), currentPrice);
-    }
+      return hist.prices
+        .filter(p => new Date(p.date) >= cutoff)
+        .reduce((max, p) => Math.max(max, p.high), currentPrice);
+    };
 
-    const [high30d, high60d, high90d] = windows.map(getHighForWindow);
+    const [high30d, high60d, high90d] = windows.map(getHigh);
 
     return {
       symbol,
-      high30d,
-      high60d,
-      high90d,
+      high30d, high60d, high90d,
       currentPrice,
       drawdown30d: calcDrawdownPct(high30d, currentPrice),
       drawdown60d: calcDrawdownPct(high60d, currentPrice),
