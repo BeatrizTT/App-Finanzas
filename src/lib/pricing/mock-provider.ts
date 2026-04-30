@@ -42,6 +42,7 @@ const MOCK_BASE_PRICES: Record<string, { price: number; currency: string; market
   UNH:   { price: 490, currency: 'USD', marketCap: 450e9 },
   JNJ:   { price: 155, currency: 'USD', marketCap: 372e9 },
   COST:  { price: 905, currency: 'USD', marketCap: 400e9 },
+  MU:    { price: 92,  currency: 'USD', marketCap: 103e9 },
   // --- Seed ETFs (USD) ---
   QQQ:   { price: 470, currency: 'USD', marketCap: 250e9 },
   SPY:   { price: 540, currency: 'USD', marketCap: 580e9 },
@@ -55,10 +56,14 @@ const MOCK_BASE_PRICES: Record<string, { price: number; currency: string; market
   XLF:   { price: 45,  currency: 'USD', marketCap: 45e9 },
   VIG:   { price: 190, currency: 'USD', marketCap: 89e9 },
   VT:    { price: 105, currency: 'USD', marketCap: 45e9 },
-  // --- EUR-denominated ETFs ---
-  IWVL:  { price: 58,  currency: 'EUR', marketCap: 8e9 },
+  // --- EUR-denominated UCITS ETFs (Trade Republic Spain) ---
+  CNDX:  { price: 210, currency: 'EUR', marketCap: 12e9 },
   IWDA:  { price: 1320, currency: 'EUR', marketCap: 80e9 },
   CSPX:  { price: 530, currency: 'EUR', marketCap: 95e9 },
+  IWVL:  { price: 58,  currency: 'EUR', marketCap: 8e9 },
+  VWCE:  { price: 118, currency: 'EUR', marketCap: 18e9 },
+  SEMI:  { price: 47,  currency: 'USD', marketCap: 1.2e9 },
+  EMIM:  { price: 31,  currency: 'USD', marketCap: 22e9 },
   // --- Extended ETFs ---
   VOO:   { price: 495, currency: 'USD', marketCap: 590e9 },
   IVV:   { price: 548, currency: 'USD', marketCap: 530e9 },
@@ -113,6 +118,17 @@ const MOCK_HIGH_OFFSETS: Record<string, { offset30d: number; offset60d: number; 
   SCHD:  { offset30d: 0.04, offset60d: 0.06, offset90d: 0.09 },
   IWVL:  { offset30d: 0.05, offset60d: 0.08, offset90d: 0.11 },
   IWDA:  { offset30d: 0.09, offset60d: 0.14, offset90d: 0.17 },
+  CNDX:  { offset30d: 0.12, offset60d: 0.18, offset90d: 0.22 },
+  CSPX:  { offset30d: 0.07, offset60d: 0.11, offset90d: 0.14 },
+  VWCE:  { offset30d: 0.08, offset60d: 0.12, offset90d: 0.15 },
+  SEMI:  { offset30d: 0.20, offset60d: 0.28, offset90d: 0.35 },
+  EMIM:  { offset30d: 0.10, offset60d: 0.15, offset90d: 0.20 },
+  MU:    { offset30d: 0.22, offset60d: 0.30, offset90d: 0.38 },
+  JNJ:   { offset30d: 0.04, offset60d: 0.07, offset90d: 0.10 },
+  COST:  { offset30d: 0.06, offset60d: 0.09, offset90d: 0.12 },
+  SHOP:  { offset30d: 0.18, offset60d: 0.25, offset90d: 0.32 },
+  SNOW:  { offset30d: 0.22, offset60d: 0.32, offset90d: 0.40 },
+  NET:   { offset30d: 0.16, offset60d: 0.24, offset90d: 0.30 },
 };
 
 function getBasePrice(symbol: string): { price: number; currency: string; marketCap?: number } {
