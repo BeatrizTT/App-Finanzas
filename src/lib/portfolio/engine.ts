@@ -185,8 +185,48 @@ function buildReasons(
   }
 
   if (state === 'REVIEW') reasons.push('Revisa tu tesis antes de añadir más');
-  if (state === 'REDUCE') reasons.push('Considera reducir la exposición');
   if (state === 'DO_NOTHING') reasons.push('Precio cercano a máximos recientes — sin acción');
+
+  return reasons;
+}
+
+function buildReduceReasons(
+  holding: PortfolioHolding,
+  unrealizedPnlPct: number,
+  concentrationPenalty: number,
+  concentration: ConcentrationData
+): string[] {
+  const reasons: string[] = [];
+
+  if (unrealizedPnlPct >= 60) {
+    reasons.push(
+      `Ganancia en papel de +${unrealizedPnlPct.toFixed(0)}% — cerca de máximos. ` +
+      `Considera vender un 20-30% para asegurar beneficios y liberar capital`
+    );
+  }
+
+  if (concentrationPenalty > 0.65) {
+    const assetWeight = concentration.sectorWeights[`asset:${holding.id}`] ?? 0;
+    if (assetWeight > 0) {
+      reasons.push(
+        `Esta posición pesa un ${assetWeight.toFixed(0)}% de tu cartera. ` +
+        `Reducir un poco mejora el equilibrio y baja el riesgo total`
+      );
+    } else {
+      const heavyTags = holding.tags.filter(
+        (t) => (concentration.themeWeights[t] ?? 0) > 35
+      );
+      if (heavyTags.length > 0) {
+        reasons.push(
+          `Concentración elevada en ${heavyTags.join(', ')} — reducir esta posición equilibra la cartera`
+        );
+      }
+    }
+  }
+
+  if (holding.manualThesisRisk === 'high') {
+    reasons.push('Riesgo alto en la tesis de inversión — considera salir o reducir significativamente');
+  }
 
   return reasons;
 }
@@ -268,6 +308,23 @@ export async function analyzeHolding(
 
   // Concentration check
   const concentrationPenalty = calcConcentrationPenalty(holding, concentration);
+  const unrealizedPnlPct = calcPnlPct(holding.avgPrice, currentPrice);
+
+  // --- Sell / Reduce signals ---
+  // Only check when not already in a buy state (price is near highs)
+  const isNearHigh = maxDrawdown < 5;
+  const profitThreshold = holding.core ? 120 : 70; // higher bar for core long-term holdings
+
+  if (!['BUY_MORE', 'BUY_PARTIAL', 'BUY_SMALL', 'REVIEW'].includes(state)) {
+    // Profit-taking: big gain AND near recent high
+    if (isNearHigh && unrealizedPnlPct >= profitThreshold) {
+      state = 'REDUCE';
+    }
+    // Heavy concentration override (position too large regardless of price)
+    if (concentrationPenalty > 0.65 && state !== 'REDUCE') {
+      state = 'REDUCE';
+    }
+  }
 
   // Suggested amount
   const suggestedAmountEur = calcSuggestedAmount(
@@ -279,8 +336,13 @@ export async function analyzeHolding(
   if (holding.convictionScore >= 9 && maxDrawdown >= 10 && concentrationPenalty < 0.5) confidence = 'high';
   if (concentrationPenalty > 0.6 || (holding.manualThesisRisk ?? 'none') !== 'none') confidence = 'low';
 
-  const reasons = buildReasons(holding, drawdown, state, concentrationPenalty, concentration);
-  const unrealizedPnlPct = calcPnlPct(holding.avgPrice, currentPrice);
+  // Build reasons — use dedicated REDUCE reasons when applicable
+  const reasons = state === 'REDUCE'
+    ? [
+        ...buildReduceReasons(holding, unrealizedPnlPct, concentrationPenalty, concentration),
+        ...buildReasons(holding, drawdown, state, concentrationPenalty, concentration).slice(0, 1),
+      ]
+    : buildReasons(holding, drawdown, state, concentrationPenalty, concentration);
 
   return {
     holding,

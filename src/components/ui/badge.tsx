@@ -12,7 +12,7 @@ export const STATE_DESCRIPTIONS: Record<string, { es: string; explain: string }>
   WAIT:            { es: 'ESPERAR',          explain: 'No es el momento ideal. El precio está cerca de máximos o no hay señal clara. Espera a mejor entrada.' },
   DO_NOTHING:      { es: 'MANTENER',         explain: 'Todo en orden. La posición está bien, no hace falta comprar ni vender nada ahora.' },
   REVIEW:          { es: 'REVISAR',          explain: 'Algo ha cambiado en esta posición. Revisa la tesis de inversión antes de tomar decisiones.' },
-  REDUCE:          { es: 'REDUCIR',          explain: 'Considera vender una parte. La posición puede estar sobredimensionada o la tesis ha cambiado.' },
+  REDUCE:          { es: 'REDUCIR',          explain: 'Buen momento para vender una parte (20-30%). El precio está cerca de máximos y tienes una ganancia grande en papel. No tienes que vender todo — solo asegurar una parte del beneficio y liberar capital para otras oportunidades.' },
   // Opportunity states
   BUY:             { es: 'COMPRAR',          explain: 'Señal fuerte de entrada. El precio es muy atractivo y el activo supera todos los filtros de calidad.' },
   READY_TO_BUY:    { es: 'CASI LISTO',       explain: 'El precio está casi en zona de compra pero no del todo. No compres todavía — espera a que baje un poco más y el motor cambie a COMPRAR. Actúa cuando veas COMPRAR, no antes.' },
