@@ -198,6 +198,15 @@ function buildReduceReasons(
 ): string[] {
   const reasons: string[] = [];
 
+  // Target price reached
+  if (holding.targetPrice && holding.targetPrice > 0 && unrealizedPnlPct > 0) {
+    const currency = (holding as any).currency === 'EUR' ? '€' : '$';
+    reasons.push(
+      `Has alcanzado tu precio objetivo de ${currency}${holding.targetPrice} (+${unrealizedPnlPct.toFixed(0)}% de ganancia). ` +
+      `Es un buen momento para vender una parte y asegurar beneficios.`
+    );
+  }
+
   if (unrealizedPnlPct >= 60) {
     reasons.push(
       `Ganancia en papel de +${unrealizedPnlPct.toFixed(0)}% — cerca de máximos. ` +
@@ -324,6 +333,16 @@ export async function analyzeHolding(
     if (concentrationPenalty > 0.65 && state !== 'REDUCE') {
       state = 'REDUCE';
     }
+  }
+
+  // Target price reached → REDUCE
+  if (
+    holding.targetPrice &&
+    holding.targetPrice > 0 &&
+    currentPrice >= holding.targetPrice &&
+    !['BUY_MORE', 'BUY_PARTIAL', 'BUY_SMALL', 'REVIEW'].includes(state)
+  ) {
+    state = 'REDUCE';
   }
 
   // Suggested amount

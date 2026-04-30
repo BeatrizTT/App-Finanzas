@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardBody } from '@/components/ui/card';
 
 interface ImportResult {
@@ -9,6 +9,13 @@ interface ImportResult {
   totalRealizedPnl?: number;
   holdings: { ticker: string; shares: number; avgCostEur: number; realizedPnl: number }[];
   closedPositions?: { ticker: string; name: string; realizedPnl: number }[];
+}
+
+interface ConfigStatus {
+  priceProvider: string;
+  telegramConfigured: boolean;
+  cronSecretSet: boolean;
+  isVercel: boolean;
 }
 
 interface Props {
@@ -33,6 +40,27 @@ function SettingRow({ label, value, description }: { label: string; value: strin
   );
 }
 
+function CopySnippet({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+  return (
+    <div className="flex items-center gap-2 mt-2">
+      <code className="flex-1 text-xs font-mono bg-black/30 px-2 py-1 rounded text-slate-300 break-all">{text}</code>
+      <button
+        onClick={copy}
+        className="text-xs px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-300 transition-colors shrink-0 cursor-pointer"
+      >
+        {copied ? '✓' : 'Copiar'}
+      </button>
+    </div>
+  );
+}
+
 export function Settings({
   onRunEngine,
   isRunning,
@@ -45,7 +73,15 @@ export function Settings({
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [importError, setImportError] = useState('');
+  const [configStatus, setConfigStatus] = useState<ConfigStatus | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    fetch('/api/config/status')
+      .then((r) => r.json())
+      .then((data: ConfigStatus) => setConfigStatus(data))
+      .catch(() => {/* silent */});
+  }, []);
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -106,25 +142,81 @@ export function Settings({
             )}
           </div>
 
-          {/* Current Config */}
+          {/* Status + Setup Guides */}
           <div>
             <div className="text-xs text-slate-500 uppercase tracking-wide mb-3">Estado del sistema</div>
-            <div className="space-y-0">
-              <SettingRow
-                label="Fuente de precios"
-                value={providerName}
-                description="'mock' = precios simulados • 'yahoo' = precios reales"
-              />
-              <SettingRow
-                label="Régimen de mercado"
-                value={marketRegime === 'bullish' ? '📈 Alcista' : marketRegime === 'bearish' ? '📉 Bajista' : '↔ Neutro'}
-                description="Influye en la agresividad de las recomendaciones"
-              />
-              <SettingRow
-                label="Alertas Telegram"
-                value={isTelegramConfigured ? '✅ Activadas' : '❌ No configuradas'}
-                description={isTelegramConfigured ? 'Recibirás alertas en Telegram' : 'Configura TELEGRAM_BOT_TOKEN y CHAT_ID'}
-              />
+            <div className="space-y-3">
+
+              {/* Precios reales */}
+              {configStatus?.priceProvider !== 'yahoo' ? (
+                <div className="rounded-lg border border-yellow-800/50 bg-yellow-900/20 p-3">
+                  <div className="text-xs font-semibold text-yellow-300 mb-1">
+                    ⚡ Activa precios reales (Yahoo Finance)
+                  </div>
+                  <div className="text-xs text-yellow-200/70 mb-2">
+                    Sin esto el motor usa precios simulados. Ve a Vercel → tu proyecto → Settings → Environment Variables → añade la variable de abajo → Redeploy
+                  </div>
+                  <CopySnippet text="PRICE_PROVIDER=yahoo" />
+                </div>
+              ) : (
+                <div className="rounded-lg border border-green-800/40 bg-green-900/20 p-3">
+                  <div className="text-xs font-semibold text-green-400">
+                    ✅ Precios reales activados (Yahoo Finance)
+                  </div>
+                </div>
+              )}
+
+              {/* Telegram */}
+              {!configStatus?.telegramConfigured ? (
+                <div className="rounded-lg border border-blue-800/40 bg-blue-900/20 p-3">
+                  <div className="text-xs font-semibold text-blue-300 mb-2">
+                    📱 Activa notificaciones Telegram
+                  </div>
+                  <ol className="text-xs text-blue-200/70 space-y-1.5 list-none">
+                    <li>1. Busca <span className="font-mono text-blue-300">@BotFather</span> en Telegram → escribe <span className="font-mono">/newbot</span> → elige nombre → copia el TOKEN</li>
+                    <li>2. Busca <span className="font-mono text-blue-300">@userinfobot</span> → escribe cualquier mensaje → copia tu Chat ID (el número)</li>
+                    <li>3. En Vercel → Settings → Environment Variables, añade:
+                      <div className="mt-1 space-y-1">
+                        <CopySnippet text="TELEGRAM_BOT_TOKEN=el_token_del_paso_1" />
+                        <CopySnippet text="TELEGRAM_CHAT_ID=tu_chat_id_del_paso_2" />
+                      </div>
+                    </li>
+                    <li>4. Redeploy y vuelve aquí — pondrá ✅ Activadas</li>
+                  </ol>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-green-800/40 bg-green-900/20 p-3">
+                  <div className="text-xs font-semibold text-green-400">
+                    ✅ Telegram activado — recibirás alertas en tu móvil
+                  </div>
+                </div>
+              )}
+
+              {/* Análisis automático */}
+              <div className="rounded-lg border border-[#2a3445] bg-[#161b27] p-3">
+                <div className="text-xs text-slate-400">
+                  ⏰ Análisis automático: el motor se ejecuta automáticamente a las 9h y 18h en días laborables (cron configurado)
+                </div>
+                {!configStatus?.cronSecretSet && (
+                  <div className="text-xs text-slate-500 mt-1.5">
+                    Opcional: añade <span className="font-mono text-slate-400">CRON_SECRET</span> en Vercel para proteger el endpoint del cron
+                  </div>
+                )}
+              </div>
+
+              {/* Simple status rows */}
+              <div className="space-y-0">
+                <SettingRow
+                  label="Fuente de precios"
+                  value={providerName}
+                  description="'mock' = precios simulados • 'yahoo' = precios reales"
+                />
+                <SettingRow
+                  label="Régimen de mercado"
+                  value={marketRegime === 'bullish' ? '📈 Alcista' : marketRegime === 'bearish' ? '📉 Bajista' : '↔ Neutro'}
+                  description="Influye en la agresividad de las recomendaciones"
+                />
+              </div>
             </div>
           </div>
         </div>

@@ -9,12 +9,43 @@ import type { PriceData, HistoricalPrices, RecentHighs, HistoricalPrice } from '
 // Some tickers need a suffix for European exchanges
 function resolveYahooTicker(symbol: string): string {
   const europeMap: Record<string, string> = {
-    ASML: 'ASML.AS',   // Amsterdam exchange
-    IWDA: 'IWDA.L',    // London Stock Exchange
-    IWVL: 'IWVL.L',
+    // Amsterdam (Euronext)
+    ASML: 'ASML.AS',
+    CNDX: 'CNDX.AS',
+    IWDA: 'IWDA.AS',
+    IWVL: 'IWVL.AS',
+    // London (LSE)
     CSPX: 'CSPX.L',
+    SEMI: 'VSEM.L',   // VanEck Semiconductor UCITS on LSE
+    EMIM: 'EMIM.L',
+    // Frankfurt (Xetra)
+    VWCE: 'VWCE.DE',
   };
   return europeMap[symbol] ?? symbol;
+}
+
+// Exponential backoff retry helper
+async function withRetry<T>(fn: () => Promise<T>, retries = 3): Promise<T> {
+  for (let i = 0; i < retries; i++) {
+    try { return await fn(); }
+    catch (err) {
+      if (i === retries - 1) throw err;
+      await new Promise(r => setTimeout(r, 1000 * Math.pow(2, i)));
+    }
+  }
+  throw new Error('unreachable');
+}
+
+// Rate-limiting: track last call timestamp
+let lastCall = 0;
+
+async function rateLimit(): Promise<void> {
+  const now = Date.now();
+  const elapsed = now - lastCall;
+  if (elapsed < 200) {
+    await new Promise(r => setTimeout(r, 200 - elapsed));
+  }
+  lastCall = Date.now();
 }
 
 // Lazy-loaded module reference
@@ -35,7 +66,10 @@ export class YahooPriceProvider implements PriceProvider {
     const ticker = resolveYahooTicker(symbol);
     const yf = await getYf();
 
-    const quote = await (yf['quote'] as (ticker: string) => Promise<Record<string, unknown>>)(ticker);
+    await rateLimit();
+    const quote = await withRetry(() =>
+      (yf['quote'] as (ticker: string) => Promise<Record<string, unknown>>)(ticker)
+    );
 
     return {
       symbol,
@@ -57,14 +91,17 @@ export class YahooPriceProvider implements PriceProvider {
     startDate.setDate(startDate.getDate() - days - 5);
 
     type HistRow = { date: Date | string; close?: number; high?: number; low?: number; volume?: number };
-    const result = await (yf['historical'] as (
-      ticker: string,
-      opts: Record<string, unknown>
-    ) => Promise<HistRow[]>)(ticker, {
-      period1: startDate,
-      period2: endDate,
-      interval: '1d',
-    });
+    await rateLimit();
+    const result = await withRetry(() =>
+      (yf['historical'] as (
+        ticker: string,
+        opts: Record<string, unknown>
+      ) => Promise<HistRow[]>)(ticker, {
+        period1: startDate,
+        period2: endDate,
+        interval: '1d',
+      })
+    );
 
     const prices: HistoricalPrice[] = result.map((row) => ({
       date: new Date(row.date).toISOString().split('T')[0],

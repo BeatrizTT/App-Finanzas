@@ -95,6 +95,7 @@ export interface PortfolioHolding {
   manualThesisRisk?: ThesisRisk;  // manual: escalate risk level
   maxWeightPercent?: number;      // max allowed portfolio weight %
   currency?: string;        // asset currency (USD, EUR) - defaults to USD
+  targetPrice?: number;        // target sell price in asset currency (optional)
 }
 
 export interface ClosedPosition {
