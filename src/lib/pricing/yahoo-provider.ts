@@ -34,21 +34,26 @@ function resolveYahooTicker(symbol: string): string {
   return TICKER_MAP[symbol] ?? symbol;
 }
 
-// 200ms minimum between requests to avoid Yahoo rate limiting
-let _lastCall = 0;
+// 500ms minimum between requests — sequential slot reservation prevents
+// concurrent calls from bypassing the limit
+let _nextCallTime = 0;
 async function rateLimit(): Promise<void> {
-  const gap = 200 - (Date.now() - _lastCall);
-  if (gap > 0) await new Promise(r => setTimeout(r, gap));
-  _lastCall = Date.now();
+  const now = Date.now();
+  const slot = Math.max(now, _nextCallTime);
+  _nextCallTime = slot + 500;
+  if (slot > now) await new Promise(r => setTimeout(r, slot - now));
 }
 
-// Exponential backoff: 1s, 2s, 4s
-async function withRetry<T>(fn: () => Promise<T>, retries = 3): Promise<T> {
+// Exponential backoff; 429 Too Many Requests gets a longer pause
+async function withRetry<T>(fn: () => Promise<T>, retries = 4): Promise<T> {
   for (let i = 0; i < retries; i++) {
     try { return await fn(); }
     catch (err) {
       if (i === retries - 1) throw err;
-      await new Promise(r => setTimeout(r, 1000 * 2 ** i));
+      const msg = err instanceof Error ? err.message : String(err);
+      const isRateLimit = msg.includes('Too Many Requests') || msg.includes('429');
+      const delay = isRateLimit ? 8000 * (i + 1) : 1000 * 2 ** i;
+      await new Promise(r => setTimeout(r, delay));
     }
   }
   throw new Error('unreachable');
