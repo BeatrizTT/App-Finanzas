@@ -208,7 +208,7 @@ export function Settings({
               <div className="space-y-0">
                 <SettingRow
                   label="Fuente de precios"
-                  value={providerName}
+                  value={configStatus?.priceProvider ?? providerName}
                   description="'mock' = precios simulados • 'yahoo' = precios reales"
                 />
                 <SettingRow
