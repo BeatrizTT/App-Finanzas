@@ -113,11 +113,14 @@ export async function runDailyEngine(options?: {
     .map((h) => h.ticker ?? h.id.toUpperCase())
     .filter(Boolean);
 
+  const isVercel = !!process.env.VERCEL;
+
+  // On Vercel Hobby (60s limit) skip extended universe — seed + portfolio is enough
   const allUniverseAssets: UniverseAsset[] = [
     ...universeConfig.seedStocks,
     ...universeConfig.seedEtfs,
-    ...universeConfig.extendedStocks,
-    ...universeConfig.extendedEtfs,
+    ...(isVercel ? [] : universeConfig.extendedStocks),
+    ...(isVercel ? [] : universeConfig.extendedEtfs),
   ];
   const universeTickers = allUniverseAssets.map((a) => a.ticker);
 

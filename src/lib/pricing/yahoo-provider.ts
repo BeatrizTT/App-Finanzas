@@ -44,15 +44,15 @@ async function rateLimit(): Promise<void> {
   if (slot > now) await new Promise(r => setTimeout(r, slot - now));
 }
 
-// Exponential backoff; 429 Too Many Requests gets a longer pause
-async function withRetry<T>(fn: () => Promise<T>, retries = 4): Promise<T> {
+// Exponential backoff; 429 fails fast (1 retry) to avoid cascading timeouts
+async function withRetry<T>(fn: () => Promise<T>, retries = 3): Promise<T> {
   for (let i = 0; i < retries; i++) {
     try { return await fn(); }
     catch (err) {
       if (i === retries - 1) throw err;
       const msg = err instanceof Error ? err.message : String(err);
       const isRateLimit = msg.includes('Too Many Requests') || msg.includes('429');
-      const delay = isRateLimit ? 8000 * (i + 1) : 1000 * 2 ** i;
+      const delay = isRateLimit ? 3000 : 1000 * 2 ** i;
       await new Promise(r => setTimeout(r, delay));
     }
   }

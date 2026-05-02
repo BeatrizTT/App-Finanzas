@@ -119,7 +119,11 @@ export default function Dashboard() {
 
   const handleRunEngine = async () => {
     setIsRunning(true);
-    setStatusMessage('Analizando...');
+    setStatusMessage('Analizando precios reales... (puede tardar ~30s)');
+    const msgTimer = setTimeout(
+      () => setStatusMessage('Aún analizando — Yahoo Finance necesita tiempo entre peticiones...'),
+      15000
+    );
     try {
       const res = await fetch('/api/engine/run', {
         method: 'POST',
@@ -127,6 +131,7 @@ export default function Dashboard() {
         body: JSON.stringify({ sendDigest: true, sendAlertMessages: true }),
       });
       const result = await res.json();
+      clearTimeout(msgTimer);
       if (result.success) {
         setStatusMessage(`¡Listo! ${result.alertsCount} alertas generadas.`);
         // Use the full data returned by POST directly — no need for a second GET
@@ -151,10 +156,11 @@ export default function Dashboard() {
           .then(r => r.ok ? r.json() : { alerts: [] })
           .then(a => setData(prev => ({ ...prev, alerts: a.alerts ?? [] })));
       } else {
-        setStatusMessage(`Error: ${result.error}`);
+        setStatusMessage(`Error: ${result.error ?? 'fallo al analizar'}`);
       }
     } catch (err) {
-      setStatusMessage('Error al ejecutar el análisis');
+      clearTimeout(msgTimer);
+      setStatusMessage('Error de red — intenta de nuevo en 30 segundos');
     } finally {
       setIsRunning(false);
       setTimeout(() => setStatusMessage(''), 5000);
