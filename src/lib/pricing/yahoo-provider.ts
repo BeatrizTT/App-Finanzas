@@ -111,8 +111,9 @@ export class YahooPriceProvider implements PriceProvider {
   async getRecentHighs(symbol: string, windows = [30, 60, 90]): Promise<RecentHighs> {
     const maxWindow = Math.max(...windows);
     const hist = await this.getHistoricalPrices(symbol, maxWindow + 5);
-    const current = await this.getCurrentPrice(symbol);
-    const currentPrice = current.currentPrice;
+    // Use last historical close as current price — avoids a second quote() call per asset
+    const lastBar = hist.prices[hist.prices.length - 1];
+    const currentPrice = lastBar?.close ?? 0;
 
     const now = new Date();
     const getHigh = (days: number) => {
