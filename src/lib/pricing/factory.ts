@@ -4,6 +4,7 @@
 import type { PriceProvider } from './interface';
 import { MockPriceProvider } from './mock-provider';
 import { YahooPriceProvider } from './yahoo-provider';
+import { TwelveDataPriceProvider } from './twelvedata-provider';
 
 let _provider: PriceProvider | null = null;
 
@@ -17,6 +18,8 @@ export function getPriceProvider(): PriceProvider {
     _provider = new MockPriceProvider();
   } else if (providerName === 'yahoo') {
     _provider = new YahooPriceProvider();
+  } else if (providerName === 'twelvedata') {
+    _provider = new TwelveDataPriceProvider();
   } else {
     console.warn(`Unknown PRICE_PROVIDER "${providerName}", falling back to mock`);
     _provider = new MockPriceProvider();
