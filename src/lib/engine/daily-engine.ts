@@ -33,12 +33,27 @@ async function fetchAllPrices(
 ): Promise<{ allHighs: Record<string, RecentHighs>; errors: string[] }> {
   const provider = getPriceProvider();
   const allTickers = Array.from(new Set([...portfolioTickers, ...universeTickers]));
-  const allHighs: Record<string, RecentHighs> = {};
   const errors: string[] = [];
 
-  console.log(`[Engine] Fetching prices for ${allTickers.length} assets...`);
+  console.log(`[Engine] Fetching prices for ${allTickers.length} assets via ${provider.providerName}...`);
 
-  // Fetch in parallel with a concurrency limit to avoid rate limits
+  // Use batch API when the provider supports it (e.g. Twelve Data) — one HTTP call for all symbols
+  if (provider.batchGetRecentHighs) {
+    try {
+      const allHighs = await provider.batchGetRecentHighs(allTickers);
+      const missing = allTickers.filter(t => !allHighs[t]);
+      for (const t of missing) errors.push(`Price fetch failed: no data for ${t}`);
+      console.log(`[Engine] Prices fetched: ${Object.keys(allHighs).length}/${allTickers.length} succeeded`);
+      return { allHighs, errors };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[Engine] Batch fetch failed, falling back to sequential: ${msg}`);
+      errors.push(`Batch fetch failed: ${msg}`);
+    }
+  }
+
+  // Sequential fallback for providers without batch support (Yahoo, mock)
+  const allHighs: Record<string, RecentHighs> = {};
   const BATCH_SIZE = 10;
   for (let i = 0; i < allTickers.length; i += BATCH_SIZE) {
     const batch = allTickers.slice(i, i + BATCH_SIZE);
@@ -58,7 +73,6 @@ async function fetchAllPrices(
       }
     }
 
-    // Small delay between batches for live provider
     if (process.env.PRICE_PROVIDER === 'yahoo' && i + BATCH_SIZE < allTickers.length) {
       await new Promise((r) => setTimeout(r, 1000));
     }

@@ -13,6 +13,12 @@ export interface PriceProvider {
   /** Calculate recent highs and drawdowns for the configured windows */
   getRecentHighs(symbol: string, windows?: number[]): Promise<RecentHighs>;
 
+  /**
+   * Batch version of getRecentHighs — optional; providers that support it
+   * (e.g. Twelve Data) can fetch all symbols in one HTTP request.
+   */
+  batchGetRecentHighs?(symbols: string[], windows?: number[]): Promise<Record<string, RecentHighs>>;
+
   /** Provider name for logging/debugging */
   readonly providerName: string;
 }
