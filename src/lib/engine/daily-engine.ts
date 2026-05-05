@@ -9,6 +9,7 @@ import { sendAlerts } from '../alerts/telegram';
 import { sendDailyDigest } from '../alerts/digest';
 import { saveAlerts } from '../alerts/history';
 import { getPriceProvider, resetPriceProvider } from '../pricing/factory';
+import { loadPriceCache, savePriceCache, getCached, setCached, countStale } from '../pricing/price-cache';
 import {
   getEffectivePortfolioConfig,
   getUniverseConfig,
@@ -27,60 +28,95 @@ import type {
 // Fetch all prices needed for one engine run
 // --------------------------------------------------------------------------
 
+// Free-tier Twelve Data allows 8 symbols/minute (each symbol = 1 credit).
+// We cache prices for 4 hours so most runs use zero API credits.
+const BATCH_CREDIT_LIMIT = 8;
+const CACHE_TTL_LABEL = '4h';
+
 async function fetchAllPrices(
   portfolioTickers: string[],
   universeTickers: string[]
 ): Promise<{ allHighs: Record<string, RecentHighs>; errors: string[] }> {
   const provider = getPriceProvider();
+  // Portfolio symbols have priority — checked first for cache misses
   const allTickers = Array.from(new Set([...portfolioTickers, ...universeTickers]));
   const errors: string[] = [];
+  const allHighs: Record<string, RecentHighs> = {};
 
-  console.log(`[Engine] Fetching prices for ${allTickers.length} assets via ${provider.providerName}...`);
+  // ----- MOCK / providers without batch support: skip cache, fetch directly -----
+  if (!provider.batchGetRecentHighs) {
+    console.log(`[Engine] ${provider.providerName}: sequential fetch for ${allTickers.length} assets`);
+    const BATCH_SIZE = 10;
+    for (let i = 0; i < allTickers.length; i += BATCH_SIZE) {
+      const batch = allTickers.slice(i, i + BATCH_SIZE);
+      const results = await Promise.allSettled(
+        batch.map(async (ticker) => ({ ticker, highs: await provider.getRecentHighs(ticker) }))
+      );
+      for (const r of results) {
+        if (r.status === 'fulfilled') allHighs[r.value.ticker] = r.value.highs;
+        else errors.push(`Price fetch failed: ${r.reason instanceof Error ? r.reason.message : r.reason}`);
+      }
+      if (process.env.PRICE_PROVIDER === 'yahoo' && i + BATCH_SIZE < allTickers.length) {
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+    }
+    console.log(`[Engine] Prices fetched: ${Object.keys(allHighs).length}/${allTickers.length}`);
+    return { allHighs, errors };
+  }
 
-  // Use batch API when the provider supports it (e.g. Twelve Data) — one HTTP call for all symbols
-  if (provider.batchGetRecentHighs) {
+  // ----- Batch provider (Twelve Data): use cache to stay within 8 credits/min -----
+  const cache = loadPriceCache();
+  const staleSymbols: string[] = [];
+
+  // Load fresh prices from cache
+  for (const ticker of allTickers) {
+    const cached = getCached(cache, ticker);
+    if (cached) {
+      allHighs[ticker] = cached;
+    } else {
+      staleSymbols.push(ticker);
+    }
+  }
+
+  const stalePriority = [
+    // portfolio symbols first, then universe
+    ...staleSymbols.filter(t => portfolioTickers.includes(t)),
+    ...staleSymbols.filter(t => !portfolioTickers.includes(t)),
+  ];
+
+  const staleCount = stalePriority.length;
+  const toFetch = stalePriority.slice(0, BATCH_CREDIT_LIMIT);
+  const deferred = stalePriority.slice(BATCH_CREDIT_LIMIT);
+
+  console.log(
+    `[Engine] Price cache: ${allTickers.length - staleCount} fresh (${CACHE_TTL_LABEL} TTL), ` +
+    `${staleCount} stale — fetching ${toFetch.length}, deferring ${deferred.length}`
+  );
+
+  if (toFetch.length > 0) {
     try {
-      const allHighs = await provider.batchGetRecentHighs(allTickers);
-      const missing = allTickers.filter(t => !allHighs[t]);
-      for (const t of missing) errors.push(`No data for ${t}`);
-      console.log(`[Engine] Prices fetched: ${Object.keys(allHighs).length}/${allTickers.length} succeeded`);
-      return { allHighs, errors };
+      const freshHighs = await provider.batchGetRecentHighs(toFetch);
+      for (const [sym, highs] of Object.entries(freshHighs)) {
+        allHighs[sym] = highs;
+        setCached(cache, sym, highs);
+      }
+      savePriceCache(cache);
+      const missed = toFetch.filter(t => !freshHighs[t]);
+      for (const t of missed) errors.push(`No data for ${t}`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`[Engine] Batch fetch failed: ${msg}`);
       errors.push(`Batch fetch failed: ${msg}`);
-      // Do NOT fall back to sequential — it would take minutes and always time out
-      return { allHighs: {}, errors };
     }
   }
 
-  // Sequential fallback for providers without batch support (Yahoo, mock)
-  const allHighs: Record<string, RecentHighs> = {};
-  const BATCH_SIZE = 10;
-  for (let i = 0; i < allTickers.length; i += BATCH_SIZE) {
-    const batch = allTickers.slice(i, i + BATCH_SIZE);
-    const results = await Promise.allSettled(
-      batch.map(async (ticker) => {
-        const highs = await provider.getRecentHighs(ticker);
-        return { ticker, highs };
-      })
+  if (deferred.length > 0) {
+    errors.push(
+      `${deferred.length} symbols deferred (rate limit): prices will refresh on the next run`
     );
-
-    for (const result of results) {
-      if (result.status === 'fulfilled') {
-        allHighs[result.value.ticker] = result.value.highs;
-      } else {
-        const err = result.reason instanceof Error ? result.reason.message : String(result.reason);
-        errors.push(`Price fetch failed: ${err}`);
-      }
-    }
-
-    if (process.env.PRICE_PROVIDER === 'yahoo' && i + BATCH_SIZE < allTickers.length) {
-      await new Promise((r) => setTimeout(r, 1000));
-    }
   }
 
-  console.log(`[Engine] Prices fetched: ${Object.keys(allHighs).length}/${allTickers.length} succeeded`);
+  console.log(`[Engine] Prices available: ${Object.keys(allHighs).length}/${allTickers.length}`);
   return { allHighs, errors };
 }
 
