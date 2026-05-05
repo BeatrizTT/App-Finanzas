@@ -18,8 +18,17 @@ export interface CsvImportResult {
 
 function parseNum(s: string): number {
   if (!s || s.trim() === '') return 0;
-  // Handle European format "1.234,56" → strip thousands dot, replace decimal comma
-  const cleaned = s.trim().replace(/\.(?=\d{3})/g, '').replace(',', '.');
+  // Strip currency symbols and whitespace
+  let cleaned = s.trim().replace(/[€$£¥\s]/g, '');
+  if (!cleaned) return 0;
+
+  if (cleaned.includes(',')) {
+    // European format: all dots are thousands separators, comma is decimal
+    // e.g. "1.234,56" → "1234.56", "1,2161240000" → "1.2161240000"
+    cleaned = cleaned.replace(/\./g, '').replace(',', '.');
+  }
+  // If no comma: plain decimal or integer — keep as-is (parseFloat handles both)
+
   const v = parseFloat(cleaned);
   return isNaN(v) ? 0 : v;
 }
