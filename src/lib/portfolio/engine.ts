@@ -3,7 +3,6 @@
 // Uses drawdown zones, conviction, DCA, concentration, and thesis risk
 
 import { calcDrawdownPct, calcPnlPct, pctOfTotal, clamp } from '../utils/math';
-import { safeFetchHighs } from '../pricing/factory';
 import { getRulesConfig, getAllocationConfig, getOverridesConfig } from '../utils/config-loader';
 import type {
   PortfolioConfig,
@@ -253,30 +252,25 @@ export async function analyzeHolding(
 ): Promise<PortfolioAnalysis> {
   const overrides = getOverridesConfig();
 
-  // Use provided highs or fetch them
+  // Use provided highs — never fetch individually (daily engine pre-fetches everything)
   let highs = recentHighs;
   let priceError: string | undefined;
 
   if (!highs) {
-    const ticker = holding.ticker ?? holding.id.toUpperCase();
-    highs = await safeFetchHighs(ticker);
-    if (!highs) {
-      priceError = `Failed to fetch price data for ${ticker}`;
-      // Return a neutral analysis if price fetch fails
-      return {
-        holding,
-        currentPrice: 0,
-        avgPrice: holding.avgPrice,
-        unrealizedPnlPct: 0,
-        drawdown: { drawdown30d: 0, drawdown60d: 0, drawdown90d: 0, maxDrawdown: 0, primaryWindow: '30d' },
-        state: 'DO_NOTHING',
-        suggestedAmountEur: { min: 0, max: 0 },
-        reasons: [priceError],
-        concentrationPenalty: 0,
-        confidence: 'low',
-        priceError,
-      };
-    }
+    priceError = `No price data for ${holding.ticker ?? holding.id.toUpperCase()}`;
+    return {
+      holding,
+      currentPrice: 0,
+      avgPrice: holding.avgPrice,
+      unrealizedPnlPct: 0,
+      drawdown: { drawdown30d: 0, drawdown60d: 0, drawdown90d: 0, maxDrawdown: 0, primaryWindow: '30d' },
+      state: 'DO_NOTHING',
+      suggestedAmountEur: { min: 0, max: 0 },
+      reasons: [priceError],
+      concentrationPenalty: 0,
+      confidence: 'low',
+      priceError,
+    };
   }
 
   const currentPrice = highs.currentPrice;

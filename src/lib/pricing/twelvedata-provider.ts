@@ -62,12 +62,18 @@ async function tdFetch(path: string): Promise<unknown> {
   const apiKey = process.env.TWELVE_DATA_API_KEY;
   if (!apiKey) throw new Error('TWELVE_DATA_API_KEY not set');
   const url = `${BASE}${path}&apikey=${apiKey}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const data = await res.json() as Record<string, unknown>;
-  // Single-symbol responses have a top-level `status` field; batch responses don't
-  if (data.status === 'error') throw new Error(String(data.message ?? 'Twelve Data error'));
-  return data;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15_000);
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json() as Record<string, unknown>;
+    // Single-symbol responses have a top-level `status` field; batch responses don't
+    if (data.status === 'error') throw new Error(String(data.message ?? 'Twelve Data error'));
+    return data;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function parseSeriesValues(values: Record<string, string>[]): HistoricalPrice[] {
