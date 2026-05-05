@@ -28,23 +28,24 @@ const HEADERS: Record<string, string> = {
   'Referer': 'https://finance.yahoo.com/',
 };
 
-// Sequential slot rate limiter — concurrent calls each claim a distinct 600ms slot
+// Sequential slot rate limiter — 1 second between requests respects Yahoo's limits
 let _nextCallTime = 0;
 async function rateLimit(): Promise<void> {
   const now = Date.now();
   const slot = Math.max(now, _nextCallTime);
-  _nextCallTime = slot + 600;
+  _nextCallTime = slot + 1000;
   if (slot > now) await new Promise(r => setTimeout(r, slot - now));
 }
 
-async function withRetry<T>(fn: () => Promise<T>, retries = 3): Promise<T> {
+async function withRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
   for (let i = 0; i < retries; i++) {
     try { return await fn(); }
     catch (err) {
       if (i === retries - 1) throw err;
       const msg = err instanceof Error ? err.message : String(err);
-      const isRateLimit = msg.includes('Too Many') || msg.includes('429');
-      await new Promise(r => setTimeout(r, isRateLimit ? 3000 : 1000 * 2 ** i));
+      // 429 = Yahoo is rate limiting this IP — don't retry, fail fast
+      if (msg.includes('Too Many') || msg.includes('429')) throw err;
+      await new Promise(r => setTimeout(r, 1000 * 2 ** i));
     }
   }
   throw new Error('unreachable');
