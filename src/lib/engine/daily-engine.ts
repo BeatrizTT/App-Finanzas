@@ -42,13 +42,15 @@ async function fetchAllPrices(
     try {
       const allHighs = await provider.batchGetRecentHighs(allTickers);
       const missing = allTickers.filter(t => !allHighs[t]);
-      for (const t of missing) errors.push(`Price fetch failed: no data for ${t}`);
+      for (const t of missing) errors.push(`No data for ${t}`);
       console.log(`[Engine] Prices fetched: ${Object.keys(allHighs).length}/${allTickers.length} succeeded`);
       return { allHighs, errors };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[Engine] Batch fetch failed, falling back to sequential: ${msg}`);
+      console.error(`[Engine] Batch fetch failed: ${msg}`);
       errors.push(`Batch fetch failed: ${msg}`);
+      // Do NOT fall back to sequential — it would take minutes and always time out
+      return { allHighs: {}, errors };
     }
   }
 

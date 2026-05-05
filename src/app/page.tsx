@@ -119,10 +119,10 @@ export default function Dashboard() {
 
   const handleRunEngine = async () => {
     setIsRunning(true);
-    setStatusMessage('Analizando precios reales... (puede tardar ~30s)');
+    setStatusMessage('Analizando precios reales...');
     const msgTimer = setTimeout(
-      () => setStatusMessage('Aún analizando — Yahoo Finance necesita tiempo entre peticiones...'),
-      15000
+      () => setStatusMessage('Aún analizando... el motor está obteniendo los precios'),
+      20000
     );
     try {
       const res = await fetch('/api/engine/run', {

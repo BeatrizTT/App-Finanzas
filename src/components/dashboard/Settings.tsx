@@ -148,23 +148,29 @@ export function Settings({
             <div className="space-y-3">
 
               {/* Precios reales */}
-              {configStatus?.priceProvider !== 'yahoo' ? (
-                <div className="rounded-lg border border-yellow-800/50 bg-yellow-900/20 p-3">
-                  <div className="text-xs font-semibold text-yellow-300 mb-1">
-                    ⚡ Activa precios reales (Yahoo Finance)
+              {(() => {
+                const provider = configStatus?.priceProvider ?? 'mock';
+                const isReal = provider === 'yahoo' || provider === 'twelvedata';
+                const providerLabel = provider === 'twelvedata' ? 'Twelve Data' : provider === 'yahoo' ? 'Yahoo Finance' : null;
+                return isReal ? (
+                  <div className="rounded-lg border border-green-800/40 bg-green-900/20 p-3">
+                    <div className="text-xs font-semibold text-green-400">
+                      ✅ Precios reales activados ({providerLabel})
+                    </div>
                   </div>
-                  <div className="text-xs text-yellow-200/70 mb-2">
-                    Sin esto el motor usa precios simulados. Ve a Vercel → tu proyecto → Settings → Environment Variables → añade la variable de abajo → Redeploy
+                ) : (
+                  <div className="rounded-lg border border-yellow-800/50 bg-yellow-900/20 p-3">
+                    <div className="text-xs font-semibold text-yellow-300 mb-1">
+                      ⚡ Activa precios reales
+                    </div>
+                    <div className="text-xs text-yellow-200/70 mb-2">
+                      Sin esto el motor usa precios simulados. Ve a Vercel → Settings → Environment Variables → añade una de estas variables → Redeploy
+                    </div>
+                    <CopySnippet text="PRICE_PROVIDER=twelvedata" />
+                    <div className="text-xs text-yellow-200/50 mt-1 mb-1">También necesitas: <span className="font-mono">TWELVE_DATA_API_KEY=tu_clave</span> (gratis en twelvedata.com)</div>
                   </div>
-                  <CopySnippet text="PRICE_PROVIDER=yahoo" />
-                </div>
-              ) : (
-                <div className="rounded-lg border border-green-800/40 bg-green-900/20 p-3">
-                  <div className="text-xs font-semibold text-green-400">
-                    ✅ Precios reales activados (Yahoo Finance)
-                  </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* Telegram */}
               {!configStatus?.telegramConfigured ? (
@@ -209,7 +215,7 @@ export function Settings({
                 <SettingRow
                   label="Fuente de precios"
                   value={configStatus?.priceProvider ?? providerName}
-                  description="'mock' = precios simulados • 'yahoo' = precios reales"
+                  description="'mock' = precios simulados • 'yahoo' / 'twelvedata' = precios reales"
                 />
                 <SettingRow
                   label="Régimen de mercado"
