@@ -49,19 +49,20 @@ function AllocationCard({ rec }: { rec: AllocationRecommendation }) {
         </div>
       ) : (
         <div className="space-y-2">
-          {rec.options.slice(0, 3).map((opt) => (
+          {rec.options.slice(0, 5).map((opt) => (
             <div
               key={opt.asset}
               className={`p-2.5 rounded-lg border ${
                 opt.rank === 1 ? 'bg-green-900/20 border-green-800/50' :
                 opt.rank === 2 ? 'bg-blue-900/20 border-blue-800/40' :
-                'bg-[#222b3a] border-[#2a3445]'
+                opt.rank === 3 ? 'bg-[#1e2a3a] border-[#2a3445]' :
+                'bg-[#1a2030] border-[#222b3a]/60 opacity-80'
               }`}
             >
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0 flex-wrap">
                   <span className="text-xs text-slate-500 shrink-0">
-                    {opt.rank === 1 ? '🥇' : opt.rank === 2 ? '🥈' : '🥉'}
+                    {opt.rank === 1 ? '🥇' : opt.rank === 2 ? '🥈' : opt.rank === 3 ? '🥉' : `${opt.rank}°`}
                   </span>
                   <span className="font-mono text-slate-200 text-sm font-semibold">{opt.asset}</span>
                   <TypeBadge type={opt.type} />

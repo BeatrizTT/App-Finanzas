@@ -6,14 +6,16 @@ import { calcDrawdownPct } from '../utils/math';
 import type { PriceProvider } from './interface';
 import type { PriceData, HistoricalPrices, RecentHighs, HistoricalPrice } from '../types';
 
-// Twelve Data uses different symbol formats for EU-listed securities.
-// iShares/Vanguard UCITS ETFs trade on LSE (XLON) and Xetra (XETR).
-// ASML is dual-listed; use Nasdaq (no exchange) which is better supported on free tier.
+// Twelve Data free tier only reliably covers US-listed securities.
+// EU-listed UCITS ETFs are mapped to US equivalents that track the same/similar index.
+// Drawdown % is identical for same-index funds regardless of listing currency.
 const SYMBOL_MAP: Record<string, { symbol: string; exchange?: string }> = {
-  ASML:  { symbol: 'ASML' },                        // Nasdaq (dual-listed, better free-tier coverage)
-  CNDX:  { symbol: 'CNDX',   exchange: 'XLON' },    // iShares NASDAQ 100 UCITS — LSE
-  IWDA:  { symbol: 'IWDA',   exchange: 'XLON' },    // iShares Core MSCI World — LSE
-  IWVL:  { symbol: 'IWVL',   exchange: 'XLON' },    // iShares MSCI World Value — LSE
+  // EU stocks — use Nasdaq listing (dual-listed, better free-tier coverage)
+  ASML:  { symbol: 'ASML' },
+  // UCITS ETFs → US price proxies (same index, drawdown % is currency-independent)
+  CNDX:  { symbol: 'QQQ' },      // iShares NASDAQ 100 UCITS → Invesco QQQ (same index)
+  IWDA:  { symbol: 'IWDA',   exchange: 'XLON' },    // iShares Core MSCI World — LSE (try native first)
+  IWVL:  { symbol: 'VTV' },      // iShares MSCI World Value UCITS → Vanguard Value ETF (proxy)
   CSPX:  { symbol: 'CSPX',   exchange: 'XLON' },    // iShares Core S&P 500 — LSE
   EMIM:  { symbol: 'EMIM',   exchange: 'XLON' },    // iShares Core MSCI EM — LSE
   VWCE:  { symbol: 'VWCE',   exchange: 'XETR' },    // Vanguard FTSE All-World — Xetra

@@ -161,11 +161,16 @@ function buildRecommendation(
 
     const percentOfDeployable = (amount / forAmount) * 100;
 
+    const stateLabels: Record<string, string> = {
+      BUY_MORE: 'caída fuerte', BUY_PARTIAL: 'caída moderada', BUY_SMALL: 'caída leve',
+      BUY: 'señal de entrada fuerte', READY_TO_BUY: 'casi en zona de compra',
+    };
+    const stateEs = stateLabels[String(candidate.state)] ?? String(candidate.state);
     let reason = '';
     if (candidate.isExistingHolding) {
-      reason = `Add to existing position — state: ${candidate.state}, conviction-weighted rank #${rank}`;
+      reason = `Añadir a posición existente — ${stateEs}, prioridad #${rank} del motor`;
     } else {
-      reason = `New ${candidate.type} opportunity — scanner state: ${candidate.state}, score: ${candidate.score.toFixed(1)}`;
+      reason = `Nueva oportunidad del escáner — ${stateEs}, puntuación: ${candidate.score.toFixed(1)}`;
     }
 
     options.push({

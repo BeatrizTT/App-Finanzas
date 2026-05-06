@@ -215,7 +215,7 @@ export function Settings({
                 <SettingRow
                   label="Fuente de precios"
                   value={configStatus?.priceProvider ?? providerName}
-                  description="'mock' = precios simulados • 'yahoo' / 'twelvedata' = precios reales"
+                  description="Twelve Data usa precios reales de mercado"
                 />
                 <SettingRow
                   label="Régimen de mercado"
@@ -265,7 +265,7 @@ export function Settings({
               </div>
               {!importResult.saved && (
                 <div className="text-xs text-yellow-500 mb-2">
-                  ⚠️ En modo preview los datos no se guardan. En Railway/producción sí se guardan permanentemente.
+                  ⚠️ Los datos se guardaron temporalmente pero se perderán al reiniciar el servidor. Para guardarlos de forma permanente, añade los datos de la cartera en el archivo config/portfolio.json del repositorio.
                 </div>
               )}
               {/* Open positions */}
