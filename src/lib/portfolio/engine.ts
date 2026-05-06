@@ -482,10 +482,11 @@ export async function runPortfolioEngine(
 ): Promise<{ analyses: PortfolioAnalysis[]; concentration: ConcentrationData }> {
   const { holdings, cashAvailableEur, targetCashReserveEur } = portfolioConfig;
 
-  // Build current prices map
+  // Build current prices map — skip entries with currentPrice=0 (drawdown-only proxies)
+  // so calcConcentration falls back to holding.avgPrice for those positions
   const currentPrices: Record<string, number> = {};
   for (const [ticker, highs] of Object.entries(allHighs)) {
-    currentPrices[ticker] = highs.currentPrice;
+    if (highs.currentPrice > 0) currentPrices[ticker] = highs.currentPrice;
   }
 
   // Calculate concentration first (used in per-holding analysis)

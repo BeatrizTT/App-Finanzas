@@ -162,6 +162,21 @@ export async function runDailyEngine(options?: {
   clearConfigCache();
   resetPriceProvider();
 
+  // Evict cached prices for drawdown-only proxies (CNDX, IWVL) — they were previously
+  // stored with a non-zero USD currentPrice which gives wrong P&L vs EUR avgPrice.
+  // The fix stores currentPrice=0, but old cache entries must be cleared first.
+  {
+    const cache = loadPriceCache();
+    let evicted = false;
+    for (const sym of ['CNDX', 'IWVL']) {
+      if (cache[sym] && (cache[sym] as any).data?.currentPrice > 0) {
+        delete cache[sym];
+        evicted = true;
+      }
+    }
+    if (evicted) savePriceCache(cache);
+  }
+
   const portfolioConfig = applyOverridesToPortfolio(getEffectivePortfolioConfig());
   const universeConfig = getUniverseConfig();
   const overrides = getOverridesConfig();

@@ -7,22 +7,22 @@ import type { PriceProvider } from './interface';
 import type { PriceData, HistoricalPrices, RecentHighs, HistoricalPrice } from '../types';
 
 // Twelve Data free tier only reliably covers US-listed securities.
-// EU-listed UCITS ETFs are mapped to US equivalents that track the same/similar index.
-// Drawdown % is identical for same-index funds regardless of listing currency.
-const SYMBOL_MAP: Record<string, { symbol: string; exchange?: string }> = {
-  // EU stocks — use Nasdaq listing (dual-listed, better free-tier coverage)
-  ASML:  { symbol: 'ASML' },
-  // UCITS ETFs → US price proxies (same index, drawdown % is currency-independent)
-  CNDX:  { symbol: 'QQQ' },      // iShares NASDAQ 100 UCITS → Invesco QQQ (same index)
-  IWDA:  { symbol: 'IWDA',   exchange: 'XLON' },    // iShares Core MSCI World — LSE (try native first)
-  IWVL:  { symbol: 'VTV' },      // iShares MSCI World Value UCITS → Vanguard Value ETF (proxy)
-  CSPX:  { symbol: 'CSPX',   exchange: 'XLON' },    // iShares Core S&P 500 — LSE
-  EMIM:  { symbol: 'EMIM',   exchange: 'XLON' },    // iShares Core MSCI EM — LSE
-  VWCE:  { symbol: 'VWCE',   exchange: 'XETR' },    // Vanguard FTSE All-World — Xetra
-  SEMI:  { symbol: 'VSEM',   exchange: 'XLON' },    // VanEck Semiconductor UCITS — LSE
+// drawdownOnly=true means: use this ticker ONLY for drawdown % (currency-independent).
+// currentPrice will be set to 0 so the engine shows "—" for P&L instead of a wrong value.
+// Reason: CNDX trades in EUR at ~€1000-1300/share; QQQ trades in USD at ~$680/share.
+// Comparing them gives nonsense P&L. But both fell X% from their 90-day high = identical.
+const SYMBOL_MAP: Record<string, { symbol: string; exchange?: string; drawdownOnly?: boolean }> = {
+  ASML:  { symbol: 'ASML' },                         // Nasdaq (dual-listed)
+  CNDX:  { symbol: 'QQQ',  drawdownOnly: true },     // EUR ETF → USD proxy, drawdown only
+  IWDA:  { symbol: 'IWDA', exchange: 'XLON' },       // iShares Core MSCI World — LSE
+  IWVL:  { symbol: 'VTV',  drawdownOnly: true },     // EUR ETF → USD proxy, drawdown only
+  CSPX:  { symbol: 'CSPX', exchange: 'XLON' },       // iShares Core S&P 500 — LSE
+  EMIM:  { symbol: 'EMIM', exchange: 'XLON' },       // iShares Core MSCI EM — LSE
+  VWCE:  { symbol: 'VWCE', exchange: 'XETR' },       // Vanguard FTSE All-World — Xetra
+  SEMI:  { symbol: 'VSEM', exchange: 'XLON' },       // VanEck Semiconductor UCITS — LSE
 };
 
-function resolveSymbol(symbol: string): { symbol: string; exchange?: string } {
+function resolveSymbol(symbol: string): { symbol: string; exchange?: string; drawdownOnly?: boolean } {
   return SYMBOL_MAP[symbol] ?? { symbol };
 }
 
@@ -132,22 +132,25 @@ export class TwelveDataPriceProvider implements PriceProvider {
 
   async getRecentHighs(symbol: string, windows = [30, 60, 90]): Promise<RecentHighs> {
     await rateLimit();
+    const resolved = resolveSymbol(symbol);
     const params = buildParams(symbol);
     const data = await withRetry(
       () => tdFetch(`/time_series?${params}&interval=1day&outputsize=90`)
     ) as { values?: Record<string, string>[] };
 
     const prices = parseSeriesValues(data.values ?? []);
-    const currentPrice = prices[prices.length - 1]?.close ?? 0;
-    const [high30d, high60d, high90d] = calcHighs(prices, currentPrice, windows);
+    const rawPrice = prices[prices.length - 1]?.close ?? 0;
+    // drawdownOnly proxies: USD price is not comparable to user's EUR avgPrice — zero it out
+    const currentPrice = resolved.drawdownOnly ? 0 : rawPrice;
+    const [high30d, high60d, high90d] = calcHighs(prices, rawPrice, windows);
 
     return {
       symbol,
       high30d, high60d, high90d,
       currentPrice,
-      drawdown30d: calcDrawdownPct(high30d, currentPrice),
-      drawdown60d: calcDrawdownPct(high60d, currentPrice),
-      drawdown90d: calcDrawdownPct(high90d, currentPrice),
+      drawdown30d: calcDrawdownPct(high30d, rawPrice),
+      drawdown60d: calcDrawdownPct(high60d, rawPrice),
+      drawdown90d: calcDrawdownPct(high90d, rawPrice),
     };
   }
 
@@ -201,16 +204,19 @@ export class TwelveDataPriceProvider implements PriceProvider {
         const prices = parseSeriesValues(entry.values);
         if (prices.length === 0) continue;
 
-        const currentPrice = prices[prices.length - 1].close;
-        const [high30d, high60d, high90d] = calcHighs(prices, currentPrice, windows);
+        const rawPrice = prices[prices.length - 1].close;
+        const [high30d, high60d, high90d] = calcHighs(prices, rawPrice, windows);
+        // drawdownOnly proxies: the USD price is NOT comparable to user's EUR avgPrice.
+        // Zero it out so the engine shows "—" for P&L. Drawdown % remains correct.
+        const currentPrice = resolved.drawdownOnly ? 0 : rawPrice;
 
         results[batch_sym] = {
           symbol: batch_sym,
           high30d, high60d, high90d,
           currentPrice,
-          drawdown30d: calcDrawdownPct(high30d, currentPrice),
-          drawdown60d: calcDrawdownPct(high60d, currentPrice),
-          drawdown90d: calcDrawdownPct(high90d, currentPrice),
+          drawdown30d: calcDrawdownPct(high30d, rawPrice),
+          drawdown60d: calcDrawdownPct(high60d, rawPrice),
+          drawdown90d: calcDrawdownPct(high90d, rawPrice),
         };
       }
 
@@ -235,15 +241,16 @@ export class TwelveDataPriceProvider implements PriceProvider {
             }
             const prices = parseSeriesValues(entry.values);
             if (prices.length === 0) continue;
-            const currentPrice = prices[prices.length - 1].close;
-            const [high30d, high60d, high90d] = calcHighs(prices, currentPrice, windows);
+            const rawPrice = prices[prices.length - 1].close;
+            const [high30d, high60d, high90d] = calcHighs(prices, rawPrice, windows);
+            const fallbackResolved = resolveSymbol(batch_sym);
             results[batch_sym] = {
               symbol: batch_sym,
               high30d, high60d, high90d,
-              currentPrice,
-              drawdown30d: calcDrawdownPct(high30d, currentPrice),
-              drawdown60d: calcDrawdownPct(high60d, currentPrice),
-              drawdown90d: calcDrawdownPct(high90d, currentPrice),
+              currentPrice: fallbackResolved.drawdownOnly ? 0 : rawPrice,
+              drawdown30d: calcDrawdownPct(high30d, rawPrice),
+              drawdown60d: calcDrawdownPct(high60d, rawPrice),
+              drawdown90d: calcDrawdownPct(high90d, rawPrice),
             };
           }
         } catch (err) {
