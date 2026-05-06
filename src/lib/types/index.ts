@@ -372,6 +372,7 @@ export interface Alert {
 export interface DailyEngineOutput {
   runAt: string;                 // ISO timestamp
   marketRegime: 'bullish' | 'neutral' | 'bearish';
+  eurUsdRate?: number;           // EUR/USD rate used for price conversion (e.g. 1.08)
   portfolioAnalyses: PortfolioAnalysis[];
   concentration: ConcentrationData;
   stockOpportunities: Opportunity[];

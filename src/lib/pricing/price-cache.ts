@@ -41,3 +41,23 @@ export function setCached(cache: PriceCache, symbol: string, data: RecentHighs):
 export function countStale(cache: PriceCache, symbols: string[]): number {
   return symbols.filter(s => !isCacheFresh(cache[s])).length;
 }
+
+const EUR_USD_KEY = '__EURUSD__';
+
+export function getEurUsdRate(cache: PriceCache): number | null {
+  const entry = cache[EUR_USD_KEY];
+  if (!entry || !isCacheFresh(entry)) return null;
+  return entry.data.currentPrice;
+}
+
+export function setEurUsdRate(cache: PriceCache, rate: number): void {
+  cache[EUR_USD_KEY] = {
+    data: {
+      symbol: EUR_USD_KEY,
+      high30d: rate, high60d: rate, high90d: rate,
+      currentPrice: rate,
+      drawdown30d: 0, drawdown60d: 0, drawdown90d: 0,
+    },
+    fetchedAt: new Date().toISOString(),
+  };
+}

@@ -32,6 +32,7 @@ export async function POST(req: NextRequest) {
       // Full data — dashboard uses this directly, no second GET needed
       runAt: output.runAt,
       marketRegime: output.marketRegime,
+      eurUsdRate: output.eurUsdRate ?? null,
       portfolioAnalyses: output.portfolioAnalyses,
       concentration: output.concentration,
       stockOpportunities: output.stockOpportunities,

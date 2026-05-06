@@ -70,6 +70,7 @@ interface Props {
   lastRunAt: string | null;
   closedPositions?: ClosedPos[];
   totalRealizedPnl?: number | null;
+  eurUsdRate?: number | null;
 }
 
 function PortfolioSummary({
@@ -171,7 +172,7 @@ function PortfolioSummary({
   );
 }
 
-export function PortfolioOverview({ analyses, concentration, lastRunAt, closedPositions, totalRealizedPnl }: Props) {
+export function PortfolioOverview({ analyses, concentration, lastRunAt, closedPositions, totalRealizedPnl, eurUsdRate }: Props) {
   if (!analyses || analyses.length === 0) {
     return (
       <Card>
@@ -194,6 +195,14 @@ export function PortfolioOverview({ analyses, concentration, lastRunAt, closedPo
           <span className="text-xs text-slate-500" title="Proporción de tu cartera entre acciones individuales y ETFs">
             Acciones {stocks.toFixed(0)}% / ETFs {etfs.toFixed(0)}%
           </span>
+          {eurUsdRate && eurUsdRate > 0 && (
+            <span
+              className="text-xs text-slate-600"
+              title="Tipo de cambio EUR/USD usado para convertir precios de acciones americanas a euros. Todos los precios y ganancias se muestran en €."
+            >
+              EUR/USD {eurUsdRate.toFixed(4)}
+            </span>
+          )}
           {lastRunAt && (
             <span className="text-xs text-slate-600">
               Análisis: {new Date(lastRunAt).toLocaleTimeString('es-ES')}
@@ -211,8 +220,8 @@ export function PortfolioOverview({ analyses, concentration, lastRunAt, closedPo
               <tr className="border-b border-[#2a3445] text-xs text-slate-500 uppercase">
                 <th className="text-left px-4 py-2">Activo / ISIN</th>
                 <th className="text-left px-4 py-2">Tipo</th>
-                <th className="text-right px-4 py-2" title="Precio actual de mercado">Precio hoy</th>
-                <th className="text-right px-4 py-2" title="Media ponderada de todos los precios a los que compraste">Lo que pagaste</th>
+                <th className="text-right px-4 py-2" title="Precio actual en euros. Para acciones americanas (NVDA, MSFT…) se convierte de USD a EUR con el tipo de cambio del día. Para ETFs europeos ya es EUR.">Precio hoy (€)</th>
+                <th className="text-right px-4 py-2" title="Precio medio de compra en euros, tal como aparece en tu CSV de Trade Republic. Trade Republic ya convierte las compras a euros.">Lo que pagaste (€)</th>
                 <th className="text-right px-4 py-2" title="Si positivo: ahora vale más de lo que pagaste. Si negativo: ahora vale menos. No es real hasta que vendas.">Ganancia en papel</th>
                 <th className="text-left px-4 py-2" title="Cuánto ha bajado desde su precio más alto reciente. Cuanto más haya bajado, más barato está.">Bajada desde máximo</th>
                 <th className="text-left px-4 py-2" title="Qué hacer con esta posición según el motor">Qué hacer</th>
@@ -223,8 +232,10 @@ export function PortfolioOverview({ analyses, concentration, lastRunAt, closedPo
             <tbody>
               {analyses.map((a) => {
                 const ticker = a.holding.ticker ?? a.holding.id.toUpperCase();
-                const currency = a.holding.currency === 'EUR' ? '€' : '$';
                 const isin = (a.holding as any).isin as string | undefined;
+                // All prices are in EUR: avgPrice from Trade Republic CSV (EUR amounts),
+                // currentPrice converted from USD → EUR by engine using EUR/USD rate.
+                const isUsdAsset = a.holding.currency !== 'EUR';
                 return (
                   <tr key={a.holding.id} className="border-b border-[#2a3445]/50 hover:bg-[#222b3a] transition-colors">
                     <td className="px-4 py-3">
@@ -235,11 +246,17 @@ export function PortfolioOverview({ analyses, concentration, lastRunAt, closedPo
                     <td className="px-4 py-3">
                       <TypeBadge type={a.holding.type} />
                     </td>
-                    <td className="px-4 py-3 text-right font-mono text-slate-200">
-                      {a.currentPrice > 0 ? `${currency}${a.currentPrice.toFixed(2)}` : '—'}
+                    <td
+                      className="px-4 py-3 text-right font-mono text-slate-200"
+                      title={isUsdAsset ? `Precio convertido de USD a EUR al tipo de cambio actual` : undefined}
+                    >
+                      {a.currentPrice > 0 ? `€${a.currentPrice.toFixed(2)}` : '—'}
                     </td>
-                    <td className="px-4 py-3 text-right font-mono text-slate-400 text-xs">
-                      {currency}{a.avgPrice.toFixed(2)}
+                    <td
+                      className="px-4 py-3 text-right font-mono text-slate-400 text-xs"
+                      title="Precio medio de compra en EUR (del CSV de Trade Republic)"
+                    >
+                      €{a.avgPrice.toFixed(2)}
                     </td>
                     <td className="px-4 py-3 text-right">
                       {a.currentPrice > 0 ? <PnlColor pct={a.unrealizedPnlPct} /> : '—'}
@@ -260,8 +277,8 @@ export function PortfolioOverview({ analyses, concentration, lastRunAt, closedPo
                     <td className="px-4 py-3 text-right text-xs font-mono">
                       {a.suggestedAmountEur.max > 0
                         ? a.state === 'REDUCE'
-                          ? <span className="text-orange-400">Vender {a.holding.currency === 'EUR' ? '€' : '$'}{a.suggestedAmountEur.min}–{a.holding.currency === 'EUR' ? '€' : '$'}{a.suggestedAmountEur.max}</span>
-                          : <span className="text-green-400">€{a.suggestedAmountEur.min}–{a.suggestedAmountEur.max}</span>
+                          ? <span className="text-orange-400">Vender €{a.suggestedAmountEur.min}–€{a.suggestedAmountEur.max}</span>
+                          : <span className="text-green-400">€{a.suggestedAmountEur.min}–€{a.suggestedAmountEur.max}</span>
                         : <span className="text-slate-600">—</span>
                       }
                     </td>

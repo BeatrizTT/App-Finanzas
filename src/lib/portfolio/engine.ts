@@ -197,12 +197,13 @@ function buildReduceReasons(
   currentPrice: number
 ): string[] {
   const reasons: string[] = [];
-  const currency = holding.currency === 'EUR' ? '€' : '$';
+  // currentPrice is always EUR — the engine converts USD prices to EUR before analysis
+  const currency = '€';
 
   // Target price reached
   if (holding.targetPrice && holding.targetPrice > 0 && unrealizedPnlPct > 0) {
     reasons.push(
-      `Has alcanzado tu precio objetivo de ${currency}${holding.targetPrice} (+${unrealizedPnlPct.toFixed(0)}% de ganancia). ` +
+      `Has superado tu precio objetivo (+${unrealizedPnlPct.toFixed(0)}% de ganancia). ` +
       `Es un buen momento para vender una parte y asegurar beneficios.`
     );
   }

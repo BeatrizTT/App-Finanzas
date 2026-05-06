@@ -48,6 +48,7 @@ interface DashboardData {
   alerts: Alert[];
   lastRunAt: string | null;
   marketRegime: string;
+  eurUsdRate: number | null;
   errors: string[];
   closedPositions: ClosedPos[];
   totalRealizedPnl: number | null;
@@ -63,6 +64,7 @@ const EMPTY_DATA: DashboardData = {
   alerts: [],
   lastRunAt: null,
   marketRegime: 'neutral',
+  eurUsdRate: null,
   errors: [],
   closedPositions: [],
   totalRealizedPnl: null,
@@ -96,6 +98,7 @@ export default function Dashboard() {
           alerts: alertsData.alerts ?? [],
           lastRunAt: engineData.runAt,
           marketRegime: engineData.marketRegime ?? 'neutral',
+          eurUsdRate: engineData.eurUsdRate ?? null,
           errors: engineData.errors ?? [],
           closedPositions: engineData.closedPositions ?? [],
           totalRealizedPnl: engineData.totalRealizedPnl ?? null,
@@ -146,6 +149,7 @@ export default function Dashboard() {
             alerts: data.alerts,
             lastRunAt: result.runAt,
             marketRegime: result.marketRegime ?? 'neutral',
+            eurUsdRate: result.eurUsdRate ?? null,
             errors: result.errors ?? [],
             closedPositions: result.closedPositions ?? [],
             totalRealizedPnl: result.totalRealizedPnl ?? null,
@@ -303,6 +307,7 @@ export default function Dashboard() {
                   lastRunAt={data.lastRunAt}
                   closedPositions={data.closedPositions}
                   totalRealizedPnl={data.totalRealizedPnl}
+                  eurUsdRate={data.eurUsdRate}
                 />
                 <TopAddOpportunities analyses={data.portfolioAnalyses} />
               </div>

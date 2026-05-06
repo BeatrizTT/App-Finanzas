@@ -9,7 +9,7 @@ import { sendAlerts } from '../alerts/telegram';
 import { sendDailyDigest } from '../alerts/digest';
 import { saveAlerts } from '../alerts/history';
 import { getPriceProvider, resetPriceProvider } from '../pricing/factory';
-import { loadPriceCache, savePriceCache, getCached, setCached, countStale } from '../pricing/price-cache';
+import { loadPriceCache, savePriceCache, getCached, setCached, countStale, getEurUsdRate, setEurUsdRate } from '../pricing/price-cache';
 import {
   getEffectivePortfolioConfig,
   getUniverseConfig,
@@ -146,6 +146,47 @@ function estimateMarketDrawdown(allHighs: Record<string, RecentHighs>): number {
 }
 
 // --------------------------------------------------------------------------
+// EUR/USD exchange rate — used to convert USD prices to EUR for P&L accuracy.
+// Trade Republic CSV exports all transaction amounts in EUR (avgPrice = EUR cost).
+// Twelve Data returns US stock prices in USD. Without conversion, P&L is wrong.
+// Rate cached for 4 hours alongside price data (no extra API key required).
+// --------------------------------------------------------------------------
+
+async function fetchEurUsdRate(): Promise<number> {
+  const cache = loadPriceCache();
+  const cached = getEurUsdRate(cache);
+  if (cached) {
+    console.log(`[Engine] EUR/USD rate: ${cached.toFixed(4)} (cached)`);
+    return cached;
+  }
+
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch('https://api.exchangerate-api.com/v4/latest/EUR', {
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    if (res.ok) {
+      const data = await res.json() as { rates?: Record<string, number> };
+      const rate = data.rates?.USD;
+      if (rate && rate > 0.5 && rate < 3) { // sanity check
+        setEurUsdRate(cache, rate);
+        savePriceCache(cache);
+        console.log(`[Engine] EUR/USD rate: ${rate.toFixed(4)} (fresh)`);
+        return rate;
+      }
+    }
+  } catch (err) {
+    console.warn('[Engine] EUR/USD rate fetch failed:', err instanceof Error ? err.message : err);
+  }
+
+  const fallback = 1.08;
+  console.warn(`[Engine] Using fallback EUR/USD rate: ${fallback}`);
+  return fallback;
+}
+
+// --------------------------------------------------------------------------
 // Main engine run function
 // --------------------------------------------------------------------------
 
@@ -201,6 +242,29 @@ export async function runDailyEngine(options?: {
   const { allHighs, errors: priceErrors } = await fetchAllPrices(portfolioTickers, universeTickers);
   errors.push(...priceErrors);
 
+  // Fetch EUR/USD rate and apply to USD-denominated portfolio holdings.
+  // Trade Republic CSV amounts are always in EUR, so avgPrice is in EUR.
+  // Twelve Data returns US stock prices in USD — we must convert to EUR for
+  // accurate P&L calculation (otherwise NVDA: avgPrice €85 vs currentPrice $196 = wrong %).
+  const eurUsdRate = await fetchEurUsdRate();
+
+  // Build a price-adjusted allHighs for the portfolio engine only.
+  // The scanner/allocator still use raw USD prices (display only, no EUR P&L needed there).
+  const usdTickers = new Set(
+    portfolioConfig.holdings
+      .filter(h => (h.currency ?? 'USD') !== 'EUR')
+      .map(h => h.ticker ?? h.id.toUpperCase())
+  );
+
+  const portfolioHighs: Record<string, import('../types').RecentHighs> = {};
+  for (const [ticker, highs] of Object.entries(allHighs)) {
+    if (usdTickers.has(ticker) && highs.currentPrice > 0) {
+      portfolioHighs[ticker] = { ...highs, currentPrice: highs.currentPrice / eurUsdRate };
+    } else {
+      portfolioHighs[ticker] = highs;
+    }
+  }
+
   // Estimate market regime from price data
   const marketMaxDrawdown = estimateMarketDrawdown(allHighs);
   const marketRegime = overrides.marketRegime ?? 'neutral';
@@ -210,7 +274,7 @@ export async function runDailyEngine(options?: {
   // --- CORE_PORTFOLIO_ENGINE ---
   const { analyses: portfolioAnalyses, concentration } = await runPortfolioEngine(
     portfolioConfig,
-    allHighs
+    portfolioHighs // EUR-converted prices for accurate P&L
   );
 
   // --- OPPORTUNITY_SCANNER ---
@@ -269,6 +333,7 @@ export async function runDailyEngine(options?: {
   const output: DailyEngineOutput = {
     runAt,
     marketRegime,
+    eurUsdRate,
     portfolioAnalyses,
     concentration,
     stockOpportunities,
