@@ -297,8 +297,9 @@ export async function analyzeHolding(
     }
   }
 
-  // Override: extremely deep drawdown gets REVIEW instead of BUY_MORE
-  if (maxDrawdown > 50) {
+  // Override: deep drawdown → caution. At 35%+ from recent highs, something is wrong.
+  // This could be company-specific news, not just a market dip. Review before buying more.
+  if (maxDrawdown > 35) {
     state = 'REVIEW';
   }
 
@@ -316,7 +317,7 @@ export async function analyzeHolding(
   // --- Sell / Reduce signals ---
   // Only check when not already in a buy state (price is near highs)
   const isNearHigh = maxDrawdown < 5;
-  const profitThreshold = holding.core ? 120 : 70; // higher bar for core long-term holdings
+  const profitThreshold = holding.core ? 80 : 50; // trim when position has run hard and is near highs
 
   if (!['BUY_MORE', 'BUY_PARTIAL', 'BUY_SMALL', 'REVIEW'].includes(state)) {
     // Profit-taking: big gain AND near recent high
