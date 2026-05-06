@@ -4,6 +4,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { runDailyEngine } from '@/lib/engine/daily-engine';
+import { loadEngineOutput } from '@/lib/utils/engine-store';
 
 /**
  * Strip known secret values and URL API key params from error messages
@@ -16,6 +17,7 @@ function sanitizeError(msg: string): string {
     process.env.ENGINE_API_SECRET,
     process.env.EODHD_API_KEY,
     process.env.CRON_SECRET,
+    process.env.KV_REST_API_TOKEN,
   ].filter((v): v is string => typeof v === 'string' && v.length > 4);
 
   let safe = msg;
@@ -81,18 +83,13 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// GET returns the last cached engine output
+// GET returns the latest persisted engine output (KV in production, file-store locally)
 export async function GET() {
   const timestamp = new Date().toISOString();
   try {
-    const { readJsonFile } = await import('@/lib/utils/file-store');
-    const output = readJsonFile<Record<string, unknown>>(
-      'engine-output.json',
-      null as unknown as Record<string, unknown>
-    );
+    const { output, source } = await loadEngineOutput();
 
     if (!output) {
-      // Return 200 so the frontend can parse the body and show an actionable message
       return NextResponse.json({
         noData: true,
         error: 'Sin datos de análisis. Pulsa Analizar para ejecutar el motor.',
@@ -100,6 +97,8 @@ export async function GET() {
       });
     }
 
+    console.log(`[API GET /engine/run] Loaded from ${source}`);
+    const { readJsonFile } = await import('@/lib/utils/file-store');
     const portfolioConfig = readJsonFile<any>('../../config/portfolio.json', {});
     return NextResponse.json({
       ...output,

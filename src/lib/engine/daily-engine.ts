@@ -17,7 +17,7 @@ import {
   clearConfigCache,
   applyOverridesToPortfolio,
 } from '../utils/config-loader';
-import { writeJsonFile } from '../utils/file-store';
+import { saveEngineOutput } from '../utils/engine-store';
 import type {
   DailyEngineOutput,
   RecentHighs,
@@ -400,13 +400,9 @@ export async function runDailyEngine(options?: {
     totalRealizedPnl: portfolioConfig.totalRealizedPnl ?? undefined,
   };
 
-  // Persist output for dashboard — non-fatal if filesystem is unavailable (Vercel)
-  try {
-    writeJsonFile('engine-output.json', output);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.warn('[Engine] Could not persist output to filesystem:', msg);
-  }
+  // Persist output — KV in production, file-store in dev; non-fatal either way
+  const { warnings: storeWarnings } = await saveEngineOutput(output);
+  for (const w of storeWarnings) errors.push(w);
 
   console.log(`[Engine] Run complete. Alerts: ${sentAlerts.length}, Errors: ${errors.length}`);
   return output;
