@@ -9,6 +9,7 @@ import { sendAlerts } from '../alerts/telegram';
 import { sendDailyDigest } from '../alerts/digest';
 import { saveAlerts } from '../alerts/history';
 import { getPriceProvider, resetPriceProvider } from '../pricing/factory';
+import { resetEodhdBudget } from '../pricing/eodhd-provider';
 import { loadPriceCache, savePriceCache, getCached, setCached, countStale, getEurUsdRate, setEurUsdRate } from '../pricing/price-cache';
 import {
   getEffectivePortfolioConfig,
@@ -211,6 +212,7 @@ export async function runDailyEngine(options?: {
   // Reload config on each run (supports live config edits)
   clearConfigCache();
   resetPriceProvider();
+  resetEodhdBudget(); // reset per-run EODHD call counter (no-op when EODHD not active)
 
   // Evict cached prices for drawdown-only proxies (CNDX, IWVL) — they were previously
   // stored with a non-zero USD currentPrice which gives wrong P&L vs EUR avgPrice.

@@ -5,6 +5,7 @@ import type { PriceProvider } from './interface';
 import { MockPriceProvider } from './mock-provider';
 import { YahooPriceProvider } from './yahoo-provider';
 import { TwelveDataPriceProvider } from './twelvedata-provider';
+import { EodhdPriceProvider } from './eodhd-provider';
 
 let _provider: PriceProvider | null = null;
 
@@ -20,6 +21,13 @@ export function getPriceProvider(): PriceProvider {
     _provider = new YahooPriceProvider();
   } else if (providerName === 'twelvedata') {
     _provider = new TwelveDataPriceProvider();
+  } else if (providerName === 'eodhd') {
+    if (process.env.EODHD_ENABLED !== 'true') {
+      console.warn('[PriceProvider] PRICE_PROVIDER=eodhd but EODHD_ENABLED is not "true" — falling back to mock');
+      _provider = new MockPriceProvider();
+    } else {
+      _provider = new EodhdPriceProvider();
+    }
   } else {
     console.warn(`Unknown PRICE_PROVIDER "${providerName}", falling back to mock`);
     _provider = new MockPriceProvider();
