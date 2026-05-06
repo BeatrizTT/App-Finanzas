@@ -193,13 +193,14 @@ function buildReduceReasons(
   holding: PortfolioHolding,
   unrealizedPnlPct: number,
   concentrationPenalty: number,
-  concentration: ConcentrationData
+  concentration: ConcentrationData,
+  currentPrice: number
 ): string[] {
   const reasons: string[] = [];
+  const currency = holding.currency === 'EUR' ? '€' : '$';
 
   // Target price reached
   if (holding.targetPrice && holding.targetPrice > 0 && unrealizedPnlPct > 0) {
-    const currency = (holding as any).currency === 'EUR' ? '€' : '$';
     reasons.push(
       `Has alcanzado tu precio objetivo de ${currency}${holding.targetPrice} (+${unrealizedPnlPct.toFixed(0)}% de ganancia). ` +
       `Es un buen momento para vender una parte y asegurar beneficios.`
@@ -234,6 +235,17 @@ function buildReduceReasons(
 
   if (holding.manualThesisRisk === 'high') {
     reasons.push('Riesgo alto en la tesis de inversión — considera salir o reducir significativamente');
+  }
+
+  // Sell amount guidance
+  if (holding.units && holding.units > 0 && currentPrice > 0) {
+    const positionValue = holding.units * currentPrice;
+    const minSell = Math.round(positionValue * 0.20);
+    const maxSell = Math.round(positionValue * 0.25);
+    reasons.push(
+      `Vende el 20-25% ahora = aprox. ${currency}${minSell}–${currency}${maxSell}. ` +
+      `El resto: el motor te avisará si toca reducir de nuevo. También puedes poner un stop-loss del 10% desde el precio actual para proteger ganancias.`
+    );
   }
 
   return reasons;
@@ -320,8 +332,10 @@ export async function analyzeHolding(
   const profitThreshold = holding.core ? 80 : 50; // trim when position has run hard and is near highs
 
   if (!['BUY_MORE', 'BUY_PARTIAL', 'BUY_SMALL', 'REVIEW'].includes(state)) {
-    // Profit-taking: big gain AND near recent high
-    if (isNearHigh && unrealizedPnlPct >= profitThreshold) {
+    // Profit-taking: big gain AND near recent high.
+    // ETFs are long-term core holdings — never reduce based on profit alone.
+    // Concentration-based REDUCE still applies to ETFs if they become too large.
+    if (isNearHigh && unrealizedPnlPct >= profitThreshold && holding.type !== 'etf') {
       state = 'REDUCE';
     }
     // Heavy concentration override (position too large regardless of price)
@@ -341,9 +355,18 @@ export async function analyzeHolding(
   }
 
   // Suggested amount
-  const suggestedAmountEur = calcSuggestedAmount(
+  let suggestedAmountEur = calcSuggestedAmount(
     state, holding, cashAvailable, targetReserve, concentrationPenalty
   );
+
+  // For REDUCE: override with suggested sell amount (20-25% of position value)
+  if (state === 'REDUCE' && holding.units && holding.units > 0 && currentPrice > 0) {
+    const positionValue = holding.units * currentPrice;
+    suggestedAmountEur = {
+      min: Math.round(positionValue * 0.20),
+      max: Math.round(positionValue * 0.25),
+    };
+  }
 
   // Confidence
   let confidence: 'low' | 'medium' | 'high' = 'medium';
@@ -353,7 +376,7 @@ export async function analyzeHolding(
   // Build reasons — use dedicated REDUCE reasons when applicable
   const reasons = state === 'REDUCE'
     ? [
-        ...buildReduceReasons(holding, unrealizedPnlPct, concentrationPenalty, concentration),
+        ...buildReduceReasons(holding, unrealizedPnlPct, concentrationPenalty, concentration, currentPrice),
         ...buildReasons(holding, drawdown, state, concentrationPenalty, concentration).slice(0, 1),
       ]
     : buildReasons(holding, drawdown, state, concentrationPenalty, concentration);

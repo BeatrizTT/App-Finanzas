@@ -380,6 +380,8 @@ export interface DailyEngineOutput {
   allocationRecommendations: AllocationRecommendation[];
   alertsGenerated: Alert[];
   errors: string[];
+  closedPositions?: ClosedPosition[];
+  totalRealizedPnl?: number;
 }
 
 // --- Previous State Store (for change detection) ---

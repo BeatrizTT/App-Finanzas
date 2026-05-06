@@ -262,6 +262,8 @@ export async function runDailyEngine(options?: {
     allocationRecommendations,
     alertsGenerated: sentAlerts,
     errors,
+    closedPositions: portfolioConfig.closedPositions ?? [],
+    totalRealizedPnl: portfolioConfig.totalRealizedPnl ?? undefined,
   };
 
   // Persist output for the dashboard to read

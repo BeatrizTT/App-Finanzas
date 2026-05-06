@@ -259,7 +259,9 @@ export function PortfolioOverview({ analyses, concentration, lastRunAt, closedPo
                     </td>
                     <td className="px-4 py-3 text-right text-xs font-mono">
                       {a.suggestedAmountEur.max > 0
-                        ? <span className="text-green-400">€{a.suggestedAmountEur.min}–{a.suggestedAmountEur.max}</span>
+                        ? a.state === 'REDUCE'
+                          ? <span className="text-orange-400">Vender {a.holding.currency === 'EUR' ? '€' : '$'}{a.suggestedAmountEur.min}–{a.holding.currency === 'EUR' ? '€' : '$'}{a.suggestedAmountEur.max}</span>
+                          : <span className="text-green-400">€{a.suggestedAmountEur.min}–{a.suggestedAmountEur.max}</span>
                         : <span className="text-slate-600">—</span>
                       }
                     </td>
