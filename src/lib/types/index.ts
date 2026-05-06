@@ -41,6 +41,41 @@ export type AllocationState =
   | 'SECOND_BEST'
   | 'HOLD_CASH';
 
+// --- Price Validation ---
+
+/**
+ * Where a price value originated. Drives trust rules in the engine.
+ * 'cache'       = previously fetched value still within TTL
+ * 'unavailable' = no data from any provider
+ */
+export type PriceSource = 'eodhd' | 'twelvedata' | 'yahoo' | 'cache' | 'unavailable';
+
+/**
+ * How a price value will be used. Different purposes require different accuracy guarantees.
+ * exact_pnl            — must be EUR-denominated and not a proxy
+ * buy_recommendation   — must be in known currency for sizing math
+ * drawdown             — percentage is currency-independent; proxies are allowed
+ * display              — shown to user; best-effort, no hard currency requirement
+ */
+export type PricingPurpose = 'exact_pnl' | 'buy_recommendation' | 'drawdown' | 'display';
+
+/**
+ * Per-instrument audit object produced alongside each price fetch.
+ * Consumers use the suitableFor* flags instead of re-deriving currency logic.
+ */
+export interface PriceValidation {
+  symbol: string;
+  source: PriceSource;
+  fetchedCurrency: string | null;      // currency the provider returned
+  expectedCurrency: string | null;     // currency we expected from config
+  currencyConfirmed: boolean;          // fetchedCurrency === expectedCurrency
+  suitableForExactPnl: boolean;        // EUR-denominated, not a proxy
+  suitableForBuyRecommendation: boolean; // known currency, usable for EUR sizing
+  suitableForDrawdown: boolean;        // drawdown % is valid (proxy allowed)
+  isProxy: boolean;                    // true = USD proxy for a EUR instrument (QQQ→CNDX)
+  note?: string;
+}
+
 // --- Price Data ---
 
 export interface PriceData {
@@ -75,6 +110,7 @@ export interface RecentHighs {
   drawdown30d: number;      // percent, positive means below high
   drawdown60d: number;
   drawdown90d: number;
+  validation?: PriceValidation; // populated by providers that support it; absent = legacy/unknown
 }
 
 // --- Portfolio Config (from config/portfolio.json) ---
