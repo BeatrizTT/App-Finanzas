@@ -2,16 +2,17 @@
 // Providers create these alongside price data; engine consumers check suitableFor* flags.
 // No API calls here — pure construction logic only.
 
-import type { PriceSource, PriceValidation } from '../types';
+import type { PriceProviderId, PriceMethod, PricingPurpose, PriceValidation } from '../types';
 
 /**
  * No price data available from any provider or cache.
- * Nothing is suitable; engine should show "—" and skip this holding in buy sizing.
+ * All suitableFor* = false. Engine must show "—" for P&L and skip buy sizing.
  */
 export function unavailableValidation(symbol: string): PriceValidation {
   return {
     symbol,
-    source: 'unavailable',
+    provider: 'none',
+    method: 'unavailable',
     fetchedCurrency: null,
     expectedCurrency: null,
     currencyConfirmed: false,
@@ -25,12 +26,14 @@ export function unavailableValidation(symbol: string): PriceValidation {
 
 /**
  * USD proxy for a EUR-denominated instrument (e.g. QQQ standing in for CNDX).
- * Drawdown % is valid; the USD price must never be used for P&L or buy sizing.
+ * Drawdown % is valid and currency-independent.
+ * The USD currentPrice must never be used for P&L or buy sizing.
  */
-export function proxyValidation(symbol: string, source: PriceSource): PriceValidation {
+export function proxyValidation(symbol: string, provider: PriceProviderId): PriceValidation {
   return {
     symbol,
-    source,
+    provider,
+    method: 'proxy_drawdown_only',
     fetchedCurrency: 'USD',
     expectedCurrency: 'EUR',
     currencyConfirmed: false,
@@ -43,34 +46,54 @@ export function proxyValidation(symbol: string, source: PriceSource): PriceValid
 }
 
 /**
- * Price fetched in USD from a US-listed security via Twelve Data or Yahoo.
- * Drawdown is valid. P&L requires a EUR/USD conversion step (done in the engine).
- * Buy recommendation is valid only after FX conversion — mark as false here;
- * the engine sets this to true once it applies the rate.
+ * USD price that has been successfully converted to EUR using a live or cached FX rate.
+ * Suitable for all purposes including exact P&L.
  */
-export function usdUnconvertedValidation(symbol: string, source: PriceSource): PriceValidation {
+export function usdConvertedValidation(symbol: string, provider: PriceProviderId): PriceValidation {
   return {
     symbol,
-    source,
+    provider,
+    method: 'usd_converted',
     fetchedCurrency: 'USD',
-    expectedCurrency: 'USD',
+    expectedCurrency: 'EUR',
     currencyConfirmed: true,
-    suitableForExactPnl: false,      // needs EUR/USD conversion first
-    suitableForBuyRecommendation: false, // set to true by engine after FX conversion
+    suitableForExactPnl: true,
+    suitableForBuyRecommendation: true,
     suitableForDrawdown: true,
     isProxy: false,
-    note: 'USD price — needs EUR/USD FX conversion before use in P&L or sizing',
   };
 }
 
 /**
- * Price confirmed in EUR directly from the provider (EODHD, LSE in GBX→GBP→EUR, etc.).
- * Suitable for all purposes — exact P&L, buy recommendations, drawdown.
+ * USD price is available but no valid EUR/USD FX rate could be obtained.
+ * Drawdown % is still valid. P&L and buy sizing are blocked until FX is available.
+ * Never use a hardcoded fallback rate — leave P&L as "—" instead.
  */
-export function confirmedEurValidation(symbol: string, source: PriceSource): PriceValidation {
+export function usdNoFxValidation(symbol: string, provider: PriceProviderId): PriceValidation {
   return {
     symbol,
-    source,
+    provider,
+    method: 'usd_no_fx',
+    fetchedCurrency: 'USD',
+    expectedCurrency: 'EUR',
+    currencyConfirmed: false,
+    suitableForExactPnl: false,
+    suitableForBuyRecommendation: false,
+    suitableForDrawdown: true,
+    isProxy: false,
+    note: 'USD price available but no valid EUR/USD FX rate — P&L unavailable',
+  };
+}
+
+/**
+ * Price confirmed in EUR directly from the provider (e.g. EODHD for Euronext instruments).
+ * Suitable for all purposes — exact P&L, buy recommendations, drawdown.
+ */
+export function confirmedEurValidation(symbol: string, provider: PriceProviderId): PriceValidation {
+  return {
+    symbol,
+    provider,
+    method: 'direct_eur_quote',
     fetchedCurrency: 'EUR',
     expectedCurrency: 'EUR',
     currencyConfirmed: true,
@@ -82,37 +105,91 @@ export function confirmedEurValidation(symbol: string, source: PriceSource): Pri
 }
 
 /**
- * Price in GBX (pence) that has been converted to GBP and then to EUR.
- * After conversion, equivalent to a confirmed EUR validation.
+ * GBP price (pounds, not pence) converted to EUR using a live or cached GBP/EUR rate.
+ * Suitable for all purposes after conversion.
  */
-export function gbxConvertedValidation(symbol: string, source: PriceSource): PriceValidation {
+export function gbpConvertedValidation(symbol: string, provider: PriceProviderId): PriceValidation {
   return {
     symbol,
-    source,
-    fetchedCurrency: 'GBX',
+    provider,
+    method: 'gbp_converted',
+    fetchedCurrency: 'GBP',
     expectedCurrency: 'EUR',
     currencyConfirmed: true,
     suitableForExactPnl: true,
     suitableForBuyRecommendation: true,
     suitableForDrawdown: true,
     isProxy: false,
-    note: 'GBX (pence) converted to EUR via GBP/EUR rate',
+    note: 'GBP price converted to EUR via GBP/EUR rate',
+  };
+}
+
+/**
+ * GBX or GBp (pence) price converted to EUR: rawPrice / 100 * GBP/EUR rate.
+ * Both "GBX" and "GBp" are treated identically — both mean pence sterling.
+ * The exact sourceCurrency string from the provider is recorded in fetchedCurrency.
+ */
+export function gbpPenceConvertedValidation(
+  symbol: string,
+  provider: PriceProviderId,
+  sourceCurrency: 'GBX' | 'GBp' | string
+): PriceValidation {
+  return {
+    symbol,
+    provider,
+    method: 'gbp_pence_converted',
+    fetchedCurrency: sourceCurrency,
+    expectedCurrency: 'EUR',
+    currencyConfirmed: true,
+    suitableForExactPnl: true,
+    suitableForBuyRecommendation: true,
+    suitableForDrawdown: true,
+    isProxy: false,
+    note: `${sourceCurrency} (pence) converted to EUR via /100 * GBP/EUR rate`,
+  };
+}
+
+/**
+ * Stale cache value used as a last resort after a live fetch failed.
+ * May be hours or days old. Suitable for drawdown and display, but not exact P&L or sizing
+ * unless the cached currency was EUR (checked by the engine before setting suitableFor*).
+ */
+export function cachedLastValidValidation(
+  symbol: string,
+  fetchedCurrency: string | null,
+  expectedCurrency: string | null
+): PriceValidation {
+  const isSameEur =
+    fetchedCurrency === 'EUR' && expectedCurrency === 'EUR';
+  return {
+    symbol,
+    provider: 'cache',
+    method: 'cached_last_valid',
+    fetchedCurrency,
+    expectedCurrency,
+    currencyConfirmed: fetchedCurrency === expectedCurrency,
+    suitableForExactPnl: isSameEur,
+    suitableForBuyRecommendation: isSameEur,
+    suitableForDrawdown: true,
+    isProxy: false,
+    note: 'Stale cache value used — live fetch failed or quota exceeded',
   };
 }
 
 /**
  * Currency mismatch — provider returned a currency different from what config expects.
- * Only drawdown is safe to use. P&L and sizing are blocked until mismatch is resolved.
+ * Only drawdown % is safe. P&L and sizing are blocked until mismatch is resolved.
  */
 export function currencyMismatchValidation(
   symbol: string,
-  source: PriceSource,
+  provider: PriceProviderId,
   fetchedCurrency: string,
   expectedCurrency: string
 ): PriceValidation {
   return {
     symbol,
-    source,
+    provider,
+    method: 'unavailable',
     fetchedCurrency,
     expectedCurrency,
     currencyConfirmed: false,
@@ -125,17 +202,18 @@ export function currencyMismatchValidation(
 }
 
 /**
- * Returns true if validation says this price can be used for the given purpose.
+ * Guard: returns true if a validation object says this price is suitable for the given purpose.
+ * Pass undefined when validation is absent (legacy/unknown) — returns false for safety.
  */
 export function isSuitableFor(
   validation: PriceValidation | undefined,
-  purpose: import('../types').PricingPurpose
+  purpose: PricingPurpose
 ): boolean {
   if (!validation) return false;
   switch (purpose) {
     case 'exact_pnl':           return validation.suitableForExactPnl;
     case 'buy_recommendation':  return validation.suitableForBuyRecommendation;
     case 'drawdown':            return validation.suitableForDrawdown;
-    case 'display':             return validation.source !== 'unavailable';
+    case 'display':             return validation.method !== 'unavailable';
   }
 }

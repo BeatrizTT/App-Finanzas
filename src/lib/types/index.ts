@@ -44,11 +44,33 @@ export type AllocationState =
 // --- Price Validation ---
 
 /**
- * Where a price value originated. Drives trust rules in the engine.
- * 'cache'       = previously fetched value still within TTL
- * 'unavailable' = no data from any provider
+ * Who delivered the raw price data.
+ * 'cache' = value served from in-memory / file cache within TTL
+ * 'mock'  = test/development fixture
+ * 'none'  = no provider was reached (all failed or quota exceeded)
  */
-export type PriceSource = 'eodhd' | 'twelvedata' | 'yahoo' | 'cache' | 'unavailable';
+export type PriceProviderId = 'eodhd' | 'twelvedata' | 'yahoo' | 'cache' | 'mock' | 'none';
+
+/**
+ * What processing or conversion was applied to the raw price.
+ * direct_eur_quote    — provider returned EUR natively (no conversion needed)
+ * usd_converted       — USD price multiplied by EUR/USD rate; result is EUR-equivalent
+ * usd_no_fx           — USD price available but no valid FX rate; P&L blocked
+ * gbp_converted       — GBP price (pounds) multiplied by GBP/EUR rate
+ * gbp_pence_converted — GBX or GBp (pence) divided by 100 then multiplied by GBP/EUR rate
+ * proxy_drawdown_only — USD proxy for a EUR instrument; only drawdown % is valid
+ * cached_last_valid   — stale cache value used after live fetch failed; may be outdated
+ * unavailable         — no usable data from any source
+ */
+export type PriceMethod =
+  | 'direct_eur_quote'
+  | 'usd_converted'
+  | 'usd_no_fx'
+  | 'gbp_converted'
+  | 'gbp_pence_converted'
+  | 'proxy_drawdown_only'
+  | 'cached_last_valid'
+  | 'unavailable';
 
 /**
  * How a price value will be used. Different purposes require different accuracy guarantees.
@@ -61,18 +83,21 @@ export type PricingPurpose = 'exact_pnl' | 'buy_recommendation' | 'drawdown' | '
 
 /**
  * Per-instrument audit object produced alongside each price fetch.
- * Consumers use the suitableFor* flags instead of re-deriving currency logic.
+ * provider  — who delivered the raw data
+ * method    — what conversion/processing was applied
+ * Consumers use suitableFor* flags instead of re-deriving currency logic.
  */
 export interface PriceValidation {
   symbol: string;
-  source: PriceSource;
-  fetchedCurrency: string | null;      // currency the provider returned
-  expectedCurrency: string | null;     // currency we expected from config
-  currencyConfirmed: boolean;          // fetchedCurrency === expectedCurrency
-  suitableForExactPnl: boolean;        // EUR-denominated, not a proxy
-  suitableForBuyRecommendation: boolean; // known currency, usable for EUR sizing
-  suitableForDrawdown: boolean;        // drawdown % is valid (proxy allowed)
-  isProxy: boolean;                    // true = USD proxy for a EUR instrument (QQQ→CNDX)
+  provider: PriceProviderId;
+  method: PriceMethod;
+  fetchedCurrency: string | null;        // exact currency string returned by provider
+  expectedCurrency: string | null;       // currency we expected from instrument config
+  currencyConfirmed: boolean;            // fetchedCurrency matches expectedCurrency
+  suitableForExactPnl: boolean;          // EUR-denominated result, not a proxy
+  suitableForBuyRecommendation: boolean; // usable for EUR buy-size math
+  suitableForDrawdown: boolean;          // drawdown % is valid (proxy allowed)
+  isProxy: boolean;                      // USD proxy for a EUR instrument (e.g. QQQ→CNDX)
   note?: string;
 }
 
