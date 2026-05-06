@@ -76,6 +76,7 @@ export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRunning, setIsRunning] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
+  const [noDataMessage, setNoDataMessage] = useState('');
 
   const fetchData = useCallback(async () => {
     try {
@@ -84,10 +85,12 @@ export default function Dashboard() {
         fetch('/api/alerts?limit=50'),
       ]);
 
-      const engineData = engineRes.ok ? await engineRes.json() : null;
+      // Always parse JSON regardless of status — the API now always returns JSON
+      const engineData = await engineRes.json().catch(() => null);
       const alertsData = alertsRes.ok ? await alertsRes.json() : { alerts: [] };
 
       if (engineData && engineData.runAt) {
+        setNoDataMessage('');
         setData({
           portfolioAnalyses: engineData.portfolioAnalyses ?? [],
           concentration: engineData.concentration ?? null,
@@ -105,9 +108,15 @@ export default function Dashboard() {
         });
       } else {
         setData({ ...EMPTY_DATA, alerts: alertsData.alerts ?? [] });
+        // Show the actionable message from the server, or a generic fallback
+        const msg = typeof engineData?.error === 'string'
+          ? engineData.error
+          : 'Sin datos de análisis. Pulsa Analizar para ejecutar el motor.';
+        setNoDataMessage(msg);
       }
     } catch (err) {
       console.error('Failed to fetch dashboard data', err);
+      setNoDataMessage('No se pudo conectar con el servidor. Recarga la página.');
     } finally {
       setIsLoading(false);
     }
@@ -133,26 +142,41 @@ export default function Dashboard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sendDigest: true, sendAlertMessages: true }),
       });
-      const result = await res.json();
+
+      // Parse JSON separately so we can detect non-JSON responses (e.g. Vercel timeout → HTML)
+      let result: Record<string, unknown>;
+      try {
+        result = await res.json();
+      } catch {
+        clearTimeout(msgTimer);
+        setStatusMessage(
+          res.status >= 500
+            ? 'Error del servidor (posible timeout). Intenta de nuevo en 30 segundos.'
+            : 'Respuesta inesperada del servidor. Intenta de nuevo.'
+        );
+        return;
+      }
+
       clearTimeout(msgTimer);
       if (result.success) {
         setStatusMessage(`¡Listo! ${result.alertsCount} alertas generadas.`);
-        // Use the full data returned by POST directly — no need for a second GET
+        setNoDataMessage('');
+        // Use the full data returned by POST directly — no second GET needed
         if (result.runAt) {
           setData({
-            portfolioAnalyses: result.portfolioAnalyses ?? [],
-            concentration: result.concentration ?? null,
-            stockOpportunities: result.stockOpportunities ?? [],
-            etfOpportunities: result.etfOpportunities ?? [],
-            discoveredOpportunities: result.discoveredOpportunities ?? [],
-            allocationRecommendations: result.allocationRecommendations ?? [],
+            portfolioAnalyses: (result.portfolioAnalyses as any) ?? [],
+            concentration: (result.concentration as any) ?? null,
+            stockOpportunities: (result.stockOpportunities as any) ?? [],
+            etfOpportunities: (result.etfOpportunities as any) ?? [],
+            discoveredOpportunities: (result.discoveredOpportunities as any) ?? [],
+            allocationRecommendations: (result.allocationRecommendations as any) ?? [],
             alerts: data.alerts,
-            lastRunAt: result.runAt,
-            marketRegime: result.marketRegime ?? 'neutral',
-            eurUsdRate: result.eurUsdRate ?? null,
-            errors: result.errors ?? [],
-            closedPositions: result.closedPositions ?? [],
-            totalRealizedPnl: result.totalRealizedPnl ?? null,
+            lastRunAt: result.runAt as string,
+            marketRegime: (result.marketRegime as string) ?? 'neutral',
+            eurUsdRate: (result.eurUsdRate as number | null) ?? null,
+            errors: (result.errors as string[]) ?? [],
+            closedPositions: (result.closedPositions as any) ?? [],
+            totalRealizedPnl: (result.totalRealizedPnl as number | null) ?? null,
           });
         }
         // Also refresh alerts separately
@@ -160,14 +184,16 @@ export default function Dashboard() {
           .then(r => r.ok ? r.json() : { alerts: [] })
           .then(a => setData(prev => ({ ...prev, alerts: a.alerts ?? [] })));
       } else {
-        setStatusMessage(`Error: ${result.error ?? 'fallo al analizar'}`);
+        const stage = typeof result.stage === 'string' ? ` (etapa: ${result.stage})` : '';
+        setStatusMessage(`Error: ${result.error ?? 'fallo al analizar'}${stage}`);
       }
     } catch (err) {
       clearTimeout(msgTimer);
-      setStatusMessage('Error de red — intenta de nuevo en 30 segundos');
+      // True network error — browser couldn't reach the server at all
+      setStatusMessage('Error de red — sin conexión al servidor. Intenta de nuevo.');
     } finally {
       setIsRunning(false);
-      setTimeout(() => setStatusMessage(''), 5000);
+      setTimeout(() => setStatusMessage(''), 8000);
     }
   };
 
@@ -245,6 +271,14 @@ export default function Dashboard() {
 
       {/* Main content */}
       <main className="max-w-screen-2xl mx-auto px-4 py-6">
+
+        {/* No-data / server error banner */}
+        {!isLoading && noDataMessage && !data.lastRunAt && (
+          <div className="mb-4 flex items-center gap-2 text-sm text-yellow-300 bg-yellow-900/20 border border-yellow-700/40 rounded-lg px-4 py-3">
+            <span className="shrink-0">⚠</span>
+            <span>{noDataMessage}</span>
+          </div>
+        )}
 
         {/* Tab description */}
         {{

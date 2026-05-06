@@ -22,7 +22,16 @@ import type {
   DailyEngineOutput,
   RecentHighs,
   UniverseAsset,
+  ConcentrationData,
 } from '../types';
+
+const EMPTY_CONCENTRATION: ConcentrationData = {
+  totalPortfolioValue: 0,
+  sectorWeights: {},
+  themeWeights: {},
+  stockVsEtfRatio: { stocks: 0, etfs: 0 },
+  highConcentrationWarnings: [],
+};
 
 // --------------------------------------------------------------------------
 // Fetch all prices needed for one engine run
@@ -272,61 +281,106 @@ export async function runDailyEngine(options?: {
   console.log(`[Engine] Market regime: ${marketRegime}, avg market drawdown: ${marketMaxDrawdown.toFixed(1)}%`);
 
   // --- CORE_PORTFOLIO_ENGINE ---
-  const { analyses: portfolioAnalyses, concentration } = await runPortfolioEngine(
-    portfolioConfig,
-    portfolioHighs // EUR-converted prices for accurate P&L
-  );
+  let portfolioAnalyses: DailyEngineOutput['portfolioAnalyses'] = [];
+  let concentration: ConcentrationData = EMPTY_CONCENTRATION;
+  try {
+    const result = await runPortfolioEngine(portfolioConfig, portfolioHighs);
+    portfolioAnalyses = result.analyses;
+    concentration = result.concentration;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[Engine] Portfolio engine failed:', msg);
+    errors.push(`portfolio_engine: ${msg}`);
+  }
 
   // --- OPPORTUNITY_SCANNER ---
-  const { stockOpportunities, etfOpportunities, discoveredOpportunities } =
-    await runOpportunityScanner(
+  let stockOpportunities: DailyEngineOutput['stockOpportunities'] = [];
+  let etfOpportunities: DailyEngineOutput['etfOpportunities'] = [];
+  let discoveredOpportunities: DailyEngineOutput['discoveredOpportunities'] = [];
+  try {
+    const scanResult = await runOpportunityScanner(
       universeConfig,
       portfolioConfig,
       allHighs,
       concentration,
       marketMaxDrawdown
     );
+    stockOpportunities = scanResult.stockOpportunities;
+    etfOpportunities = scanResult.etfOpportunities;
+    discoveredOpportunities = scanResult.discoveredOpportunities;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[Engine] Scanner failed:', msg);
+    errors.push(`scanner: ${msg}`);
+  }
 
   // --- CAPITAL_ALLOCATOR ---
-  const allocationRecommendations = runCapitalAllocator(
-    portfolioAnalyses,
-    stockOpportunities,
-    etfOpportunities,
-    discoveredOpportunities,
-    portfolioConfig.cashAvailableEur,
-    portfolioConfig.targetCashReserveEur
-  );
+  let allocationRecommendations: DailyEngineOutput['allocationRecommendations'] = [];
+  try {
+    allocationRecommendations = runCapitalAllocator(
+      portfolioAnalyses,
+      stockOpportunities,
+      etfOpportunities,
+      discoveredOpportunities,
+      portfolioConfig.cashAvailableEur,
+      portfolioConfig.targetCashReserveEur
+    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[Engine] Allocator failed:', msg);
+    errors.push(`allocator: ${msg}`);
+  }
 
   // --- Alert generation ---
-  const generatedAlerts = generateAlerts(
-    portfolioAnalyses,
-    stockOpportunities,
-    etfOpportunities,
-    discoveredOpportunities,
-    concentration,
-    allocationRecommendations
-  );
+  let generatedAlerts: DailyEngineOutput['alertsGenerated'] = [];
+  try {
+    generatedAlerts = generateAlerts(
+      portfolioAnalyses,
+      stockOpportunities,
+      etfOpportunities,
+      discoveredOpportunities,
+      concentration,
+      allocationRecommendations
+    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[Engine] Alert generation failed:', msg);
+    errors.push(`alert_generation: ${msg}`);
+  }
 
   // --- Send alerts ---
   let sentAlerts = generatedAlerts;
   if (options?.sendAlertMessages !== false) {
-    sentAlerts = await sendAlerts(generatedAlerts);
-    saveAlerts(sentAlerts);
+    try {
+      sentAlerts = await sendAlerts(generatedAlerts);
+      saveAlerts(sentAlerts);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[Engine] Sending alerts failed:', msg);
+      errors.push(`telegram_alerts: ${msg}`);
+      try { saveAlerts(generatedAlerts); } catch { /* ignore */ }
+    }
   }
 
   // --- Daily digest ---
   if (options?.sendDigest !== false) {
-    const alwaysSend = process.env.ALWAYS_SEND_DIGEST !== 'false';
-    if (alwaysSend || generatedAlerts.length > 0) {
-      const digestAlert = await sendDailyDigest(
-        portfolioAnalyses,
-        stockOpportunities,
-        etfOpportunities,
-        discoveredOpportunities,
-        allocationRecommendations,
-        concentration
-      );
-      sentAlerts = [...sentAlerts, digestAlert];
+    try {
+      const alwaysSend = process.env.ALWAYS_SEND_DIGEST !== 'false';
+      if (alwaysSend || generatedAlerts.length > 0) {
+        const digestAlert = await sendDailyDigest(
+          portfolioAnalyses,
+          stockOpportunities,
+          etfOpportunities,
+          discoveredOpportunities,
+          allocationRecommendations,
+          concentration
+        );
+        sentAlerts = [...sentAlerts, digestAlert];
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[Engine] Daily digest failed:', msg);
+      errors.push(`digest: ${msg}`);
     }
   }
 
@@ -346,8 +400,13 @@ export async function runDailyEngine(options?: {
     totalRealizedPnl: portfolioConfig.totalRealizedPnl ?? undefined,
   };
 
-  // Persist output for the dashboard to read
-  writeJsonFile('engine-output.json', output);
+  // Persist output for dashboard — non-fatal if filesystem is unavailable (Vercel)
+  try {
+    writeJsonFile('engine-output.json', output);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn('[Engine] Could not persist output to filesystem:', msg);
+  }
 
   console.log(`[Engine] Run complete. Alerts: ${sentAlerts.length}, Errors: ${errors.length}`);
   return output;
