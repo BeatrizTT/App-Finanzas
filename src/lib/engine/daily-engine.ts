@@ -101,8 +101,16 @@ async function fetchAllPrices(
         setCached(cache, sym, highs);
       }
       savePriceCache(cache);
+      // Only report missing data as errors for portfolio holdings (actionable).
+      // Universe scanner misses are expected on free-tier and logged separately.
       const missed = toFetch.filter(t => !freshHighs[t]);
-      for (const t of missed) errors.push(`No data for ${t}`);
+      for (const t of missed) {
+        if (portfolioTickers.includes(t)) {
+          errors.push(`No data for ${t}`);
+        } else {
+          console.warn(`[Engine] No price data for universe symbol ${t} (will retry next run)`);
+        }
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`[Engine] Batch fetch failed: ${msg}`);
@@ -111,9 +119,7 @@ async function fetchAllPrices(
   }
 
   if (deferred.length > 0) {
-    errors.push(
-      `${deferred.length} symbols deferred (rate limit): prices will refresh on the next run`
-    );
+    console.log(`[Engine] ${deferred.length} universe symbols deferred (rate limit) — will refresh on next run`);
   }
 
   console.log(`[Engine] Prices available: ${Object.keys(allHighs).length}/${allTickers.length}`);

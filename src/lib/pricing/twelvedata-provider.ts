@@ -6,16 +6,18 @@ import { calcDrawdownPct } from '../utils/math';
 import type { PriceProvider } from './interface';
 import type { PriceData, HistoricalPrices, RecentHighs, HistoricalPrice } from '../types';
 
-// Twelve Data uses different symbol formats for EU-listed securities
+// Twelve Data uses different symbol formats for EU-listed securities.
+// iShares/Vanguard UCITS ETFs trade on LSE (XLON) and Xetra (XETR).
+// ASML is dual-listed; use Nasdaq (no exchange) which is better supported on free tier.
 const SYMBOL_MAP: Record<string, { symbol: string; exchange?: string }> = {
-  ASML:  { symbol: 'ASML',   exchange: 'XAMS' },  // Euronext Amsterdam
-  CNDX:  { symbol: 'CNDX',   exchange: 'XAMS' },
-  IWDA:  { symbol: 'IWDA',   exchange: 'XAMS' },
-  IWVL:  { symbol: 'IWVL',   exchange: 'XAMS' },
-  CSPX:  { symbol: 'CSPX',   exchange: 'XLON' },  // London Stock Exchange
-  EMIM:  { symbol: 'EMIM',   exchange: 'XLON' },
-  VWCE:  { symbol: 'VWCE',   exchange: 'XETR' },  // Xetra Frankfurt
-  SEMI:  { symbol: 'VSEM',   exchange: 'XLON' },  // VanEck Semi UCITS
+  ASML:  { symbol: 'ASML' },                        // Nasdaq (dual-listed, better free-tier coverage)
+  CNDX:  { symbol: 'CNDX',   exchange: 'XLON' },    // iShares NASDAQ 100 UCITS — LSE
+  IWDA:  { symbol: 'IWDA',   exchange: 'XLON' },    // iShares Core MSCI World — LSE
+  IWVL:  { symbol: 'IWVL',   exchange: 'XLON' },    // iShares MSCI World Value — LSE
+  CSPX:  { symbol: 'CSPX',   exchange: 'XLON' },    // iShares Core S&P 500 — LSE
+  EMIM:  { symbol: 'EMIM',   exchange: 'XLON' },    // iShares Core MSCI EM — LSE
+  VWCE:  { symbol: 'VWCE',   exchange: 'XETR' },    // Vanguard FTSE All-World — Xetra
+  SEMI:  { symbol: 'VSEM',   exchange: 'XLON' },    // VanEck Semiconductor UCITS — LSE
 };
 
 function resolveSymbol(symbol: string): { symbol: string; exchange?: string } {
@@ -171,6 +173,8 @@ export class TwelveDataPriceProvider implements PriceProvider {
         () => tdFetch(`/time_series?symbol=${symbolList}&interval=1day&outputsize=90`)
       ) as Record<string, unknown>;
 
+      const exchangeFailed: string[] = [];
+
       for (const batch_sym of batch) {
         const resolved = resolveSymbol(batch_sym);
         // Twelve Data keys the response by the full "SYM:EXCHANGE" or just "SYM"
@@ -183,7 +187,12 @@ export class TwelveDataPriceProvider implements PriceProvider {
           | undefined;
 
         if (!entry || entry.status === 'error' || !entry.values) {
-          console.warn(`[TwelveData] No batch data for ${batch_sym} (key: ${key})`);
+          if (resolved.exchange) {
+            // Will retry without exchange suffix in fallback pass
+            exchangeFailed.push(batch_sym);
+          } else {
+            console.warn(`[TwelveData] No batch data for ${batch_sym}`);
+          }
           continue;
         }
 
@@ -201,6 +210,43 @@ export class TwelveDataPriceProvider implements PriceProvider {
           drawdown60d: calcDrawdownPct(high60d, currentPrice),
           drawdown90d: calcDrawdownPct(high90d, currentPrice),
         };
+      }
+
+      // Fallback: retry exchange-suffixed symbols using plain ticker (Nasdaq/default)
+      if (exchangeFailed.length > 0) {
+        const fallbackList = exchangeFailed.map(s => resolveSymbol(s).symbol).join(',');
+        console.log(`[TwelveData] Fallback fetch (no exchange): ${fallbackList}`);
+        try {
+          await rateLimit();
+          const fallbackRaw = await withRetry(
+            () => tdFetch(`/time_series?symbol=${fallbackList}&interval=1day&outputsize=90`)
+          ) as Record<string, unknown>;
+
+          for (const batch_sym of exchangeFailed) {
+            const plainSymbol = resolveSymbol(batch_sym).symbol;
+            const entry = fallbackRaw[plainSymbol] as
+              | { values?: Record<string, string>[]; status?: string }
+              | undefined;
+            if (!entry || entry.status === 'error' || !entry.values) {
+              console.warn(`[TwelveData] No data for ${batch_sym} (tried exchange + plain)`);
+              continue;
+            }
+            const prices = parseSeriesValues(entry.values);
+            if (prices.length === 0) continue;
+            const currentPrice = prices[prices.length - 1].close;
+            const [high30d, high60d, high90d] = calcHighs(prices, currentPrice, windows);
+            results[batch_sym] = {
+              symbol: batch_sym,
+              high30d, high60d, high90d,
+              currentPrice,
+              drawdown30d: calcDrawdownPct(high30d, currentPrice),
+              drawdown60d: calcDrawdownPct(high60d, currentPrice),
+              drawdown90d: calcDrawdownPct(high90d, currentPrice),
+            };
+          }
+        } catch (err) {
+          console.warn(`[TwelveData] Fallback batch failed: ${err instanceof Error ? err.message : err}`);
+        }
       }
     }
 
