@@ -6,6 +6,7 @@ import { calcOpportunityScore, stateFromScore, buildOpportunityReasons } from '.
 import { runQualityGates, filterDiscoveryUniverse } from './discovery';
 import { getAllocationConfig, getOverridesConfig, getRulesConfig } from '../utils/config-loader';
 import { clamp } from '../utils/math';
+import { applyPricingSafety } from './pricing-safety';
 import type {
   UniverseConfig,
   PortfolioConfig,
@@ -131,6 +132,11 @@ function scoreAsset(
   if (score.total >= 8 && concentrationPenalty < 0.3) confidence = 'high';
   if (score.total < 6 || concentrationPenalty > 0.6 || !assetDef.isSeed) confidence = 'low';
 
+  // Block BUY/READY_TO_BUY and zero sizing when pricing is not buy-recommendation-safe.
+  // Catches unconfirmed currency, usd_no_fx, proxy, and any other non-buy-safe method.
+  // Legacy providers without validation metadata are trusted (backward compat).
+  const safe = applyPricingSafety(state, suggestedAmountEur, reasons, confidence, highs.validation);
+
   return {
     ticker: assetDef.ticker,
     name: assetDef.name,
@@ -139,7 +145,7 @@ function scoreAsset(
     isin: assetDef.isin,
     isSeedUniverse: assetDef.isSeed,
     score,
-    state,
+    state: safe.state,
     currentPrice: highs.currentPrice,
     currency: assetDef.currency ?? 'USD',
     drawdown: {
@@ -149,9 +155,9 @@ function scoreAsset(
       maxDrawdown: maxDD,
       primaryWindow,
     },
-    reasons,
-    suggestedAmountEur,
-    confidence,
+    reasons: safe.reasons,
+    suggestedAmountEur: safe.suggestedAmountEur,
+    confidence: safe.confidence,
     qualityGates: {
       liquidity: qualityGates.liquidity ?? true,
       quality: qualityGates.quality ?? true,

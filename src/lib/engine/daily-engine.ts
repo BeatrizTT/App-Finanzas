@@ -19,6 +19,7 @@ import {
   applyOverridesToPortfolio,
 } from '../utils/config-loader';
 import { saveEngineOutput } from '../utils/engine-store';
+import { buildPortfolioHighs } from './portfolio-highs';
 import type {
   DailyEngineOutput,
   RecentHighs,
@@ -271,22 +272,18 @@ export async function runDailyEngine(options?: {
   // accurate P&L calculation (otherwise NVDA: avgPrice €85 vs currentPrice $196 = wrong %).
   const eurUsdRate = await fetchEurUsdRate();
 
-  // Build a price-adjusted allHighs for the portfolio engine only.
-  // The scanner/allocator still use raw USD prices (display only, no EUR P&L needed there).
+  // Build EUR-equivalent prices for the portfolio engine.
+  // buildPortfolioHighs uses provider validation as source of truth:
+  //   - validated price (suitableForExactPnl=true): already EUR, no second FX step
+  //   - non-validated price (usd_no_fx, unconfirmed, proxy): null → P&L skipped
+  //   - legacy provider without validation: apply eurUsdRate for USD holdings as before
   const usdTickers = new Set(
     portfolioConfig.holdings
       .filter(h => (h.currency ?? 'USD') !== 'EUR')
       .map(h => h.ticker ?? h.id.toUpperCase())
   );
 
-  const portfolioHighs: Record<string, import('../types').RecentHighs> = {};
-  for (const [ticker, highs] of Object.entries(allHighs)) {
-    if (usdTickers.has(ticker) && highs.currentPrice != null && highs.currentPrice > 0) {
-      portfolioHighs[ticker] = { ...highs, currentPrice: highs.currentPrice / eurUsdRate };
-    } else {
-      portfolioHighs[ticker] = highs;
-    }
-  }
+  const portfolioHighs = buildPortfolioHighs(allHighs, usdTickers, eurUsdRate);
 
   // Estimate market regime from price data
   const marketMaxDrawdown = estimateMarketDrawdown(allHighs);
