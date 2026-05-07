@@ -4,11 +4,12 @@
 
 import { calcDrawdownPct } from '../utils/math';
 import type { PriceProvider } from './interface';
-import type { PriceData, HistoricalPrices, RecentHighs, HistoricalPrice } from '../types';
+import type { PriceData, HistoricalPrices, RecentHighs, HistoricalPrice, PriceProviderId } from '../types';
+import { proxyValidation } from './price-validation';
 
 // Twelve Data free tier only reliably covers US-listed securities.
 // drawdownOnly=true means: use this ticker ONLY for drawdown % (currency-independent).
-// currentPrice will be set to 0 so the engine shows "—" for P&L instead of a wrong value.
+// currentPrice will be null so the engine shows "—" for P&L instead of a wrong value.
 // Reason: CNDX trades in EUR at ~€1000-1300/share; QQQ trades in USD at ~$680/share.
 // Comparing them gives nonsense P&L. But both fell X% from their 90-day high = identical.
 const SYMBOL_MAP: Record<string, { symbol: string; exchange?: string; drawdownOnly?: boolean }> = {
@@ -105,6 +106,33 @@ function calcHighs(prices: HistoricalPrice[], currentPrice: number, windows: num
   return windows.map(getHigh);
 }
 
+/**
+ * Pure helper: build a RecentHighs from a raw Twelve Data values array.
+ * Returns null when values is empty or all closes are zero.
+ * drawdownOnly=true → currentPrice=null (proxy symbol; USD price not EUR-comparable).
+ */
+export function buildHighsFromSeriesValues(
+  symbol: string,
+  values: Record<string, string>[],
+  drawdownOnly: boolean,
+  windows: number[],
+  provider: PriceProviderId = 'twelvedata',
+): RecentHighs | null {
+  const prices = parseSeriesValues(values);
+  if (prices.length === 0) return null;
+  const rawPrice = prices[prices.length - 1].close;
+  const [high30d, high60d, high90d] = calcHighs(prices, rawPrice, windows);
+  return {
+    symbol,
+    high30d, high60d, high90d,
+    currentPrice: drawdownOnly ? null : rawPrice,
+    drawdown30d: calcDrawdownPct(high30d, rawPrice),
+    drawdown60d: calcDrawdownPct(high60d, rawPrice),
+    drawdown90d: calcDrawdownPct(high90d, rawPrice),
+    ...(drawdownOnly && { validation: proxyValidation(symbol, provider) }),
+  };
+}
+
 export class TwelveDataPriceProvider implements PriceProvider {
   readonly providerName = 'twelvedata';
 
@@ -112,9 +140,11 @@ export class TwelveDataPriceProvider implements PriceProvider {
     await rateLimit();
     const params = buildParams(symbol);
     const data = await withRetry(() => tdFetch(`/price?${params}`)) as Record<string, unknown>;
+    const price = parseFloat(String(data.price ?? ''));
+    if (!(price > 0)) throw new Error(`[TwelveData] No valid price for ${symbol}`);
     return {
       symbol,
-      currentPrice: parseFloat(String(data.price ?? '0')),
+      currentPrice: price,
       currency: 'USD',
       timestamp: new Date(),
     };
@@ -138,20 +168,9 @@ export class TwelveDataPriceProvider implements PriceProvider {
       () => tdFetch(`/time_series?${params}&interval=1day&outputsize=90`)
     ) as { values?: Record<string, string>[] };
 
-    const prices = parseSeriesValues(data.values ?? []);
-    const rawPrice = prices[prices.length - 1]?.close ?? 0;
-    // drawdownOnly proxies: USD price is not comparable to user's EUR avgPrice — zero it out
-    const currentPrice = resolved.drawdownOnly ? 0 : rawPrice;
-    const [high30d, high60d, high90d] = calcHighs(prices, rawPrice, windows);
-
-    return {
-      symbol,
-      high30d, high60d, high90d,
-      currentPrice,
-      drawdown30d: calcDrawdownPct(high30d, rawPrice),
-      drawdown60d: calcDrawdownPct(high60d, rawPrice),
-      drawdown90d: calcDrawdownPct(high90d, rawPrice),
-    };
+    const highs = buildHighsFromSeriesValues(symbol, data.values ?? [], resolved.drawdownOnly ?? false, windows);
+    if (!highs) throw new Error(`[TwelveData] No price series for ${symbol}`);
+    return highs;
   }
 
   /**
@@ -201,23 +220,9 @@ export class TwelveDataPriceProvider implements PriceProvider {
           continue;
         }
 
-        const prices = parseSeriesValues(entry.values);
-        if (prices.length === 0) continue;
-
-        const rawPrice = prices[prices.length - 1].close;
-        const [high30d, high60d, high90d] = calcHighs(prices, rawPrice, windows);
-        // drawdownOnly proxies: the USD price is NOT comparable to user's EUR avgPrice.
-        // Zero it out so the engine shows "—" for P&L. Drawdown % remains correct.
-        const currentPrice = resolved.drawdownOnly ? 0 : rawPrice;
-
-        results[batch_sym] = {
-          symbol: batch_sym,
-          high30d, high60d, high90d,
-          currentPrice,
-          drawdown30d: calcDrawdownPct(high30d, rawPrice),
-          drawdown60d: calcDrawdownPct(high60d, rawPrice),
-          drawdown90d: calcDrawdownPct(high90d, rawPrice),
-        };
+        const highs = buildHighsFromSeriesValues(batch_sym, entry.values, resolved.drawdownOnly ?? false, windows);
+        if (!highs) continue;
+        results[batch_sym] = highs;
       }
 
       // Fallback: retry exchange-suffixed symbols using plain ticker (Nasdaq/default)
@@ -239,19 +244,10 @@ export class TwelveDataPriceProvider implements PriceProvider {
               console.warn(`[TwelveData] No data for ${batch_sym} (tried exchange + plain)`);
               continue;
             }
-            const prices = parseSeriesValues(entry.values);
-            if (prices.length === 0) continue;
-            const rawPrice = prices[prices.length - 1].close;
-            const [high30d, high60d, high90d] = calcHighs(prices, rawPrice, windows);
             const fallbackResolved = resolveSymbol(batch_sym);
-            results[batch_sym] = {
-              symbol: batch_sym,
-              high30d, high60d, high90d,
-              currentPrice: fallbackResolved.drawdownOnly ? 0 : rawPrice,
-              drawdown30d: calcDrawdownPct(high30d, rawPrice),
-              drawdown60d: calcDrawdownPct(high60d, rawPrice),
-              drawdown90d: calcDrawdownPct(high90d, rawPrice),
-            };
+            const highs = buildHighsFromSeriesValues(batch_sym, entry.values, fallbackResolved.drawdownOnly ?? false, windows);
+            if (!highs) continue;
+            results[batch_sym] = highs;
           }
         } catch (err) {
           console.warn(`[TwelveData] Fallback batch failed: ${err instanceof Error ? err.message : err}`);

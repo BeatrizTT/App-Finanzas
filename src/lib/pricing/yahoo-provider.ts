@@ -52,7 +52,7 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
 }
 
 interface ChartData {
-  currentPrice: number;
+  currentPrice: number; // always > 0; fetchChart throws if missing
   currency: string;
   prices: HistoricalPrice[];
 }
@@ -82,8 +82,14 @@ async function fetchChart(yahooSymbol: string): Promise<ChartData> {
     }))
     .filter(p => p.close > 0);
 
+  const rawPrice =
+    (result.meta?.regularMarketPrice as number | undefined) ??
+    prices[prices.length - 1]?.close;
+  if (rawPrice == null || !(rawPrice > 0)) {
+    throw new Error(`[Yahoo] No valid current price for ${yahooSymbol}`);
+  }
   return {
-    currentPrice: (result.meta?.regularMarketPrice as number) ?? prices[prices.length - 1]?.close ?? 0,
+    currentPrice: rawPrice,
     currency: (result.meta?.currency as string) ?? 'USD',
     prices,
   };
