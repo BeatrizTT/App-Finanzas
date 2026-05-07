@@ -28,6 +28,7 @@ import {
 } from './price-validation';
 import type { PriceProvider } from './interface';
 import type { PriceData, HistoricalPrices, RecentHighs, PricingPurpose } from '../types';
+// PricingPurpose is also re-exported via interface.ts — import from types to avoid indirection
 
 // Numeric level for comparing partial results when no provider satisfies the full purpose.
 // exact_pnl(4) > buy_recommendation(3) > drawdown(2) > display(1) > unavailable(0)
@@ -182,9 +183,17 @@ export class ChainedPriceProvider implements PriceProvider {
   }
 
   async getRecentHighs(symbol: string, windows?: number[]): Promise<RecentHighs> {
-    // Default purpose for getRecentHighs is buy_recommendation — the most common engine use case.
-    // Callers that need exact_pnl should use resolvePriceForInstrument directly.
+    // Default purpose when caller doesn't specify: buy_recommendation.
+    // The engine should prefer getRecentHighsForPurpose for portfolio (exact_pnl) vs scanner.
     return resolvePriceForInstrument(symbol, 'buy_recommendation', this.providers, windows);
+  }
+
+  async getRecentHighsForPurpose(
+    symbol: string,
+    purpose: PricingPurpose,
+    windows?: number[]
+  ): Promise<RecentHighs> {
+    return resolvePriceForInstrument(symbol, purpose, this.providers, windows);
   }
 
   // No batchGetRecentHighs — chain resolution is inherently sequential per symbol.

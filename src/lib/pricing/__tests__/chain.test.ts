@@ -143,8 +143,8 @@ test('isSuitableFor: stale USD→EUR cache → drawdown only', () => {
 // ---------------------------------------------------------------------------
 
 test('Chain: EODHD unconfirmed does NOT block chain for buy_recommendation', async () => {
-  // EODHD returns unconfirmed (drawdown-only); Twelve Data returns converted (full)
-  const sym = '__TEST_CHAIN_EODHD_FALLBACK__';
+  // Unique symbol per run to avoid cache hits from previous test executions
+  const sym = `__TEST_CHAIN_EODHD_FALLBACK_${Date.now()}__`;
   let eodhdCalled = false;
   let tdCalled = false;
 
@@ -277,6 +277,73 @@ test('Chain: missing FX → usd_no_fx not suitable for exact_pnl', async () => {
 
   assert('usd_no_fx: not suitable for exact_pnl', !isSuitableFor(result.validation, 'exact_pnl'));
   assert('usd_no_fx: suitable for drawdown', isSuitableFor(result.validation, 'drawdown'));
+});
+
+// ---------------------------------------------------------------------------
+// Section 3: getRecentHighsForPurpose integration (engine calls with purpose)
+// ---------------------------------------------------------------------------
+
+test('getRecentHighsForPurpose: exact_pnl skips unconfirmed, uses confirmed', async () => {
+  const sym = '__TEST_FOR_PURPOSE_EXACT__';
+  const calls: string[] = [];
+
+  const eodhdProvider: PriceProvider = {
+    providerName: 'eodhd',
+    getCurrentPrice: async () => { throw new Error('not used'); },
+    getHistoricalPrices: async () => ({ symbol: '', prices: [] }),
+    getRecentHighs: async () => {
+      calls.push('eodhd-getRecentHighs');
+      return makeHighs(sym, {
+        currentPrice: null,
+        validation: unconfirmedCurrencyValidation(sym, 'eodhd', 'EUR'),
+      });
+    },
+  };
+
+  const tdProvider: PriceProvider = {
+    providerName: 'twelvedata',
+    getCurrentPrice: async () => { throw new Error('not used'); },
+    getHistoricalPrices: async () => ({ symbol: '', prices: [] }),
+    getRecentHighs: async () => {
+      calls.push('td-getRecentHighs');
+      return makeHighs(sym, {
+        currentPrice: 95,
+        validation: confirmedEurValidation(sym, 'twelvedata'),
+      });
+    },
+  };
+
+  const { ChainedPriceProvider } = await import('../chain-provider');
+  const chain = new ChainedPriceProvider([eodhdProvider, tdProvider]);
+
+  const result = await chain.getRecentHighsForPurpose(sym, 'exact_pnl');
+
+  assert('chain resolved to twelvedata (exact_pnl-suitable)', result.validation?.provider === 'twelvedata');
+  assert('currentPrice non-null for confirmed EUR', result.currentPrice !== null);
+  assert('suitableForExactPnl on result', result.validation?.suitableForExactPnl === true);
+});
+
+test('getRecentHighsForPurpose: buy_recommendation stops at TD (no need for exact_pnl bar)', async () => {
+  const sym = '__TEST_FOR_PURPOSE_BUY__';
+
+  const tdProvider: PriceProvider = {
+    providerName: 'twelvedata',
+    getCurrentPrice: async () => { throw new Error('not used'); },
+    getHistoricalPrices: async () => ({ symbol: '', prices: [] }),
+    getRecentHighs: async () =>
+      makeHighs(sym, {
+        currentPrice: 95,
+        validation: usdConvertedValidation(sym, 'twelvedata'),
+      }),
+  };
+
+  const { ChainedPriceProvider } = await import('../chain-provider');
+  const chain = new ChainedPriceProvider([tdProvider]);
+
+  const result = await chain.getRecentHighsForPurpose(sym, 'buy_recommendation');
+
+  assert('buy_recommendation satisfied by usd_converted', isSuitableFor(result.validation, 'buy_recommendation'));
+  assert('currentPrice non-null', result.currentPrice !== null);
 });
 
 // ---------------------------------------------------------------------------

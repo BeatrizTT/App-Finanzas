@@ -24,6 +24,7 @@ import type {
   RecentHighs,
   UniverseAsset,
   ConcentrationData,
+  PricingPurpose,
 } from '../types';
 
 const EMPTY_CONCENTRATION: ConcentrationData = {
@@ -60,7 +61,18 @@ async function fetchAllPrices(
     for (let i = 0; i < allTickers.length; i += BATCH_SIZE) {
       const batch = allTickers.slice(i, i + BATCH_SIZE);
       const results = await Promise.allSettled(
-        batch.map(async (ticker) => ({ ticker, highs: await provider.getRecentHighs(ticker) }))
+        batch.map(async (ticker) => {
+          // Purpose-aware fetch: portfolio holdings need exact_pnl (confirmed currency, no proxy);
+          // universe scanner needs buy_recommendation (will accept USD-converted prices).
+          // Non-chain providers ignore this and fall back to standard getRecentHighs.
+          const purpose: PricingPurpose = portfolioTickers.includes(ticker)
+            ? 'exact_pnl'
+            : 'buy_recommendation';
+          const highs = provider.getRecentHighsForPurpose
+            ? await provider.getRecentHighsForPurpose(ticker, purpose)
+            : await provider.getRecentHighs(ticker);
+          return { ticker, highs };
+        })
       );
       for (const r of results) {
         if (r.status === 'fulfilled') allHighs[r.value.ticker] = r.value.highs;

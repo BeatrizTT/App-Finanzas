@@ -286,7 +286,13 @@ export async function analyzeHolding(
     };
   }
 
-  const currentPrice: number | null = highs.currentPrice;
+  // Null out currentPrice for P&L if validation explicitly marks the price as unsuitable for
+  // exact accounting (e.g. currency_unconfirmed, usd_no_fx, proxy_drawdown_only).
+  // Backward-compat: providers without validation metadata (Twelve Data) are trusted as before.
+  const currentPrice: number | null =
+    highs.validation && !highs.validation.suitableForExactPnl
+      ? null
+      : highs.currentPrice;
   const maxDrawdown = Math.max(highs.drawdown30d, highs.drawdown60d, highs.drawdown90d);
   const primaryWindow =
     highs.drawdown90d === maxDrawdown ? '90d' :
