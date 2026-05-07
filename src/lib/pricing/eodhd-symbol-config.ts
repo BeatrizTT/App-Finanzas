@@ -88,6 +88,30 @@ export function getEodhdCuratedEntry(internalTicker: string): EodhdCuratedEntry 
 }
 
 /**
+ * Returns true only when the EODHD raw close price can be set as currentPrice.
+ *
+ * Only validated_exact_eur is safe: the price is already in EUR (Euronext/Xetra),
+ * no FX conversion needed, no ambiguity.
+ *
+ * validated_usd_needs_fx → false:
+ *   The raw price is in USD. Without a real EUR/USD FX rate the number is
+ *   meaningless in an EUR portfolio. Setting currentPrice=null forces every
+ *   downstream consumer (scanner, display, portfolio engine) to show "—"
+ *   instead of silently treating 207.83 USD as €207.83.
+ *
+ * rejected_mismatch → false:
+ *   The currency is wrong; exposing the raw price would be misleading.
+ *
+ * All other statuses → false (conservative default).
+ *
+ * NOTE: drawdown % is still computed from the raw price in getRecentHighs —
+ * the ratio is currency-independent and remains valid even when currentPrice is null.
+ */
+export function isCuratedCurrentPriceUsable(status: EodhdValidationStatus): boolean {
+  return status === 'validated_exact_eur';
+}
+
+/**
  * Build a PriceValidation from a curated entry.
  *
  * Statuses and their outcomes:

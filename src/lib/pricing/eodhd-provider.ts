@@ -19,6 +19,7 @@ import {
 import {
   getEodhdCuratedEntry,
   buildValidationFromCurated,
+  isCuratedCurrentPriceUsable,
 } from './eodhd-symbol-config';
 
 // ---------------------------------------------------------------------------
@@ -29,7 +30,12 @@ interface EodhdSymbolEntry {
   eodhdTicker: string;       // "TICKER.EXCHANGE" format used by EODHD API
   inferredCurrency: string;  // derived from exchange code
   lseMaybePence: boolean;    // true = LSE-listed, price may be in GBX (pence)
-  validated: boolean;        // false until a real API response confirms this ticker
+  // true = EODHD ticker + currency confirmed by P2c smoke run.
+  // true is NOT equivalent to "EUR-safe for exact P&L" — see curated status
+  // in eodhd-symbol-validation.json for suitability (validated_exact_eur vs
+  // validated_usd_needs_fx vs rejected_mismatch). currentPrice usability is
+  // determined by isCuratedCurrentPriceUsable(status), not this flag.
+  validated: boolean;
 }
 
 const SYMBOL_MAP: Record<string, EodhdSymbolEntry> = {
@@ -254,8 +260,10 @@ function buildValidation(
   if (curated) {
     // FX conversion is not done at provider level — pass false; engine handles FX.
     const validation = buildValidationFromCurated(symbol, curated, false);
-    // rejected_mismatch: currency is wrong — don't expose the raw price as currentPrice
-    const currentPriceUsable = curated.status !== 'rejected_mismatch';
+    // Only validated_exact_eur exposes a currentPrice — all other statuses return null
+    // so that raw USD prices (NVDA: $207, QQQ: $695) are never treated as EUR by
+    // downstream consumers (scanner, portfolio engine, display).
+    const currentPriceUsable = isCuratedCurrentPriceUsable(curated.status);
     return { validation, currentPriceUsable };
   }
 
