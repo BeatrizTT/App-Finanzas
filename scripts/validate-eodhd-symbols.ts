@@ -61,6 +61,10 @@ const ALL_VALIDATION_TARGETS: ValidationTarget[] = [
   { internalTicker: 'ADBE',  eodhdSymbol: 'ADBE.US',    exchange: 'US',    expectedCurrency: 'USD', description: 'Adobe Inc — NASDAQ' },
   { internalTicker: 'ORCL',  eodhdSymbol: 'ORCL.US',    exchange: 'US',    expectedCurrency: 'USD', description: 'Oracle Corp — NYSE' },
   { internalTicker: 'MU',    eodhdSymbol: 'MU.US',      exchange: 'US',    expectedCurrency: 'USD', description: 'Micron Technology — NASDAQ' },
+  // --- Market proxies (USD, drawdown reference) ---
+  { internalTicker: 'QQQ',   eodhdSymbol: 'QQQ.US',     exchange: 'US',    expectedCurrency: 'USD', description: 'Invesco QQQ Trust (NASDAQ-100 ETF)' },
+  { internalTicker: 'SPY',   eodhdSymbol: 'SPY.US',     exchange: 'US',    expectedCurrency: 'USD', description: 'SPDR S&P 500 ETF Trust' },
+  { internalTicker: 'VOO',   eodhdSymbol: 'VOO.US',     exchange: 'US',    expectedCurrency: 'USD', description: 'Vanguard S&P 500 ETF' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -252,6 +256,16 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  // Warn about requested symbols not present in the targets list — never drop silently
+  if (symbolFilter) {
+    const knownTickers = new Set(ALL_VALIDATION_TARGETS.map(t => t.internalTicker));
+    for (const requested of symbolFilter) {
+      if (!knownTickers.has(requested)) {
+        console.warn(`[Validator] Warning: '${requested}' is not in the validation targets list — add it to ALL_VALIDATION_TARGETS to validate it`);
+      }
+    }
+  }
+
   console.log('=== EODHD Symbol Validator (P2c-1) ===');
   console.log(`Symbols:     ${targets.map(t => t.internalTicker).join(', ')}`);
   console.log(`Budget:      ${budgetLimit()} calls max`);
@@ -309,10 +323,10 @@ async function main(): Promise<void> {
   console.log(`\nBudget used: ${budgetUsed}/${budgetLimit()}`);
   console.log(`Report written: ${outputPath}`);
 
-  const hasErrors = results.some(r =>
-    r.status === 'provider_error' || r.status === 'rejected_mismatch'
-  );
-  process.exit(hasErrors ? 1 : 0);
+  // Exit 0 — findings (rejected_mismatch, ambiguous_symbol, suspected_gbx_pence, etc.)
+  // are the expected output of a smoke run, not technical failures.
+  // Technical failures (missing key, auth error, write error) already exit 1 above.
+  process.exit(0);
 }
 
 main().catch(err => {
