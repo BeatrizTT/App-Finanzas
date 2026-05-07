@@ -1,0 +1,117 @@
+# P2c-1-smoke: Controlled EODHD symbol validator — manual only
+#
+# What this does: calls EODHD search API for a small set of symbols,
+# generates a validation report, checks for secret leaks, uploads as artifact.
+#
+# What this does NOT do:
+#   - does not modify SYMBOL_MAP or any production code
+#   - does not change validated: false to true
+#   - does not activate EODHD as the default price provider
+#   - does not run the full universe
+#   - does not commit or push any file
+#
+# Trigger: manual only (Actions → EODHD Symbol Smoke → Run workflow)
+
+name: EODHD Symbol Smoke (P2c-1)
+
+on:
+  workflow_dispatch:
+    inputs:
+      symbols:
+        description: 'Comma-separated symbols (no spaces). Max 10 due to budget.'
+        required: false
+        default: 'ASML,CNDX,IWVL,NVDA,QQQ'
+
+jobs:
+  validate:
+    name: Validate EODHD symbols
+    runs-on: ubuntu-latest
+    environment: production    # EODHD_API_KEY must be set as a secret in this environment
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: claude/personal-investing-app-BG2r1
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run EODHD symbol validator
+        env:
+          EODHD_API_KEY: ${{ secrets.EODHD_API_KEY }}
+          EODHD_ENABLED: 'true'
+          EODHD_MAX_CALLS_PER_RUN: '10'
+        run: |
+          SYMBOLS="${{ inputs.symbols }}"
+          echo "Validating symbols: ${SYMBOLS}"
+          echo "Budget: ${EODHD_MAX_CALLS_PER_RUN} calls max"
+          npx ts-node --project tsconfig.scripts.json \
+            scripts/validate-eodhd-symbols.ts \
+            --symbols "${SYMBOLS}" \
+            --out src/data/eodhd-validation-report.json
+
+      # Verify no secrets leaked into the report before uploading.
+      # Uses grep -F (fixed strings, no regex) to avoid false positives.
+      # If the actual API key value appears anywhere in the JSON, the report
+      # is deleted and the workflow fails — artifact is never uploaded.
+      - name: Security check — report must not contain secrets
+        env:
+          EODHD_API_KEY: ${{ secrets.EODHD_API_KEY }}
+        run: |
+          REPORT="src/data/eodhd-validation-report.json"
+
+          if [ ! -f "${REPORT}" ]; then
+            echo "::error::Report file not found — validator may have failed"
+            exit 1
+          fi
+
+          echo "Checking report for sensitive strings..."
+
+          # Patterns that must never appear in a clean report
+          # "api_key" catches EODHD error bodies; "api_token" catches URL params
+          for PATTERN in "api_token" "EODHD_API_KEY" "secret" "api_key"; do
+            if grep -qiF "${PATTERN}" "${REPORT}"; then
+              echo "::error::Pattern '${PATTERN}' found in report — potential secret leak"
+              exit 1
+            fi
+          done
+
+          # Check that the actual API key value is not present in the file
+          if [ -n "${EODHD_API_KEY}" ] && grep -qF "${EODHD_API_KEY}" "${REPORT}"; then
+            echo "::error::Actual API key value found in report — deleting file and failing"
+            rm -f "${REPORT}"
+            exit 1
+          fi
+
+          echo "Report is clean — no secrets detected."
+          echo ""
+          echo "=== Report summary ==="
+          # Print report without any risk of echoing secrets (only structure, not raw values)
+          node -e "
+            const r = JSON.parse(require('fs').readFileSync('${REPORT}', 'utf-8'));
+            console.log('Generated:', r.generatedAt);
+            console.log('Budget used:', r.budgetUsed + '/' + r.budgetLimit);
+            console.log('Symbols:', r.totalSymbols);
+            console.log('Summary:', JSON.stringify(r.summary, null, 2));
+            r.results.forEach(s => {
+              console.log(s.internalTicker + ' (' + s.eodhdSymbol + '): ' + s.status +
+                (s.confirmedCurrency ? ' [' + s.confirmedCurrency + ']' : '') +
+                (s.samplePrice ? ' price=' + s.samplePrice : ''));
+              s.warnings.forEach(w => console.log('  warning:', w));
+            });
+          "
+
+      - name: Upload validation report
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eodhd-validation-report
+          path: src/data/eodhd-validation-report.json
+          retention-days: 30
