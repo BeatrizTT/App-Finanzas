@@ -160,9 +160,16 @@ export class ChainedPriceProvider implements PriceProvider {
 
   async getCurrentPrice(symbol: string): Promise<PriceData> {
     const highs = await this.getRecentHighs(symbol);
+    if (highs.currentPrice == null) {
+      throw new Error(
+        `[Chain] No usable price for ${symbol}` +
+        ` (method: ${highs.validation?.method ?? 'unknown'})` +
+        ` — suitableForExactPnl=${highs.validation?.suitableForExactPnl ?? false}`
+      );
+    }
     return {
       symbol,
-      currentPrice: highs.currentPrice ?? 0,
+      currentPrice: highs.currentPrice,
       currency:
         highs.validation?.fetchedCurrency ??
         highs.validation?.expectedCurrency ??

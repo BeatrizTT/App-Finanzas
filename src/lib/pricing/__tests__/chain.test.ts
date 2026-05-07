@@ -20,8 +20,10 @@ import {
   usdConvertedValidation,
   unavailableValidation,
   cachedLastValidValidation,
+  currencyMismatchValidation,
 } from '../price-validation';
-import { resolvePriceForInstrument } from '../chain-provider';
+import { resolvePriceForInstrument, ChainedPriceProvider } from '../chain-provider';
+import { safeFetchPrice } from '../factory';
 import type { RecentHighs } from '../../types';
 import type { PriceProvider } from '../interface';
 
@@ -344,6 +346,110 @@ test('getRecentHighsForPurpose: buy_recommendation stops at TD (no need for exac
 
   assert('buy_recommendation satisfied by usd_converted', isSuitableFor(result.validation, 'buy_recommendation'));
   assert('currentPrice non-null', result.currentPrice !== null);
+});
+
+// ---------------------------------------------------------------------------
+// P2c-2b: ChainedPriceProvider.getCurrentPrice — no zero fallback
+// ---------------------------------------------------------------------------
+
+test('P2c-2b: getCurrentPrice throws when currentPrice=null (no price: 0)', async () => {
+  const nullPriceProvider = makeProvider('eodhd', async () =>
+    makeHighs('TEST', {
+      currentPrice: null,
+      validation: unavailableValidation('TEST'),
+    })
+  );
+  const chain = new ChainedPriceProvider([nullPriceProvider]);
+  let threw = false;
+  let result: { currentPrice: number } | null = null;
+  try {
+    result = await chain.getCurrentPrice('TEST');
+  } catch {
+    threw = true;
+  }
+  assert('getCurrentPrice throws when currentPrice=null', threw);
+  assert('no price: 0 emitted', result === null);
+});
+
+test('P2c-2b: validated_usd_needs_fx without FX → getCurrentPrice throws (not price: 0)', async () => {
+  const usdNoFxProvider = makeProvider('eodhd', async () =>
+    makeHighs('NVDA', {
+      currentPrice: null,
+      validation: { ...usdNoFxValidation('NVDA', 'eodhd'), note: 'USD quote validated but FX missing' },
+    })
+  );
+  const chain = new ChainedPriceProvider([usdNoFxProvider]);
+  let threw = false;
+  try {
+    await chain.getCurrentPrice('NVDA');
+  } catch (err) {
+    threw = true;
+    const msg = err instanceof Error ? err.message : '';
+    assert('error message names the symbol', msg.includes('NVDA'));
+    assert('error message names the method', msg.includes('usd_no_fx'));
+  }
+  assert('throws for validated_usd_needs_fx without FX', threw);
+});
+
+test('P2c-2b: rejected_mismatch → getCurrentPrice throws (not price: 0)', async () => {
+  const mismatchProvider = makeProvider('eodhd', async () =>
+    makeHighs('CNDX', {
+      currentPrice: null,
+      validation: currencyMismatchValidation('CNDX', 'eodhd', 'USD', 'GBP'),
+    })
+  );
+  const chain = new ChainedPriceProvider([mismatchProvider]);
+  let threw = false;
+  try {
+    await chain.getCurrentPrice('CNDX');
+  } catch {
+    threw = true;
+  }
+  assert('throws for rejected_mismatch (CNDX USD/GBP mismatch)', threw);
+});
+
+test('P2c-2b: safeFetchPrice returns null when chain throws (no price: 0 escapes)', async () => {
+  const nullPriceProvider: PriceProvider = {
+    providerName: 'null-price-mock',
+    async getCurrentPrice() {
+      throw new Error('[Chain] No usable price for TEST (method: unavailable)');
+    },
+    async getHistoricalPrices() { return { symbol: '', prices: [] }; },
+    async getRecentHighs() {
+      return makeHighs('TEST', { currentPrice: null, validation: unavailableValidation('TEST') });
+    },
+  };
+  const result = await safeFetchPrice('TEST', nullPriceProvider);
+  assert('safeFetchPrice returns null when getCurrentPrice throws', result === null);
+  assert('no price: 0 from safeFetchPrice', result !== null ? result.price !== 0 : true);
+});
+
+test('P2c-2b: getCurrentPrice works correctly for validated_exact_eur (EUR price non-null)', async () => {
+  const eurProvider = makeProvider('eodhd', async () =>
+    makeHighs('ASML', {
+      currentPrice: 1300,
+      validation: confirmedEurValidation('ASML', 'eodhd'),
+    })
+  );
+  const chain = new ChainedPriceProvider([eurProvider]);
+  const result = await chain.getCurrentPrice('ASML');
+  assert('currentPrice is 1300', result.currentPrice === 1300);
+  assert('currency is EUR', result.currency === 'EUR');
+  assert('currentPrice is not 0', result.currentPrice !== 0);
+  assert('currentPrice is not null', result.currentPrice != null);
+});
+
+test('P2c-2b: legacy provider with non-null currentPrice still works via chain', async () => {
+  // Legacy providers (Yahoo, mock) set currentPrice directly — chain must not break them
+  const legacyProvider = makeProvider('yahoo', async () =>
+    makeHighs('MSFT', {
+      currentPrice: 415.5,
+    })
+  );
+  const chain = new ChainedPriceProvider([legacyProvider]);
+  const result = await chain.getCurrentPrice('MSFT');
+  assert('legacy provider: currentPrice 415.5 passes through', result.currentPrice === 415.5);
+  assert('legacy provider: no crash', result !== null);
 });
 
 // ---------------------------------------------------------------------------
