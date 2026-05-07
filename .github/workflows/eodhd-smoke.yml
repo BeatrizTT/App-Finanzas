@@ -31,6 +31,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: claude/personal-investing-app-BG2r1
 
       - name: Setup Node.js 22
         uses: actions/setup-node@v4
@@ -73,7 +75,8 @@ jobs:
           echo "Checking report for sensitive strings..."
 
           # Patterns that must never appear in a clean report
-          for PATTERN in "api_token" "EODHD_API_KEY" "secret" "key"; do
+          # "api_key" catches EODHD error bodies; "api_token" catches URL params
+          for PATTERN in "api_token" "EODHD_API_KEY" "secret" "api_key"; do
             if grep -qiF "${PATTERN}" "${REPORT}"; then
               echo "::error::Pattern '${PATTERN}' found in report — potential secret leak"
               exit 1

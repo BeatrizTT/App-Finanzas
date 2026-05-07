@@ -120,7 +120,7 @@ async function fetchEodhdSearch(
   if (res.status === 401 || res.status === 403) {
     return {
       results: null,
-      error: { isQuota: false, isNotFound: false, isTimeout: false, isAuth: true, message: 'Unauthorized — check EODHD_API_KEY' },
+      error: { isQuota: false, isNotFound: false, isTimeout: false, isAuth: true, message: 'Unauthorized (HTTP 401/403) — invalid or missing API credential' },
     };
   }
   if (res.status === 402 || res.status === 429) {
