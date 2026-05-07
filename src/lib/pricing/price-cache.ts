@@ -3,7 +3,8 @@
 // most engine runs use zero API credits and complete in milliseconds.
 
 import { readJsonFile, writeJsonFile } from '../utils/file-store';
-import type { RecentHighs } from '../types';
+import { isSuitableFor } from './price-validation';
+import type { RecentHighs, PricingPurpose } from '../types';
 
 interface CacheEntry {
   data: RecentHighs;
@@ -35,6 +36,29 @@ export function getCached(cache: PriceCache, symbol: string): RecentHighs | null
 
 export function setCached(cache: PriceCache, symbol: string, data: RecentHighs): void {
   cache[symbol] = { data, fetchedAt: new Date().toISOString() };
+}
+
+/**
+ * Returns fresh cache entry only if it also satisfies the requested purpose.
+ * Used by the provider chain to skip live fetches when cache is good enough.
+ */
+export function getCachedForPurpose(
+  cache: PriceCache,
+  symbol: string,
+  purpose: PricingPurpose
+): RecentHighs | null {
+  const entry = cache[symbol];
+  if (!entry || !isCacheFresh(entry)) return null;
+  if (!isSuitableFor(entry.data.validation, purpose)) return null;
+  return entry.data;
+}
+
+/**
+ * Returns any cached entry regardless of freshness, or null if absent.
+ * Used by the provider chain as a last-resort fallback after all live fetches fail.
+ */
+export function getCachedStale(cache: PriceCache, symbol: string): RecentHighs | null {
+  return cache[symbol]?.data ?? null;
 }
 
 /** How many symbols need fresh data (cache miss or expired) */
