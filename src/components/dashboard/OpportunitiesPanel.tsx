@@ -99,7 +99,7 @@ function OpportunityRow({ opp, showDiscoveryBadge = false }: { opp: Opportunity;
             </div>
           </div>
           <div className="text-right shrink-0">
-            <div className="font-mono text-slate-300 text-sm">{currency}{opp.currentPrice.toFixed(2)}</div>
+            <div className="font-mono text-slate-300 text-sm">{opp.currentPrice != null ? `${currency}${opp.currentPrice.toFixed(2)}` : '—'}</div>
             {opp.suggestedAmountEur.max > 0 ? (
               <div className="text-green-400 font-mono text-sm font-semibold">
                 €{opp.suggestedAmountEur.min}–{opp.suggestedAmountEur.max}

@@ -133,7 +133,7 @@ function scoreRiskReward(highs: RecentHighs, asset: UniverseAsset): number {
   const currentPrice = highs.currentPrice;
   const high90d = highs.high90d;
 
-  if (currentPrice <= 0 || high90d <= 0) return 5;
+  if (currentPrice == null || currentPrice <= 0 || high90d <= 0) return 5;
 
   const upsideToHigh = ((high90d - currentPrice) / currentPrice) * 100;
   const estimatedDownside = maxDrawdown * 0.5; // rough estimate: risk = half current drawdown deeper

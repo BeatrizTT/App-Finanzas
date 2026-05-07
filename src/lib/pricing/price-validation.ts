@@ -65,6 +65,33 @@ export function usdConvertedValidation(symbol: string, provider: PriceProviderId
 }
 
 /**
+ * Provider returned a price but did NOT include currency in the response.
+ * Currency is inferred from exchange code or config — not confirmed.
+ * Only drawdown % is safe. P&L and buy sizing blocked until P2c validation confirms
+ * the actual currency from a real provider response.
+ */
+export function unconfirmedCurrencyValidation(
+  symbol: string,
+  provider: PriceProviderId,
+  inferredCurrency: string,
+  note?: string
+): PriceValidation {
+  return {
+    symbol,
+    provider,
+    method: 'currency_unconfirmed',
+    fetchedCurrency: null,           // provider response did not include currency
+    expectedCurrency: inferredCurrency,
+    currencyConfirmed: false,
+    suitableForExactPnl: false,
+    suitableForBuyRecommendation: false,
+    suitableForDrawdown: true,
+    isProxy: false,
+    note: note ?? `Currency inferred as ${inferredCurrency} from exchange code — not confirmed by provider response`,
+  };
+}
+
+/**
  * USD price is available but no valid EUR/USD FX rate could be obtained.
  * Drawdown % is still valid. P&L and buy sizing are blocked until FX is available.
  * Never use a hardcoded fallback rate — leave P&L as "—" instead.

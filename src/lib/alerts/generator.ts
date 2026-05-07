@@ -45,7 +45,9 @@ function generatePortfolioAlerts(
 
     const ticker = analysis.holding.ticker ?? analysis.holding.id.toUpperCase();
     const drawdownStr = `-${analysis.drawdown.maxDrawdown.toFixed(1)}%`;
-    const priceStr = `${analysis.holding.currency === 'EUR' ? '€' : '$'}${analysis.currentPrice.toFixed(2)}`;
+    const priceStr = analysis.currentPrice != null
+      ? `${analysis.holding.currency === 'EUR' ? '€' : '$'}${analysis.currentPrice.toFixed(2)}`
+      : '—';
     const confidenceEs = analysis.confidence === 'high' ? 'ALTA' : analysis.confidence === 'medium' ? 'MEDIA' : 'BAJA';
 
     let message = `📊 *${ticker}* — Alerta de cartera\n`;
@@ -98,7 +100,9 @@ function generateOpportunityAlerts(
     if (!shouldSendAlert(assetId, prev)) continue;
 
     const drawdownStr = `-${opp.drawdown.maxDrawdown.toFixed(1)}%`;
-    const priceStr = `${opp.currency === 'EUR' ? '€' : '$'}${opp.currentPrice.toFixed(2)}`;
+    const priceStr = opp.currentPrice != null
+      ? `${opp.currency === 'EUR' ? '€' : '$'}${opp.currentPrice.toFixed(2)}`
+      : '—';
     const confidenceEs = opp.confidence === 'high' ? 'ALTA' : opp.confidence === 'medium' ? 'MEDIA' : 'BAJA';
     const typeEs = opp.type === 'etf' ? 'ETF' : 'Acción';
 

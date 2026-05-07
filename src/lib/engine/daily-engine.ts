@@ -269,7 +269,7 @@ export async function runDailyEngine(options?: {
 
   const portfolioHighs: Record<string, import('../types').RecentHighs> = {};
   for (const [ticker, highs] of Object.entries(allHighs)) {
-    if (usdTickers.has(ticker) && highs.currentPrice > 0) {
+    if (usdTickers.has(ticker) && highs.currentPrice != null && highs.currentPrice > 0) {
       portfolioHighs[ticker] = { ...highs, currentPrice: highs.currentPrice / eurUsdRate };
     } else {
       portfolioHighs[ticker] = highs;

@@ -2,19 +2,19 @@
 // Requires: EODHD_API_KEY + EODHD_ENABLED=true
 // Budget: EODHD_MAX_CALLS_PER_RUN (default 10) — enforced per engine run
 //
-// Symbol map entries start as validated=false — EODHD tickers are best-guess
-// until confirmed with a real response in P2c. The engine trusts inferred
-// currencies for EUR/Euronext instruments; LSE instruments are flagged as
-// unconfirmed (could be GBX pence) and currentPrice is zeroed out.
+// All SYMBOL_MAP entries are validated=false until P2c confirms tickers with
+// real API responses. The EODHD EOD endpoint does not return currency, so all
+// prices from this provider use unconfirmedCurrencyValidation — drawdown only.
+// currentPrice is null for any result where currency cannot be confirmed.
 
 import { calcDrawdownPct } from '../utils/math';
 import type { PriceProvider } from './interface';
+import type { PriceValidation } from '../types';
 import type { PriceData, HistoricalPrices, RecentHighs, HistoricalPrice } from '../types';
 import {
   unavailableValidation,
-  confirmedEurValidation,
+  unconfirmedCurrencyValidation,
   usdNoFxValidation,
-  currencyMismatchValidation,
 } from './price-validation';
 
 // ---------------------------------------------------------------------------
@@ -234,28 +234,38 @@ function isoDateDaysAgo(days: number): string {
 }
 
 // ---------------------------------------------------------------------------
-// Validation selection based on inferred currency
+// Validation selection
+// EODHD EOD endpoint never returns currency — all results are currency_unconfirmed.
+// Only USD instruments get usdNoFxValidation (semantically accurate: USD raw price,
+// engine handles FX conversion). EUR and LSE instruments get unconfirmedCurrencyValidation
+// since we cannot confirm their currency without a real-time response (P2c).
 // ---------------------------------------------------------------------------
 
 function buildValidation(
   symbol: string,
   entry: EodhdSymbolEntry
-): { validation: ReturnType<typeof confirmedEurValidation>; currentPriceUsable: boolean } {
-  if (entry.inferredCurrency === 'EUR') {
-    return {
-      validation: confirmedEurValidation(symbol, 'eodhd'),
-      currentPriceUsable: true,
-    };
-  }
+): { validation: PriceValidation; currentPriceUsable: boolean } {
   if (entry.inferredCurrency === 'USD') {
     return {
       validation: usdNoFxValidation(symbol, 'eodhd'),
-      currentPriceUsable: true, // USD price intact; engine converts
+      currentPriceUsable: true, // USD price intact; engine applies FX conversion
     };
   }
-  // GBP/GBX (LSE) — zero out currentPrice until currency and pence status confirmed
+  if (entry.inferredCurrency === 'EUR') {
+    return {
+      validation: unconfirmedCurrencyValidation(
+        symbol, 'eodhd', 'EUR',
+        `Euronext/Xetra instrument — currency inferred from exchange suffix, not confirmed by EODHD EOD response (validated=false until P2c)`
+      ),
+      currentPriceUsable: false, // EUR not confirmed; null until P2c validation
+    };
+  }
+  // GBP/GBX (LSE) — price could be in pence; null until P2c confirms
   return {
-    validation: currencyMismatchValidation(symbol, 'eodhd', entry.lseMaybePence ? 'GBP/GBX' : 'GBP', 'EUR'),
+    validation: unconfirmedCurrencyValidation(
+      symbol, 'eodhd', 'GBP',
+      `LSE instrument — may be GBX (pence); currency not confirmed by EODHD EOD response (validated=false until P2c)`
+    ),
     currentPriceUsable: false,
   };
 }
@@ -304,11 +314,15 @@ export class EodhdPriceProvider implements PriceProvider {
     const entry = SYMBOL_MAP[symbol.toUpperCase()];
     if (!entry) {
       console.warn(`[EODHD] Symbol not in map: ${symbol} — returning unavailable`);
-      return zeroHighs(symbol, unavailableValidation(symbol));
+      return nullHighs(symbol, unavailableValidation(symbol));
     }
 
     if (!tryConsumeBudget()) {
-      return zeroHighs(symbol, unavailableValidation(symbol));
+      console.warn(`[EODHD] Budget exhausted — skipping ${symbol} (${_callsThisRun}/${budgetLimit()} calls used this run); P&L and buy sizing unavailable`);
+      return nullHighs(symbol, {
+        ...unavailableValidation(symbol),
+        note: `EODHD budget exhausted (${_callsThisRun}/${budgetLimit()} calls this run) — use cache or fallback provider`,
+      });
     }
 
     let rows: EodhdEodRow[];
@@ -328,20 +342,21 @@ export class EodhdPriceProvider implements PriceProvider {
         console.warn(`[EODHD] Fetch failed for ${symbol}: ${msg}`);
       }
 
-      return zeroHighs(symbol, unavailableValidation(symbol));
+      return nullHighs(symbol, unavailableValidation(symbol));
     }
 
     const prices = parseRows(rows);
     if (prices.length === 0) {
       console.warn(`[EODHD] Empty response for ${entry.eodhdTicker}`);
-      return zeroHighs(symbol, unavailableValidation(symbol));
+      return nullHighs(symbol, unavailableValidation(symbol));
     }
 
     const rawPrice = prices[prices.length - 1].close;
     const [high30d, high60d, high90d] = calcHighs(prices, rawPrice, windows);
 
     const { validation, currentPriceUsable } = buildValidation(symbol, entry);
-    const currentPrice = currentPriceUsable ? rawPrice : 0;
+    // currentPrice is null when currency is unconfirmed — engine and UI must show "—"
+    const currentPrice = currentPriceUsable ? rawPrice : null;
 
     return {
       symbol,
@@ -355,11 +370,12 @@ export class EodhdPriceProvider implements PriceProvider {
   }
 }
 
-function zeroHighs(symbol: string, validation: RecentHighs['validation']): RecentHighs {
+// Returns a RecentHighs with null currentPrice and zeroed drawdowns (no usable data)
+function nullHighs(symbol: string, validation: RecentHighs['validation']): RecentHighs {
   return {
     symbol,
     high30d: 0, high60d: 0, high90d: 0,
-    currentPrice: 0,
+    currentPrice: null,
     drawdown30d: 0, drawdown60d: 0, drawdown90d: 0,
     validation,
   };

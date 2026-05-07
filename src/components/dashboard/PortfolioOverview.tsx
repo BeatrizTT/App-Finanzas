@@ -80,15 +80,16 @@ function PortfolioSummary({
   totalValue: number;
   totalRealizedPnl?: number | null;
 }) {
-  const withPrice = analyses.filter(a => a.currentPrice > 0 && (a.holding.units ?? 0) > 0);
-  const inProfit = withPrice.filter(a => a.unrealizedPnlPct > 0);
-  const inLoss   = withPrice.filter(a => a.unrealizedPnlPct < 0);
+  const withPrice = analyses.filter(a => (a.currentPrice ?? 0) > 0 && (a.holding.units ?? 0) > 0);
+  const inProfit = withPrice.filter(a => (a.unrealizedPnlPct ?? 0) > 0);
+  const inLoss   = withPrice.filter(a => (a.unrealizedPnlPct ?? 0) < 0);
 
   // Approximate invested from pnlPct (currency-agnostic ratio)
   let sumCurrent = 0, sumInvested = 0;
   for (const a of withPrice) {
-    const cur = a.currentPrice * (a.holding.units ?? 0);
-    const inv = cur / (1 + a.unrealizedPnlPct / 100);
+    const cur = (a.currentPrice ?? 0) * (a.holding.units ?? 0);
+    const pnl = a.unrealizedPnlPct ?? 0;
+    const inv = pnl !== -100 ? cur / (1 + pnl / 100) : 0;
     sumCurrent += cur;
     sumInvested += inv;
   }
@@ -97,8 +98,8 @@ function PortfolioSummary({
   const paperGainPct   = investedEur > 0 ? (paperGainEur / investedEur) * 100 : 0;
   const totalReturnEur = paperGainEur + (totalRealizedPnl ?? 0);
 
-  const best  = withPrice.length > 0 ? withPrice.reduce((a, b) => b.unrealizedPnlPct > a.unrealizedPnlPct ? b : a) : null;
-  const worst = withPrice.length > 0 ? withPrice.reduce((a, b) => b.unrealizedPnlPct < a.unrealizedPnlPct ? b : a) : null;
+  const best  = withPrice.length > 0 ? withPrice.reduce((a, b) => (b.unrealizedPnlPct ?? -Infinity) > (a.unrealizedPnlPct ?? -Infinity) ? b : a) : null;
+  const worst = withPrice.length > 0 ? withPrice.reduce((a, b) => (b.unrealizedPnlPct ?? Infinity) < (a.unrealizedPnlPct ?? Infinity) ? b : a) : null;
 
   const hasSold = totalRealizedPnl != null;
 
@@ -158,12 +159,12 @@ function PortfolioSummary({
         <div className="text-xs mt-0.5 space-y-0.5">
           {best && (
             <div className="text-green-400 font-mono">
-              ↑ {best.holding.ticker ?? best.holding.id.toUpperCase()} {best.unrealizedPnlPct >= 0 ? '+' : ''}{best.unrealizedPnlPct.toFixed(1)}%
+              ↑ {best.holding.ticker ?? best.holding.id.toUpperCase()} {(best.unrealizedPnlPct ?? 0) >= 0 ? '+' : ''}{(best.unrealizedPnlPct ?? 0).toFixed(1)}%
             </div>
           )}
           {worst && worst.holding.id !== best?.holding.id && (
             <div className="text-red-400 font-mono">
-              ↓ {worst.holding.ticker ?? worst.holding.id.toUpperCase()} {worst.unrealizedPnlPct.toFixed(1)}%
+              ↓ {worst.holding.ticker ?? worst.holding.id.toUpperCase()} {(worst.unrealizedPnlPct ?? 0).toFixed(1)}%
             </div>
           )}
         </div>
@@ -250,7 +251,7 @@ export function PortfolioOverview({ analyses, concentration, lastRunAt, closedPo
                       className="px-4 py-3 text-right font-mono text-slate-200"
                       title={isUsdAsset ? `Precio convertido de USD a EUR al tipo de cambio actual` : undefined}
                     >
-                      {a.currentPrice > 0 ? `€${a.currentPrice.toFixed(2)}` : '—'}
+                      {(a.currentPrice ?? 0) > 0 ? `€${a.currentPrice!.toFixed(2)}` : '—'}
                     </td>
                     <td
                       className="px-4 py-3 text-right font-mono text-slate-400 text-xs"
@@ -259,7 +260,7 @@ export function PortfolioOverview({ analyses, concentration, lastRunAt, closedPo
                       €{a.avgPrice.toFixed(2)}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      {a.currentPrice > 0 ? <PnlColor pct={a.unrealizedPnlPct} /> : '—'}
+                      {(a.currentPrice ?? 0) > 0 ? <PnlColor pct={a.unrealizedPnlPct ?? 0} /> : '—'}
                     </td>
                     <td className="px-4 py-3">
                       <DrawdownDisplay

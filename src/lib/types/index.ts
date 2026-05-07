@@ -69,6 +69,7 @@ export type PriceMethod =
   | 'gbp_converted'
   | 'gbp_pence_converted'
   | 'proxy_drawdown_only'
+  | 'currency_unconfirmed'  // price received but currency not returned by provider; inferred only
   | 'cached_last_valid'
   | 'unavailable';
 
@@ -131,7 +132,8 @@ export interface RecentHighs {
   high30d: number;
   high60d: number;
   high90d: number;
-  currentPrice: number;
+  /** null = price unavailable (currency unconfirmed, proxy, or fetch failed); never use for P&L */
+  currentPrice: number | null;
   drawdown30d: number;      // percent, positive means below high
   drawdown60d: number;
   drawdown90d: number;
@@ -326,9 +328,11 @@ export interface ConcentrationData {
 
 export interface PortfolioAnalysis {
   holding: PortfolioHolding;
-  currentPrice: number;
+  /** null when price is unavailable (unconfirmed currency, proxy, or fetch failed) */
+  currentPrice: number | null;
   avgPrice: number;
-  unrealizedPnlPct: number;   // (current - avg) / avg * 100
+  /** null when currentPrice is null — cannot compute P&L without a valid price */
+  unrealizedPnlPct: number | null;
   drawdown: DrawdownData;
   state: PortfolioState;
   suggestedAmountEur: { min: number; max: number };
@@ -362,7 +366,8 @@ export interface Opportunity {
   isSeedUniverse: boolean;         // false = found via extended discovery
   score: OpportunityScore;
   state: OpportunityState;
-  currentPrice: number;
+  /** null when price currency is unconfirmed or unavailable */
+  currentPrice: number | null;
   currency: string;
   drawdown: DrawdownData;
   reasons: string[];

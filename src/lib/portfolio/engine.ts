@@ -239,7 +239,7 @@ function buildReduceReasons(
   }
 
   // Sell amount guidance
-  if (holding.units && holding.units > 0 && currentPrice > 0) {
+  if (holding.units && holding.units > 0 && currentPrice != null && currentPrice > 0) {
     const positionValue = holding.units * currentPrice;
     const minSell = Math.round(positionValue * 0.20);
     const maxSell = Math.round(positionValue * 0.25);
@@ -273,9 +273,9 @@ export async function analyzeHolding(
     priceError = `No price data for ${holding.ticker ?? holding.id.toUpperCase()}`;
     return {
       holding,
-      currentPrice: 0,
+      currentPrice: null,
       avgPrice: holding.avgPrice,
-      unrealizedPnlPct: 0,
+      unrealizedPnlPct: null,
       drawdown: { drawdown30d: 0, drawdown60d: 0, drawdown90d: 0, maxDrawdown: 0, primaryWindow: '30d' },
       state: 'DO_NOTHING',
       suggestedAmountEur: { min: 0, max: 0 },
@@ -286,7 +286,7 @@ export async function analyzeHolding(
     };
   }
 
-  const currentPrice = highs.currentPrice;
+  const currentPrice: number | null = highs.currentPrice;
   const maxDrawdown = Math.max(highs.drawdown30d, highs.drawdown60d, highs.drawdown90d);
   const primaryWindow =
     highs.drawdown90d === maxDrawdown ? '90d' :
@@ -325,7 +325,7 @@ export async function analyzeHolding(
 
   // Concentration check
   const concentrationPenalty = calcConcentrationPenalty(holding, concentration);
-  const unrealizedPnlPct = calcPnlPct(holding.avgPrice, currentPrice);
+  const unrealizedPnlPct = currentPrice != null ? calcPnlPct(holding.avgPrice, currentPrice) : null;
 
   // --- Sell / Reduce signals ---
   // Only check when not already in a buy state (price is near highs)
@@ -336,7 +336,7 @@ export async function analyzeHolding(
     // Profit-taking: big gain AND near recent high.
     // ETFs are long-term core holdings — never reduce based on profit alone.
     // Concentration-based REDUCE still applies to ETFs if they become too large.
-    if (isNearHigh && unrealizedPnlPct >= profitThreshold && holding.type !== 'etf') {
+    if (isNearHigh && unrealizedPnlPct != null && unrealizedPnlPct >= profitThreshold && holding.type !== 'etf') {
       state = 'REDUCE';
     }
     // Heavy concentration override (position too large regardless of price)
@@ -349,7 +349,7 @@ export async function analyzeHolding(
   if (
     holding.targetPrice &&
     holding.targetPrice > 0 &&
-    currentPrice >= holding.targetPrice &&
+    currentPrice != null && currentPrice >= holding.targetPrice &&
     !['BUY_MORE', 'BUY_PARTIAL', 'BUY_SMALL', 'REVIEW'].includes(state)
   ) {
     state = 'REDUCE';
@@ -361,7 +361,7 @@ export async function analyzeHolding(
   );
 
   // For REDUCE: override with suggested sell amount (20-25% of position value)
-  if (state === 'REDUCE' && holding.units && holding.units > 0 && currentPrice > 0) {
+  if (state === 'REDUCE' && holding.units && holding.units > 0 && currentPrice != null && currentPrice > 0) {
     const positionValue = holding.units * currentPrice;
     suggestedAmountEur = {
       min: Math.round(positionValue * 0.20),
@@ -375,7 +375,7 @@ export async function analyzeHolding(
   if (concentrationPenalty > 0.6 || (holding.manualThesisRisk ?? 'none') !== 'none') confidence = 'low';
 
   // Build reasons — use dedicated REDUCE reasons when applicable
-  const reasons = state === 'REDUCE'
+  const reasons = state === 'REDUCE' && unrealizedPnlPct != null && currentPrice != null
     ? [
         ...buildReduceReasons(holding, unrealizedPnlPct, concentrationPenalty, concentration, currentPrice),
         ...buildReasons(holding, drawdown, state, concentrationPenalty, concentration).slice(0, 1),
@@ -483,11 +483,11 @@ export async function runPortfolioEngine(
 ): Promise<{ analyses: PortfolioAnalysis[]; concentration: ConcentrationData }> {
   const { holdings, cashAvailableEur, targetCashReserveEur } = portfolioConfig;
 
-  // Build current prices map — skip entries with currentPrice=0 (drawdown-only proxies)
+  // Build current prices map — skip entries with null/zero currentPrice
   // so calcConcentration falls back to holding.avgPrice for those positions
   const currentPrices: Record<string, number> = {};
   for (const [ticker, highs] of Object.entries(allHighs)) {
-    if (highs.currentPrice > 0) currentPrices[ticker] = highs.currentPrice;
+    if (highs.currentPrice != null && highs.currentPrice > 0) currentPrices[ticker] = highs.currentPrice;
   }
 
   // Calculate concentration first (used in per-holding analysis)
