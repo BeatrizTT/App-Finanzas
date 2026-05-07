@@ -78,7 +78,7 @@ export function resetPriceProvider(): void {
 export async function safeFetchPrice(
   symbol: string,
   provider?: PriceProvider
-): Promise<{ price: number; currency: string; error?: string } | null> {
+): Promise<{ price: number; currency: string } | null> {
   const p = provider ?? getPriceProvider();
   try {
     const data = await p.getCurrentPrice(symbol);
@@ -86,7 +86,7 @@ export async function safeFetchPrice(
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`[PriceProvider] Failed to fetch ${symbol}: ${msg}`);
-    return { price: 0, currency: 'USD', error: msg };
+    return null;
   }
 }
 
