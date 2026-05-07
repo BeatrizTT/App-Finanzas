@@ -1,0 +1,71 @@
+{
+  "generatedAt": "2026-05-07T18:26:17.859Z",
+  "source": "P2c-1b smoke (eodhd-smoke workflow, branch claude/personal-investing-app-BG2r1)",
+  "note": "Curated from real EODHD search API responses. This file contains no credentials or tokens.",
+  "symbols": [
+    {
+      "internalTicker": "ASML",
+      "eodhdSymbol": "ASML.AS",
+      "exchange": "AS",
+      "status": "validated_exact_eur",
+      "confirmedCurrency": "EUR",
+      "expectedCurrency": "EUR",
+      "samplePrice": 1300,
+      "samplePriceDate": "2026-05-07",
+      "warnings": [],
+      "note": "EUR confirmed by EODHD search response. Suitable for exact P&L and buy recommendations."
+    },
+    {
+      "internalTicker": "NVDA",
+      "eodhdSymbol": "NVDA.US",
+      "exchange": "US",
+      "status": "validated_usd_needs_fx",
+      "confirmedCurrency": "USD",
+      "expectedCurrency": "USD",
+      "samplePrice": 207.83,
+      "samplePriceDate": "2026-05-06",
+      "warnings": [],
+      "note": "USD confirmed by EODHD search response. Exact P&L and buy sizing require a real EUR/USD FX rate — no hardcoded conversion."
+    },
+    {
+      "internalTicker": "QQQ",
+      "eodhdSymbol": "QQQ.US",
+      "exchange": "US",
+      "status": "validated_usd_needs_fx",
+      "confirmedCurrency": "USD",
+      "expectedCurrency": "USD",
+      "samplePrice": 695.77,
+      "samplePriceDate": "2026-05-06",
+      "warnings": [],
+      "note": "USD confirmed by EODHD search response. Exact P&L and buy sizing require a real EUR/USD FX rate — no hardcoded conversion."
+    },
+    {
+      "internalTicker": "CNDX",
+      "eodhdSymbol": "CNDX.LSE",
+      "exchange": "LSE",
+      "status": "rejected_mismatch",
+      "confirmedCurrency": "USD",
+      "expectedCurrency": "GBP",
+      "samplePrice": null,
+      "samplePriceDate": null,
+      "warnings": [
+        "Currency mismatch: expected GBP, EODHD reports USD"
+      ],
+      "note": "Rejected. EODHD reports USD for a symbol expected to trade in GBP on LSE. Do not use for exact P&L or BUY. Seek alternative symbol or exchange listing."
+    },
+    {
+      "internalTicker": "IWVL",
+      "eodhdSymbol": "IWVL.LSE",
+      "exchange": "LSE",
+      "status": "rejected_mismatch",
+      "confirmedCurrency": "USD",
+      "expectedCurrency": "GBP",
+      "samplePrice": null,
+      "samplePriceDate": null,
+      "warnings": [
+        "Currency mismatch: expected GBP, EODHD reports USD"
+      ],
+      "note": "Rejected. EODHD reports USD for a symbol expected to trade in GBP on LSE. Do not use for exact P&L or BUY. Seek alternative symbol or exchange listing."
+    }
+  ]
+}

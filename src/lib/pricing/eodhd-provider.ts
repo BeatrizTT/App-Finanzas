@@ -16,6 +16,10 @@ import {
   unconfirmedCurrencyValidation,
   usdNoFxValidation,
 } from './price-validation';
+import {
+  getEodhdCuratedEntry,
+  buildValidationFromCurated,
+} from './eodhd-symbol-config';
 
 // ---------------------------------------------------------------------------
 // Symbol map — best-guess EODHD tickers, all validated=false until P2c
@@ -30,17 +34,17 @@ interface EodhdSymbolEntry {
 
 const SYMBOL_MAP: Record<string, EodhdSymbolEntry> = {
   // --- EUR instruments (Euronext / Xetra) ---
-  ASML:  { eodhdTicker: 'ASML.AS',     inferredCurrency: 'EUR', lseMaybePence: false, validated: false },
+  ASML:  { eodhdTicker: 'ASML.AS',     inferredCurrency: 'EUR', lseMaybePence: false, validated: true  }, // P2c-1b: validated_exact_eur
   VWCE:  { eodhdTicker: 'VWCE.XETRA',  inferredCurrency: 'EUR', lseMaybePence: false, validated: false },
   // --- LSE instruments — GBP or GBX, price zeroed until P2c confirms ---
-  CNDX:  { eodhdTicker: 'CNDX.LSE',    inferredCurrency: 'GBP', lseMaybePence: true,  validated: false },
+  CNDX:  { eodhdTicker: 'CNDX.LSE',    inferredCurrency: 'GBP', lseMaybePence: true,  validated: false }, // P2c-1b: rejected_mismatch (EODHD reports USD)
   IWDA:  { eodhdTicker: 'IWDA.LSE',    inferredCurrency: 'GBP', lseMaybePence: true,  validated: false },
-  IWVL:  { eodhdTicker: 'IWVL.LSE',    inferredCurrency: 'GBP', lseMaybePence: true,  validated: false },
+  IWVL:  { eodhdTicker: 'IWVL.LSE',    inferredCurrency: 'GBP', lseMaybePence: true,  validated: false }, // P2c-1b: rejected_mismatch (EODHD reports USD)
   CSPX:  { eodhdTicker: 'CSPX.LSE',    inferredCurrency: 'GBP', lseMaybePence: true,  validated: false },
   EMIM:  { eodhdTicker: 'EMIM.LSE',    inferredCurrency: 'GBP', lseMaybePence: true,  validated: false },
   SEMI:  { eodhdTicker: 'VSEM.LSE',    inferredCurrency: 'GBP', lseMaybePence: true,  validated: false },
   // --- USD instruments (.US) ---
-  NVDA:  { eodhdTicker: 'NVDA.US',     inferredCurrency: 'USD', lseMaybePence: false, validated: false },
+  NVDA:  { eodhdTicker: 'NVDA.US',     inferredCurrency: 'USD', lseMaybePence: false, validated: true  }, // P2c-1b: validated_usd_needs_fx
   MSFT:  { eodhdTicker: 'MSFT.US',     inferredCurrency: 'USD', lseMaybePence: false, validated: false },
   AMZN:  { eodhdTicker: 'AMZN.US',     inferredCurrency: 'USD', lseMaybePence: false, validated: false },
   SMCI:  { eodhdTicker: 'SMCI.US',     inferredCurrency: 'USD', lseMaybePence: false, validated: false },
@@ -52,7 +56,7 @@ const SYMBOL_MAP: Record<string, EodhdSymbolEntry> = {
   MU:    { eodhdTicker: 'MU.US',       inferredCurrency: 'USD', lseMaybePence: false, validated: false },
   // --- Market proxies (USD, drawdown only) ---
   SPY:   { eodhdTicker: 'SPY.US',      inferredCurrency: 'USD', lseMaybePence: false, validated: false },
-  QQQ:   { eodhdTicker: 'QQQ.US',      inferredCurrency: 'USD', lseMaybePence: false, validated: false },
+  QQQ:   { eodhdTicker: 'QQQ.US',      inferredCurrency: 'USD', lseMaybePence: false, validated: true  }, // P2c-1b: validated_usd_needs_fx
   VTV:   { eodhdTicker: 'VTV.US',      inferredCurrency: 'USD', lseMaybePence: false, validated: false },
   VOO:   { eodhdTicker: 'VOO.US',      inferredCurrency: 'USD', lseMaybePence: false, validated: false },
 };
@@ -245,26 +249,37 @@ function buildValidation(
   symbol: string,
   entry: EodhdSymbolEntry
 ): { validation: PriceValidation; currentPriceUsable: boolean } {
+  // Curated config (P2c smoke results) takes precedence over suffix inference.
+  const curated = getEodhdCuratedEntry(symbol);
+  if (curated) {
+    // FX conversion is not done at provider level — pass false; engine handles FX.
+    const validation = buildValidationFromCurated(symbol, curated, false);
+    // rejected_mismatch: currency is wrong — don't expose the raw price as currentPrice
+    const currentPriceUsable = curated.status !== 'rejected_mismatch';
+    return { validation, currentPriceUsable };
+  }
+
+  // Fallback: infer from exchange suffix (symbols not yet in curated config)
   if (entry.inferredCurrency === 'USD') {
     return {
       validation: usdNoFxValidation(symbol, 'eodhd'),
-      currentPriceUsable: true, // USD price intact; engine applies FX conversion
+      currentPriceUsable: true,
     };
   }
   if (entry.inferredCurrency === 'EUR') {
     return {
       validation: unconfirmedCurrencyValidation(
         symbol, 'eodhd', 'EUR',
-        `Euronext/Xetra instrument — currency inferred from exchange suffix, not confirmed by EODHD EOD response (validated=false until P2c)`
+        `Euronext/Xetra instrument — currency inferred from exchange suffix, not confirmed by EODHD EOD response`
       ),
-      currentPriceUsable: false, // EUR not confirmed; null until P2c validation
+      currentPriceUsable: false,
     };
   }
-  // GBP/GBX (LSE) — price could be in pence; null until P2c confirms
+  // GBP/GBX (LSE) — price could be in pence; null until confirmed
   return {
     validation: unconfirmedCurrencyValidation(
       symbol, 'eodhd', 'GBP',
-      `LSE instrument — may be GBX (pence); currency not confirmed by EODHD EOD response (validated=false until P2c)`
+      `LSE instrument — may be GBX (pence); currency not confirmed by EODHD EOD response`
     ),
     currentPriceUsable: false,
   };
