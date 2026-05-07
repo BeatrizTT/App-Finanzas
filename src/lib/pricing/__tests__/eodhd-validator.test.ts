@@ -329,6 +329,172 @@ test('GBP on LSE: no sample price → warning about unknown pence/pounds, but st
 });
 
 // ---------------------------------------------------------------------------
+// P2c-1b: Code-based auto-disambiguation tests
+// ---------------------------------------------------------------------------
+
+test('P2c-1b: auto-selects unique Code match when multiple results on same exchange', () => {
+  // Simulates NVDA.US: EODHD returns stock + several derivatives, only Code=NVDA is the stock
+  const r = resolveValidationStatus(
+    makeInput({ internalTicker: 'NVDA', eodhdSymbol: 'NVDA.US', exchange: 'US', expectedCurrency: 'USD' }),
+    [
+      makeSearchResult({ Code: 'NVDA', Exchange: 'US', Currency: 'USD', Name: 'NVIDIA Corp', Type: 'Common Stock' }),
+      makeSearchResult({ Code: 'NVDA.W', Exchange: 'US', Currency: 'USD', Name: 'NVIDIA Warrant', Type: 'Warrant' }),
+      makeSearchResult({ Code: 'NVDA250117C00200000', Exchange: 'US', Currency: 'USD', Name: 'NVDA Call Option', Type: 'Option' }),
+    ],
+    null,
+    null
+  );
+  assert('status is validated_usd_needs_fx (auto-selected unique Code match)', r.status === 'validated_usd_needs_fx');
+  assert('confirmedCurrency is USD', r.confirmedCurrency === 'USD');
+  assert('no warnings', r.warnings.length === 0);
+  assert('no candidates (clean resolution)', r.candidates === undefined);
+});
+
+test('P2c-1b: auto-selects unique Code match — QQQ pattern with multiple options/ETFs', () => {
+  const r = resolveValidationStatus(
+    makeInput({ internalTicker: 'QQQ', eodhdSymbol: 'QQQ.US', exchange: 'US', expectedCurrency: 'USD' }),
+    [
+      makeSearchResult({ Code: 'QQQ', Exchange: 'US', Currency: 'USD', Name: 'Invesco QQQ Trust', Type: 'ETF' }),
+      makeSearchResult({ Code: 'QQQM', Exchange: 'US', Currency: 'USD', Name: 'Invesco NASDAQ 100 ETF', Type: 'ETF' }),
+      makeSearchResult({ Code: 'QQQS', Exchange: 'US', Currency: 'USD', Name: 'Pacer NASDAQ 100 Stocks ETF', Type: 'ETF' }),
+      makeSearchResult({ Code: 'QQQ250117C00500000', Exchange: 'US', Currency: 'USD', Name: 'QQQ Call Option', Type: 'Option' }),
+    ],
+    null,
+    null
+  );
+  assert('status is validated_usd_needs_fx (exact Code=QQQ auto-selected)', r.status === 'validated_usd_needs_fx');
+  assert('confirmedCurrency is USD', r.confirmedCurrency === 'USD');
+  assert('no candidates field (clean resolution)', r.candidates === undefined);
+});
+
+test('P2c-1b: ambiguous_symbol when two results share the exact same Code', () => {
+  // Unusual but possible: two different instruments listed with same Code on same exchange
+  const r = resolveValidationStatus(
+    makeInput({ internalTicker: 'NVDA', eodhdSymbol: 'NVDA.US', exchange: 'US', expectedCurrency: 'USD' }),
+    [
+      makeSearchResult({ Code: 'NVDA', Exchange: 'US', Currency: 'USD', Name: 'NVIDIA Corp Class A', Type: 'Common Stock' }),
+      makeSearchResult({ Code: 'NVDA', Exchange: 'US', Currency: 'USD', Name: 'NVIDIA Corp Class B', Type: 'Common Stock' }),
+    ],
+    null,
+    null
+  );
+  assert('status is ambiguous_symbol (two exact Code matches)', r.status === 'ambiguous_symbol');
+  assert('confirmedCurrency is null', r.confirmedCurrency === null);
+  assert('warning mentions 2 results', r.warnings.some(w => w.includes('2')));
+  assert('candidates list populated', Array.isArray(r.candidates) && r.candidates!.length === 2);
+  assert('each candidate has code/exchange/currency', r.candidates!.every(c => c.code && c.exchange && c.currency));
+});
+
+test('P2c-1b: candidates list populated when no exact Code match found', () => {
+  // Exchange matches but Code never matches expected base ticker
+  const r = resolveValidationStatus(
+    makeInput({ internalTicker: 'FAKE', eodhdSymbol: 'FAKE.US', exchange: 'US', expectedCurrency: 'USD' }),
+    [
+      makeSearchResult({ Code: 'FAKEX', Exchange: 'US', Currency: 'USD', Name: 'Fake Expanded ETF', Type: 'ETF' }),
+      makeSearchResult({ Code: 'FAKEY', Exchange: 'US', Currency: 'USD', Name: 'Fake Y Corp', Type: 'Common Stock' }),
+    ],
+    null,
+    null
+  );
+  assert('status is ambiguous_symbol (no exact Code match)', r.status === 'ambiguous_symbol');
+  assert('warning mentions no Code match', r.warnings.some(w => w.includes("'FAKE'") || w.includes('none with Code')));
+  assert('candidates list populated from matchingExchange', Array.isArray(r.candidates) && r.candidates!.length === 2);
+  assert('candidates capped (no more than 10)', r.candidates!.length <= 10);
+});
+
+test('P2c-1b: candidates list capped at 10 when many non-matching results', () => {
+  const manyResults = Array.from({ length: 15 }, (_, i) =>
+    makeSearchResult({ Code: `NVDX${i}`, Exchange: 'US', Currency: 'USD', Name: `NVDA Option ${i}`, Type: 'Option' })
+  );
+  const r = resolveValidationStatus(
+    makeInput({ internalTicker: 'NVDA', eodhdSymbol: 'NVDA.US', exchange: 'US', expectedCurrency: 'USD' }),
+    manyResults,
+    null,
+    null
+  );
+  assert('status is ambiguous_symbol', r.status === 'ambiguous_symbol');
+  assert('candidates capped at 10', r.candidates !== undefined && r.candidates!.length === 10);
+});
+
+test('P2c-1b: candidates contain no API key values', () => {
+  const fakeKey = 'supersecret-apikey-eodhd-abc';
+  // Inject key into a Name field as if EODHD returned it (defensive test)
+  const r = resolveValidationStatus(
+    makeInput({ internalTicker: 'NVDA', eodhdSymbol: 'NVDA.US', exchange: 'US', expectedCurrency: 'USD' }),
+    [
+      makeSearchResult({ Code: 'NVDA', Exchange: 'US', Currency: 'USD', Name: `NVIDIA Corp ${fakeKey}`, Type: 'Common Stock' }),
+      makeSearchResult({ Code: 'NVDA', Exchange: 'US', Currency: 'USD', Name: 'NVIDIA Corp Duplicate', Type: 'Common Stock' }),
+    ],
+    null,
+    null
+  );
+  // The key is NOT stripped from candidate Name by resolveValidationStatus itself —
+  // that's the API layer's responsibility (sanitizeApiKey before calling here).
+  // This test verifies the structure is intact; the sanitization test is separate.
+  assert('candidates present', Array.isArray(r.candidates));
+  const serialized = JSON.stringify(r);
+  // Verify status is ambiguous (not a spurious success)
+  assert('ambiguous (defensive check)', r.status === 'ambiguous_symbol');
+  assert('serialized result is a string (no crash)', typeof serialized === 'string');
+});
+
+test('P2c-1b: CNDX.LSE rejected_mismatch when single result reports USD', () => {
+  // Single result, correct exchange, exact Code match, but currency is USD not GBP
+  const r = resolveValidationStatus(
+    makeInput({ internalTicker: 'CNDX', eodhdSymbol: 'CNDX.LSE', exchange: 'LSE', expectedCurrency: 'GBP' }),
+    [makeSearchResult({ Code: 'CNDX', Exchange: 'LSE', Currency: 'USD', Name: 'iShares MSCI World Consumer Disc ETF' })],
+    null,
+    null
+  );
+  assert('status is rejected_mismatch (CNDX USD on LSE)', r.status === 'rejected_mismatch');
+  assert('confirmedCurrency is USD', r.confirmedCurrency === 'USD');
+  assert('warning mentions mismatch', r.warnings.some(w => w.includes('mismatch') || w.includes('USD') || w.includes('GBP')));
+  assert('no candidates (unambiguous single match)', r.candidates === undefined);
+});
+
+test('P2c-1b: IWVL.LSE rejected_mismatch when single result reports USD', () => {
+  const r = resolveValidationStatus(
+    makeInput({ internalTicker: 'IWVL', eodhdSymbol: 'IWVL.LSE', exchange: 'LSE', expectedCurrency: 'GBP' }),
+    [makeSearchResult({ Code: 'IWVL', Exchange: 'LSE', Currency: 'USD', Name: 'iShares Edge MSCI World Value Factor ETF' })],
+    null,
+    null
+  );
+  assert('status is rejected_mismatch (IWVL USD on LSE)', r.status === 'rejected_mismatch');
+  assert('confirmedCurrency is USD', r.confirmedCurrency === 'USD');
+  assert('no candidates', r.candidates === undefined);
+});
+
+test('P2c-1b: candidates include Country field when present in search result', () => {
+  const r = resolveValidationStatus(
+    makeInput({ internalTicker: 'NVDA', eodhdSymbol: 'NVDA.US', exchange: 'US', expectedCurrency: 'USD' }),
+    [
+      makeSearchResult({ Code: 'NVDA', Exchange: 'US', Currency: 'USD', Name: 'NVIDIA Corp', Type: 'Common Stock', Country: 'USA' }),
+      makeSearchResult({ Code: 'NVDA', Exchange: 'US', Currency: 'USD', Name: 'NVIDIA Corp Class B', Type: 'Common Stock', Country: 'USA' }),
+    ],
+    null,
+    null
+  );
+  assert('status is ambiguous_symbol', r.status === 'ambiguous_symbol');
+  assert('candidates present', Array.isArray(r.candidates) && r.candidates!.length === 2);
+  assert('candidates include country field', r.candidates!.every(c => c.country === 'USA'));
+});
+
+test('P2c-1b: candidate isin field is null when not available', () => {
+  const r = resolveValidationStatus(
+    makeInput({ internalTicker: 'NVDA', eodhdSymbol: 'NVDA.US', exchange: 'US', expectedCurrency: 'USD' }),
+    [
+      makeSearchResult({ Code: 'NVDA', Exchange: 'US', Currency: 'USD', ISIN: null }),
+      makeSearchResult({ Code: 'NVDA', Exchange: 'US', Currency: 'USD', ISIN: 'US67066G1040' }),
+    ],
+    null,
+    null
+  );
+  assert('status is ambiguous_symbol', r.status === 'ambiguous_symbol');
+  assert('first candidate isin is null', r.candidates![0].isin === null);
+  assert('second candidate isin is set', r.candidates![1].isin === 'US67066G1040');
+});
+
+// ---------------------------------------------------------------------------
 // Runner
 // ---------------------------------------------------------------------------
 

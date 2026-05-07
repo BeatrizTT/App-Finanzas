@@ -38,9 +38,21 @@ export interface EodhdSearchResult {
   Name: string;
   Type: string;
   Currency: string;
+  Country?: string;
   ISIN: string | null;
   previousClose: number | null;
   previousCloseDate: string | null;
+}
+
+/** Compact candidate entry written to the report when disambiguation is needed. */
+export interface EodhdCandidateInfo {
+  code: string;
+  exchange: string;
+  name: string;
+  type: string;
+  currency: string;
+  country?: string;
+  isin?: string | null;
 }
 
 /** EOD price entry (only the fields we use). */
@@ -69,6 +81,7 @@ export interface EodhdSymbolValidationResult {
   samplePriceDate: string | null;
   status: EodhdValidationStatus;
   warnings: string[];
+  candidates?: EodhdCandidateInfo[];
   sourceEndpoint: string;
   timestamp: string;
 }
@@ -176,21 +189,40 @@ export function resolveValidationStatus(
     };
   }
 
-  if (matchingExchange.length > 1) {
-    const currencies = [...new Set(matchingExchange.map(r => r.Currency))].join(', ');
+  // Conservative auto-selection: filter further by exact Code from eodhdSymbol.
+  // EODHD search returns all instrument types (stocks, options, warrants…) for the
+  // same base ticker — we only want the one where Code matches exactly.
+  const expectedCode = input.eodhdSymbol.split('.')[0].toUpperCase();
+  const exactCodeMatches = matchingExchange.filter(
+    r => r.Code.toUpperCase() === expectedCode
+  );
+
+  if (exactCodeMatches.length !== 1) {
+    const candidateSet = exactCodeMatches.length > 0 ? exactCodeMatches : matchingExchange.slice(0, 10);
+    const currencies = [...new Set(candidateSet.map(r => r.Currency))].join(', ');
+    const msg = exactCodeMatches.length === 0
+      ? `${matchingExchange.length} results on ${input.exchange} (currencies: ${currencies}) but none with Code '${expectedCode}'`
+      : `${exactCodeMatches.length} results with Code '${expectedCode}' on ${input.exchange} (currencies: ${currencies}) — cannot select unambiguously`;
     return {
       ...base,
       confirmedCurrency: null,
       samplePrice: null,
       samplePriceDate: null,
       status: 'ambiguous_symbol',
-      warnings: [
-        `${matchingExchange.length} matches on ${input.exchange} (currencies: ${currencies}) — cannot select unambiguously`,
-      ],
+      warnings: [msg],
+      candidates: candidateSet.map(r => ({
+        code: r.Code,
+        exchange: r.Exchange,
+        name: r.Name,
+        type: r.Type,
+        currency: r.Currency,
+        ...(r.Country !== undefined && { country: r.Country }),
+        isin: r.ISIN,
+      })),
     };
   }
 
-  const match = matchingExchange[0];
+  const match = exactCodeMatches[0];
   const rawCurrency = match.Currency?.trim() ?? '';
 
   // Prefer the dedicated EOD sample price; fall back to previousClose from search
