@@ -21,6 +21,7 @@ import {
   buildValidationFromCurated,
   isCuratedCurrentPriceUsable,
 } from './eodhd-symbol-config';
+import { getFxRate } from './fx-provider';
 
 // ---------------------------------------------------------------------------
 // Symbol map — best-guess EODHD tickers, all validated=false until P2c
@@ -377,9 +378,29 @@ export class EodhdPriceProvider implements PriceProvider {
     const rawPrice = prices[prices.length - 1].close;
     const [high30d, high60d, high90d] = calcHighs(prices, rawPrice, windows);
 
-    const { validation, currentPriceUsable } = buildValidation(symbol, entry);
-    // currentPrice is null when currency is unconfirmed — engine and UI must show "—"
-    const currentPrice = currentPriceUsable ? rawPrice : null;
+    // validated_usd_needs_fx: attempt real FX conversion (USD → EUR).
+    // All other curated statuses and non-curated symbols use the existing path.
+    const curated = getEodhdCuratedEntry(symbol);
+    let currentPrice: number | null = null;
+    let validation: PriceValidation;
+
+    if (curated?.status === 'validated_usd_needs_fx') {
+      const fx = await getFxRate('USD', 'EUR');
+      if (fx.freshness === 'fresh') {
+        currentPrice = rawPrice * fx.rate;
+        validation = buildValidationFromCurated(symbol, curated, true, 'eodhd');
+        console.log(
+          `[EODHD] ${symbol}: USD ${rawPrice} × ${fx.rate} (${fx.pair}) = EUR ${currentPrice.toFixed(4)}`
+        );
+      } else {
+        validation = buildValidationFromCurated(symbol, curated, false, 'eodhd');
+        if (fx.warning) console.warn(`[EODHD] ${symbol}: ${fx.warning}`);
+      }
+    } else {
+      const bv = buildValidation(symbol, entry);
+      validation = bv.validation;
+      currentPrice = bv.currentPriceUsable ? rawPrice : null;
+    }
 
     return {
       symbol,
