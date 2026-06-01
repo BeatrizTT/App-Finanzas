@@ -60,6 +60,9 @@ const ALL_VALIDATION_TARGETS: ValidationTarget[] = [
   { internalTicker: 'NOW',   eodhdSymbol: 'NOW.US',     exchange: 'US',    expectedCurrency: 'USD', description: 'ServiceNow Inc — NYSE' },
   { internalTicker: 'ADBE',  eodhdSymbol: 'ADBE.US',    exchange: 'US',    expectedCurrency: 'USD', description: 'Adobe Inc — NASDAQ' },
   { internalTicker: 'ORCL',  eodhdSymbol: 'ORCL.US',    exchange: 'US',    expectedCurrency: 'USD', description: 'Oracle Corp — NYSE' },
+  { internalTicker: 'GOOGL', eodhdSymbol: 'GOOGL.US',   exchange: 'US',    expectedCurrency: 'USD', description: 'Alphabet Inc (Class A) — NASDAQ' },
+  { internalTicker: 'FTNT',  eodhdSymbol: 'FTNT.US',    exchange: 'US',    expectedCurrency: 'USD', description: 'Fortinet Inc — NASDAQ' },
+  { internalTicker: 'MRVL',  eodhdSymbol: 'MRVL.US',    exchange: 'US',    expectedCurrency: 'USD', description: 'Marvell Technology Inc — NASDAQ' },
   { internalTicker: 'MU',    eodhdSymbol: 'MU.US',      exchange: 'US',    expectedCurrency: 'USD', description: 'Micron Technology — NASDAQ' },
   // --- Market proxies (USD, drawdown reference) ---
   { internalTicker: 'QQQ',   eodhdSymbol: 'QQQ.US',     exchange: 'US',    expectedCurrency: 'USD', description: 'Invesco QQQ Trust (NASDAQ-100 ETF)' },

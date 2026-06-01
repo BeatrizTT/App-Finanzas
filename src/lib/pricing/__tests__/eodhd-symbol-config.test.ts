@@ -233,7 +233,7 @@ test('config JSON is valid JSON and has expected top-level keys', () => {
   assert('has source', typeof parsed.source === 'string');
   assert('has note', typeof parsed.note === 'string');
   assert('has symbols array', Array.isArray(parsed.symbols));
-  assert('has 5 symbols', (parsed.symbols as unknown[]).length === 5);
+  assert('has 15 symbols', (parsed.symbols as unknown[]).length === 15);
 });
 
 // ---------------------------------------------------------------------------
@@ -423,6 +423,68 @@ test('P2c-2a: portfolio-highs safety layer — suitableForExactPnl=false → cur
       assert(`${label}: suitableForExactPnl (price passes through)`, v.suitableForExactPnl === true);
     }
   }
+});
+
+// ---------------------------------------------------------------------------
+// P2c-4: 10 new USD holdings (MSFT, AMZN, GOOGL, ORCL, ADBE, CRM, NOW, FTNT, MRVL, SMCI)
+// Validated by real EODHD smoke run on 2026-06-01 — all returned validated_usd_needs_fx.
+// ---------------------------------------------------------------------------
+
+const P2C4_SYMBOLS: Array<{ ticker: string; eodhdSymbol: string; samplePrice: number }> = [
+  { ticker: 'MSFT',  eodhdSymbol: 'MSFT.US',  samplePrice: 450.24 },
+  { ticker: 'AMZN',  eodhdSymbol: 'AMZN.US',  samplePrice: 270.64 },
+  { ticker: 'GOOGL', eodhdSymbol: 'GOOGL.US', samplePrice: 380.34 },
+  { ticker: 'ORCL',  eodhdSymbol: 'ORCL.US',  samplePrice: 225.78 },
+  { ticker: 'ADBE',  eodhdSymbol: 'ADBE.US',  samplePrice: 259.21 },
+  { ticker: 'CRM',   eodhdSymbol: 'CRM.US',   samplePrice: 191.10 },
+  { ticker: 'NOW',   eodhdSymbol: 'NOW.US',   samplePrice: 124.37 },
+  { ticker: 'FTNT',  eodhdSymbol: 'FTNT.US',  samplePrice: 137.97 },
+  { ticker: 'MRVL',  eodhdSymbol: 'MRVL.US',  samplePrice: 205.00 },
+  { ticker: 'SMCI',  eodhdSymbol: 'SMCI.US',  samplePrice:  46.09 },
+];
+
+test('P2c-4: all 10 USD holdings present in curated config with correct status and currency', () => {
+  resetCuratedConfigCache();
+  for (const { ticker, eodhdSymbol, samplePrice } of P2C4_SYMBOLS) {
+    const entry = getEodhdCuratedEntry(ticker);
+    assert(`${ticker}: entry found`, entry !== null);
+    assert(`${ticker}: status is validated_usd_needs_fx`, entry?.status === 'validated_usd_needs_fx');
+    assert(`${ticker}: confirmedCurrency is USD`, entry?.confirmedCurrency === 'USD');
+    assert(`${ticker}: eodhdSymbol is ${eodhdSymbol}`, entry?.eodhdSymbol === eodhdSymbol);
+    assert(`${ticker}: samplePrice matches smoke (${samplePrice})`, entry?.samplePrice === samplePrice);
+  }
+});
+
+test('P2c-4: all 10 USD holdings have currentPriceUsable=false (raw USD must not appear as EUR)', () => {
+  for (const { ticker } of P2C4_SYMBOLS) {
+    assert(`${ticker}: currentPriceUsable=false`, isCuratedCurrentPriceUsable('validated_usd_needs_fx') === false);
+  }
+});
+
+test('P2c-4: all 10 USD holdings have suitableForDrawdown=true even without FX', () => {
+  for (const { ticker, eodhdSymbol } of P2C4_SYMBOLS) {
+    const entry = makeEntry({ internalTicker: ticker, eodhdSymbol, exchange: 'US', status: 'validated_usd_needs_fx', confirmedCurrency: 'USD', expectedCurrency: 'USD' });
+    const v = buildValidationFromCurated(ticker, entry, false);
+    assert(`${ticker}: suitableForDrawdown=true`, v.suitableForDrawdown === true);
+    assert(`${ticker}: suitableForExactPnl=false (no FX)`, v.suitableForExactPnl === false);
+    assert(`${ticker}: suitableForBuyRecommendation=false (no FX)`, v.suitableForBuyRecommendation === false);
+  }
+});
+
+test('P2c-4: no P2c-4 symbol produces suitableForExactPnl=true without FX', () => {
+  for (const { ticker } of P2C4_SYMBOLS) {
+    const entry = makeEntry({ internalTicker: ticker, status: 'validated_usd_needs_fx', confirmedCurrency: 'USD', expectedCurrency: 'USD' });
+    const v = buildValidationFromCurated(ticker, entry, false);
+    assert(`${ticker}: does not leak suitableForExactPnl=true`, v.suitableForExactPnl !== true);
+  }
+});
+
+test('P2c-4: curated config now has 15 symbols (5 original + 10 new)', () => {
+  resetCuratedConfigCache();
+  const configPath = path.resolve(__dirname, '../../../../config/eodhd-symbol-validation.json');
+  const raw = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+  assert('config has 15 symbols', raw.symbols.length === 15);
+  assert('source references P2c-4', (raw.source as string).includes('P2c-4'));
 });
 
 // ---------------------------------------------------------------------------
