@@ -463,6 +463,17 @@ test('18. EODHD sweep: all validated_usd_needs_fx symbols → currentPrice=null 
   const usdSymbols = config.symbols.filter(s => s.status === 'validated_usd_needs_fx');
   assert(`sweep: curated config contains at least 12 validated_usd_needs_fx symbols`, usdSymbols.length >= 12);
 
+  // Guard: every one of these 12 known symbols must be present — if any is accidentally
+  // removed from the curated config, this assert catches it regardless of total count.
+  const EXPECTED_USD_SYMBOLS = new Set([
+    'NVDA', 'QQQ', 'MSFT', 'AMZN', 'SMCI', 'CRM',
+    'NOW', 'ADBE', 'ORCL', 'GOOGL', 'FTNT', 'MRVL',
+  ]);
+  const foundTickers = new Set(usdSymbols.map(s => s.internalTicker));
+  for (const ticker of EXPECTED_USD_SYMBOLS) {
+    assert(`sweep: expected symbol ${ticker} present in curated config`, foundTickers.has(ticker));
+  }
+
   process.env.EODHD_API_KEY = 'test-key';
   const origFetch = globalThis.fetch;
   try {
