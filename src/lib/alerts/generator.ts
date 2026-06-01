@@ -34,27 +34,31 @@ function generatePortfolioAlerts(
     const currentState = analysis.state;
     const prevState = prevEntry?.state as PortfolioState | undefined;
 
-    // Determine if alert is warranted
-    const stateChanged = prevState && prevState !== currentState;
-    const newlyActionable = !prevState && ALERT_PORTFOLIO_STATES.includes(currentState);
-    const isActionable = ALERT_PORTFOLIO_STATES.includes(currentState);
+    // Alert only when state actually changes into an actionable state,
+    // or when this asset has no previous record at all (first run).
+    const stateChanged = prevState !== undefined && prevState !== currentState;
+    const newlyActionable = prevState === undefined && ALERT_PORTFOLIO_STATES.includes(currentState);
 
-    if (!isActionable && !stateChanged) continue;
+    if (!stateChanged && !newlyActionable) continue;
+    if (!ALERT_PORTFOLIO_STATES.includes(currentState) && !stateChanged) continue;
     if (!shouldSendAlert(assetId, prev)) continue;
 
     const ticker = analysis.holding.ticker ?? analysis.holding.id.toUpperCase();
     const drawdownStr = `-${analysis.drawdown.maxDrawdown.toFixed(1)}%`;
-    const priceStr = `${analysis.holding.currency === 'EUR' ? '€' : '$'}${analysis.currentPrice.toFixed(2)}`;
+    const priceStr = analysis.currentPrice != null
+      ? `${analysis.holding.currency === 'EUR' ? '€' : '$'}${analysis.currentPrice.toFixed(2)}`
+      : '—';
+    const confidenceEs = analysis.confidence === 'high' ? 'ALTA' : analysis.confidence === 'medium' ? 'MEDIA' : 'BAJA';
 
-    let message = `📊 *${ticker}* — Portfolio Alert\n`;
-    message += `Mode: CORE_PORTFOLIO | Type: ${analysis.holding.type.toUpperCase()}\n`;
-    message += `State: \`${currentState}\`${stateChanged ? ` (was: ${prevState})` : ''}\n`;
-    message += `Price: ${priceStr} | Drawdown: ${drawdownStr} from ${analysis.drawdown.primaryWindow} high\n\n`;
-    message += `*Why:*\n${analysis.reasons.slice(0, 3).map((r) => `• ${r}`).join('\n')}\n\n`;
+    let message = `📊 *${ticker}* — Alerta de cartera\n`;
+    message += `Tipo: ${analysis.holding.type === 'etf' ? 'ETF' : 'Acción'}\n`;
+    message += `Estado: \`${currentState}\`${stateChanged ? ` (antes: ${prevState})` : ''}\n`;
+    message += `Precio: ${priceStr} | Caída desde máximo (${analysis.drawdown.primaryWindow}): ${drawdownStr}\n\n`;
+    message += `*Por qué:*\n${analysis.reasons.slice(0, 3).map((r) => `• ${r}`).join('\n')}\n\n`;
     if (analysis.suggestedAmountEur.max > 0) {
-      message += `*Suggested:* Consider adding €${analysis.suggestedAmountEur.min}–€${analysis.suggestedAmountEur.max}\n`;
+      message += `*Sugerencia:* Plantéate añadir €${analysis.suggestedAmountEur.min}–€${analysis.suggestedAmountEur.max}\n`;
     }
-    message += `*Confidence:* ${analysis.confidence.toUpperCase()}`;
+    message += `*Confianza:* ${confidenceEs}`;
 
     alerts.push(
       createAlert({
@@ -96,28 +100,31 @@ function generateOpportunityAlerts(
     if (!shouldSendAlert(assetId, prev)) continue;
 
     const drawdownStr = `-${opp.drawdown.maxDrawdown.toFixed(1)}%`;
-    const priceStr = `${opp.currency === 'EUR' ? '€' : '$'}${opp.currentPrice.toFixed(2)}`;
+    const priceStr = opp.currentPrice != null
+      ? `${opp.currency === 'EUR' ? '€' : '$'}${opp.currentPrice.toFixed(2)}`
+      : '—';
+    const confidenceEs = opp.confidence === 'high' ? 'ALTA' : opp.confidence === 'medium' ? 'MEDIA' : 'BAJA';
+    const typeEs = opp.type === 'etf' ? 'ETF' : 'Acción';
 
     let message = '';
     if (alertType === 'discovery') {
-      message = `🔍 *${opp.ticker}* — New Discovery\n`;
-      message += `Mode: OPPORTUNITY_SCANNER | Type: ${opp.type.toUpperCase()} | *Extended Universe*\n`;
+      message = `🔍 *${opp.ticker}* — Nuevo descubrimiento\n`;
+      message += `Tipo: ${typeEs} | *Universo extendido*\n`;
     } else {
       message = `${opp.type === 'etf' ? '📦' : '📈'} *${opp.ticker}* — ${opp.name}\n`;
-      message += `Mode: OPPORTUNITY_SCANNER | Type: ${opp.type.toUpperCase()}\n`;
+      message += `Tipo: ${typeEs}\n`;
     }
 
-    message += `State: \`${currentState}\`${stateChanged ? ` (was: ${prevState})` : ''}\n`;
-    message += `Score: ${opp.score.total}/10 | Price: ${priceStr} | Drawdown: ${drawdownStr}\n\n`;
-    message += `*Why:*\n${opp.reasons.slice(0, 3).map((r) => `• ${r}`).join('\n')}\n\n`;
+    message += `Estado: \`${currentState}\`${stateChanged ? ` (antes: ${prevState})` : ''}\n`;
+    message += `Puntuación: ${opp.score.total}/10 | Precio: ${priceStr} | Caída: ${drawdownStr}\n\n`;
+    message += `*Por qué:*\n${opp.reasons.slice(0, 3).map((r) => `• ${r}`).join('\n')}\n\n`;
     if (opp.suggestedAmountEur.max > 0) {
-      message += `*Suggested:* Consider €${opp.suggestedAmountEur.min}–€${opp.suggestedAmountEur.max}\n`;
+      message += `*Sugerencia:* Plantéate €${opp.suggestedAmountEur.min}–€${opp.suggestedAmountEur.max}\n`;
     }
-    message += `*Confidence:* ${opp.confidence.toUpperCase()}`;
+    message += `*Confianza:* ${confidenceEs}`;
 
     if (alertType === 'discovery') {
-      const gates = opp.qualityGates;
-      message += `\n\n*Quality gates passed:* liquidity ✓ quality ✓ volatility ✓ portfolio-fit ✓`;
+      message += `\n\n*Filtros de calidad superados:* liquidez ✓ calidad ✓ volatilidad ✓ encaje en cartera ✓`;
     }
 
     alerts.push(
@@ -153,9 +160,9 @@ function generateConcentrationAlerts(
     if (hours < 24) return [];
   }
 
-  let message = `⚠️ *Portfolio Concentration Warning*\n\n`;
+  let message = `⚠️ *Advertencia: cartera muy concentrada*\n\n`;
   message += concentration.highConcentrationWarnings.map((w) => `• ${w}`).join('\n');
-  message += `\n\n*Suggestion:* Consider diversified ETF adds before adding more single-stock tech exposure.`;
+  message += `\n\n*Consejo:* Añade ETFs diversificados antes de comprar más acciones individuales de tecnología. Así reduces el riesgo.`;
 
   return [
     createAlert({
@@ -206,10 +213,12 @@ export function generateAlerts(
   };
 
   for (const analysis of portfolioAnalyses) {
+    // Use the same ticker derivation used when creating the alert
+    const ticker = analysis.holding.ticker ?? analysis.holding.id.toUpperCase();
     newPrev.portfolio[analysis.holding.id] = {
       assetId: analysis.holding.id,
       state: analysis.state,
-      lastAlertAt: allAlerts.some((a) => a.asset === (analysis.holding.ticker ?? analysis.holding.id))
+      lastAlertAt: allAlerts.some((a) => a.asset === ticker)
         ? new Date().toISOString()
         : (prev.portfolio[analysis.holding.id]?.lastAlertAt ?? ''),
     };

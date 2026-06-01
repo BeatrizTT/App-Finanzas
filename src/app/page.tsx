@@ -8,6 +8,7 @@ import { BestUseOfCash } from '@/components/dashboard/BestUseOfCash';
 import { ConcentrationBalance } from '@/components/dashboard/ConcentrationBalance';
 import { AlertsHistory } from '@/components/dashboard/AlertsHistory';
 import { Settings } from '@/components/dashboard/Settings';
+import { GlossaryButton } from '@/components/Glossary';
 import type {
   PortfolioAnalysis,
   Opportunity,
@@ -26,14 +27,16 @@ type Tab =
   | 'settings';
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: 'portfolio', label: 'Portfolio' },
-  { id: 'opportunities', label: 'Opportunities' },
-  { id: 'cash', label: 'Cash Allocator' },
+  { id: 'portfolio', label: 'Mi Cartera' },
+  { id: 'opportunities', label: 'Oportunidades' },
+  { id: 'cash', label: 'Usar Efectivo' },
   { id: 'concentration', label: 'Balance' },
-  { id: 'discovery', label: 'Discovery' },
-  { id: 'alerts', label: 'Alerts' },
-  { id: 'settings', label: 'Settings' },
+  { id: 'discovery', label: 'Descubrimientos' },
+  { id: 'alerts', label: 'Alertas' },
+  { id: 'settings', label: 'Configuración' },
 ];
+
+interface ClosedPos { isin: string; ticker?: string; name: string; realizedPnl: number }
 
 interface DashboardData {
   portfolioAnalyses: PortfolioAnalysis[];
@@ -45,7 +48,10 @@ interface DashboardData {
   alerts: Alert[];
   lastRunAt: string | null;
   marketRegime: string;
+  eurUsdRate: number | null;
   errors: string[];
+  closedPositions: ClosedPos[];
+  totalRealizedPnl: number | null;
 }
 
 const EMPTY_DATA: DashboardData = {
@@ -58,7 +64,10 @@ const EMPTY_DATA: DashboardData = {
   alerts: [],
   lastRunAt: null,
   marketRegime: 'neutral',
+  eurUsdRate: null,
   errors: [],
+  closedPositions: [],
+  totalRealizedPnl: null,
 };
 
 export default function Dashboard() {
@@ -67,6 +76,7 @@ export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRunning, setIsRunning] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
+  const [noDataMessage, setNoDataMessage] = useState('');
 
   const fetchData = useCallback(async () => {
     try {
@@ -75,10 +85,12 @@ export default function Dashboard() {
         fetch('/api/alerts?limit=50'),
       ]);
 
-      const engineData = engineRes.ok ? await engineRes.json() : null;
+      // Always parse JSON regardless of status — the API now always returns JSON
+      const engineData = await engineRes.json().catch(() => null);
       const alertsData = alertsRes.ok ? await alertsRes.json() : { alerts: [] };
 
       if (engineData && engineData.runAt) {
+        setNoDataMessage('');
         setData({
           portfolioAnalyses: engineData.portfolioAnalyses ?? [],
           concentration: engineData.concentration ?? null,
@@ -89,13 +101,22 @@ export default function Dashboard() {
           alerts: alertsData.alerts ?? [],
           lastRunAt: engineData.runAt,
           marketRegime: engineData.marketRegime ?? 'neutral',
+          eurUsdRate: engineData.eurUsdRate ?? null,
           errors: engineData.errors ?? [],
+          closedPositions: engineData.closedPositions ?? [],
+          totalRealizedPnl: engineData.totalRealizedPnl ?? null,
         });
       } else {
         setData({ ...EMPTY_DATA, alerts: alertsData.alerts ?? [] });
+        // Show the actionable message from the server, or a generic fallback
+        const msg = typeof engineData?.error === 'string'
+          ? engineData.error
+          : 'Sin datos de análisis. Pulsa Analizar para ejecutar el motor.';
+        setNoDataMessage(msg);
       }
     } catch (err) {
       console.error('Failed to fetch dashboard data', err);
+      setNoDataMessage('No se pudo conectar con el servidor. Recarga la página.');
     } finally {
       setIsLoading(false);
     }
@@ -110,25 +131,69 @@ export default function Dashboard() {
 
   const handleRunEngine = async () => {
     setIsRunning(true);
-    setStatusMessage('Running engine...');
+    setStatusMessage('Analizando precios reales...');
+    const msgTimer = setTimeout(
+      () => setStatusMessage('Aún analizando... el motor está obteniendo los precios'),
+      20000
+    );
     try {
       const res = await fetch('/api/engine/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sendDigest: true, sendAlertMessages: true }),
       });
-      const result = await res.json();
+
+      // Parse JSON separately so we can detect non-JSON responses (e.g. Vercel timeout → HTML)
+      let result: Record<string, unknown>;
+      try {
+        result = await res.json();
+      } catch {
+        clearTimeout(msgTimer);
+        setStatusMessage(
+          res.status >= 500
+            ? 'Error del servidor (posible timeout). Intenta de nuevo en 30 segundos.'
+            : 'Respuesta inesperada del servidor. Intenta de nuevo.'
+        );
+        return;
+      }
+
+      clearTimeout(msgTimer);
       if (result.success) {
-        setStatusMessage(`Done! ${result.alertsCount} alerts generated.`);
-        await fetchData();
+        setStatusMessage(`¡Listo! ${result.alertsCount} alertas generadas.`);
+        setNoDataMessage('');
+        // Use the full data returned by POST directly — no second GET needed
+        if (result.runAt) {
+          setData({
+            portfolioAnalyses: (result.portfolioAnalyses as any) ?? [],
+            concentration: (result.concentration as any) ?? null,
+            stockOpportunities: (result.stockOpportunities as any) ?? [],
+            etfOpportunities: (result.etfOpportunities as any) ?? [],
+            discoveredOpportunities: (result.discoveredOpportunities as any) ?? [],
+            allocationRecommendations: (result.allocationRecommendations as any) ?? [],
+            alerts: data.alerts,
+            lastRunAt: result.runAt as string,
+            marketRegime: (result.marketRegime as string) ?? 'neutral',
+            eurUsdRate: (result.eurUsdRate as number | null) ?? null,
+            errors: (result.errors as string[]) ?? [],
+            closedPositions: (result.closedPositions as any) ?? [],
+            totalRealizedPnl: (result.totalRealizedPnl as number | null) ?? null,
+          });
+        }
+        // Also refresh alerts separately
+        fetch('/api/alerts?limit=50')
+          .then(r => r.ok ? r.json() : { alerts: [] })
+          .then(a => setData(prev => ({ ...prev, alerts: a.alerts ?? [] })));
       } else {
-        setStatusMessage(`Error: ${result.error}`);
+        const stage = typeof result.stage === 'string' ? ` (etapa: ${result.stage})` : '';
+        setStatusMessage(`Error: ${result.error ?? 'fallo al analizar'}${stage}`);
       }
     } catch (err) {
-      setStatusMessage('Failed to run engine');
+      clearTimeout(msgTimer);
+      // True network error — browser couldn't reach the server at all
+      setStatusMessage('Error de red — sin conexión al servidor. Intenta de nuevo.');
     } finally {
       setIsRunning(false);
-      setTimeout(() => setStatusMessage(''), 5000);
+      setTimeout(() => setStatusMessage(''), 8000);
     }
   };
 
@@ -158,9 +223,10 @@ export default function Dashboard() {
             )}
             {data.lastRunAt && (
               <span className="text-xs text-slate-500 hidden sm:block">
-                Last run: {new Date(data.lastRunAt).toLocaleString()}
+                Último análisis: {new Date(data.lastRunAt).toLocaleString('es-ES')}
               </span>
             )}
+            <GlossaryButton />
             <button
               onClick={handleRunEngine}
               disabled={isRunning}
@@ -170,7 +236,7 @@ export default function Dashboard() {
                   : 'bg-green-700 hover:bg-green-600 text-white cursor-pointer'
               }`}
             >
-              {isRunning ? 'Running...' : 'Run Engine'}
+              {isRunning ? 'Analizando...' : '▶ Analizar'}
             </button>
           </div>
         </div>
@@ -205,12 +271,40 @@ export default function Dashboard() {
 
       {/* Main content */}
       <main className="max-w-screen-2xl mx-auto px-4 py-6">
+
+        {/* No-data / server error banner */}
+        {!isLoading && noDataMessage && !data.lastRunAt && (
+          <div className="mb-4 flex items-center gap-2 text-sm text-yellow-300 bg-yellow-900/20 border border-yellow-700/40 rounded-lg px-4 py-3">
+            <span className="shrink-0">⚠</span>
+            <span>{noDataMessage}</span>
+          </div>
+        )}
+
+        {/* Tab description */}
+        {{
+          portfolio:      { icon: '📊', text: 'Todo lo que tienes invertido ahora mismo, cuánto vale, cuánto ganaste o perdiste en papel, y qué recomienda el motor para cada posición.' },
+          opportunities:  { icon: '🔍', text: 'Acciones y ETFs que el motor vigila y que ahora están en buen momento para comprar por primera vez (o añadir si ya los tienes). Ordenadas por puntuación.' },
+          cash:           { icon: '💰', text: '¿Tienes efectivo y no sabes en qué ponerlo? El motor te dice exactamente en qué invertir y en qué orden, dependiendo de cuánto tengas disponible.' },
+          concentration:  { icon: '⚖️', text: '¿Estás demasiado concentrada en un sector? Aquí ves si tu cartera está equilibrada o si tienes demasiado en tecnología/IA/semiconductores.' },
+          discovery:      { icon: '🌐', text: 'El motor escanea un universo más amplio de empresas que no tienes todavía. Si encuentra algo interesante con buen precio, aparece aquí con ISIN para que lo busques en Trade Republic.' },
+          alerts:         { icon: '🔔', text: 'Historial de avisos automáticos. Una alerta se genera cuando una posición cambia de estado (ej: pasa de ESPERAR a COMPRAR). Si configuras Telegram, te llega al móvil.' },
+          settings:       { icon: '⚙️', text: 'Actualiza tu cartera importando el CSV de Trade Republic, ejecuta el análisis manualmente, y ve el estado del sistema.' },
+        }[activeTab] && (
+          <div className="mb-4 flex items-start gap-2 text-xs text-slate-500 bg-[#161b27] border border-[#2a3445]/40 rounded-lg px-3 py-2">
+            <span className="text-base shrink-0">
+              {({ portfolio: '📊', opportunities: '🔍', cash: '💰', concentration: '⚖️', discovery: '🌐', alerts: '🔔', settings: '⚙️' } as Record<string,string>)[activeTab]}
+            </span>
+            <span>
+              {({ portfolio: 'Todo lo que tienes invertido ahora mismo, cuánto vale, cuánto ganaste o perdiste en papel, y qué recomienda el motor para cada posición.', opportunities: 'Acciones y ETFs que el motor vigila y que ahora están en buen momento para comprar por primera vez. El motor puntúa cada una del 0 al 10 y ordena las mejores oportunidades arriba.', cash: '¿Tienes efectivo y no sabes en qué ponerlo? El motor te dice exactamente en qué invertir y en qué orden dependiendo de cuánto tengas disponible.', concentration: '¿Estás demasiado concentrada en un sector? Aquí ves si tu cartera está equilibrada o si tienes demasiado en tecnología, IA o semiconductores, y qué hacer.', discovery: 'El motor escanea un universo más amplio de empresas que no tienes todavía. Si encuentra algo interesante con buen precio y buenas métricas, aparece aquí con ISIN para buscarlo en Trade Republic.', alerts: 'Historial de avisos automáticos del motor. Una alerta se genera cuando una posición cambia de estado (ej: ESPERAR → COMPRAR). Con Telegram configurado, te llega al móvil al instante.', settings: 'Actualiza tu cartera importando el CSV de Trade Republic, ejecuta el análisis manualmente y ve el estado del sistema.' } as Record<string,string>)[activeTab]}
+            </span>
+          </div>
+        )}
         {isLoading ? (
           <div className="flex items-center justify-center py-20">
             <div className="text-center">
-              <div className="text-slate-500 text-lg mb-2">Loading dashboard...</div>
+              <div className="text-slate-500 text-lg mb-2">Cargando...</div>
               <div className="text-slate-600 text-sm">
-                {data.lastRunAt ? 'Fetching latest engine data' : 'No engine data yet — click "Run Engine" to start'}
+                {data.lastRunAt ? 'Obteniendo datos del análisis' : 'Sin datos todavía — pulsa "▶ Analizar" para empezar'}
               </div>
             </div>
           </div>
@@ -219,10 +313,10 @@ export default function Dashboard() {
             {/* No data state */}
             {!data.lastRunAt && activeTab !== 'settings' && (
               <div className="mb-6 bg-blue-900/20 border border-blue-800/50 rounded-lg px-4 py-3">
-                <div className="text-sm text-blue-300 font-medium">No engine data yet</div>
+                <div className="text-sm text-blue-300 font-medium">Sin datos de análisis</div>
                 <div className="text-xs text-blue-400 mt-1">
-                  Click <strong>Run Engine</strong> (top right) to fetch prices and generate your first analysis.
-                  In MOCK mode, no internet is needed — real prices require <code>PRICE_PROVIDER=yahoo</code> in .env.local.
+                  Pulsa <strong>▶ Analizar</strong> (arriba a la derecha) para obtener precios y generar tu primer análisis.
+                  En modo MOCK no hace falta internet — para precios reales añade <code>PRICE_PROVIDER=yahoo</code> en .env.local.
                 </div>
               </div>
             )}
@@ -245,6 +339,9 @@ export default function Dashboard() {
                   analyses={data.portfolioAnalyses}
                   concentration={data.concentration}
                   lastRunAt={data.lastRunAt}
+                  closedPositions={data.closedPositions}
+                  totalRealizedPnl={data.totalRealizedPnl}
+                  eurUsdRate={data.eurUsdRate}
                 />
                 <TopAddOpportunities analyses={data.portfolioAnalyses} />
               </div>
@@ -281,6 +378,7 @@ export default function Dashboard() {
                 providerName={priceProvider}
                 marketRegime={data.marketRegime}
                 isTelegramConfigured={false}
+                onImportDone={fetchData}
               />
             )}
           </>

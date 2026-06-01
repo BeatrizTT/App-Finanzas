@@ -3,7 +3,6 @@
 // Uses drawdown zones, conviction, DCA, concentration, and thesis risk
 
 import { calcDrawdownPct, calcPnlPct, pctOfTotal, clamp } from '../utils/math';
-import { safeFetchHighs } from '../pricing/factory';
 import { getRulesConfig, getAllocationConfig, getOverridesConfig } from '../utils/config-loader';
 import type {
   PortfolioConfig,
@@ -161,30 +160,94 @@ function buildReasons(
 ): string[] {
   const reasons: string[] = [];
 
+  const windowLabel = drawdown.primaryWindow === '90d' ? '90 días' : drawdown.primaryWindow === '60d' ? '60 días' : '30 días';
   reasons.push(
-    `${drawdown.maxDrawdown.toFixed(1)}% drawdown from ${drawdown.primaryWindow} high (${drawdown.drawdown30d.toFixed(1)}% / ${drawdown.drawdown60d.toFixed(1)}% / ${drawdown.drawdown90d.toFixed(1)}% over 30/60/90d)`
+    `Bajó un ${drawdown.maxDrawdown.toFixed(1)}% desde el máximo de ${windowLabel} (${drawdown.drawdown30d.toFixed(1)}% / ${drawdown.drawdown60d.toFixed(1)}% / ${drawdown.drawdown90d.toFixed(1)}% en 30/60/90d)`
   );
 
-  if (holding.core) reasons.push('Core long-term holding with high conviction');
-  if (holding.dcaMonthlyEur > 0) reasons.push(`Active DCA of €${holding.dcaMonthlyEur}/month already running`);
-  if (holding.type === 'etf') reasons.push('ETF provides built-in diversification');
+  if (holding.core) reasons.push('Posición central a largo plazo con alta convicción');
+  if (holding.dcaMonthlyEur > 0) reasons.push(`Aportación DCA de €${holding.dcaMonthlyEur}/mes ya activa`);
+  if (holding.type === 'etf') reasons.push('ETF con diversificación incorporada');
 
   if (concentrationPenalty > 0.5) {
     const heavyTags = holding.tags.filter((t) =>
       (concentration.themeWeights[t] ?? 0) > 30 || (concentration.sectorWeights[t] ?? 0) > 40
     );
     if (heavyTags.length > 0) {
-      reasons.push(`High concentration in ${heavyTags.join(', ')} — position size reduced`);
+      reasons.push(`Alta concentración en ${heavyTags.join(', ')} — posición reducida`);
     }
   }
 
   if (holding.manualThesisRisk && holding.manualThesisRisk !== 'none') {
-    reasons.push(`Manual thesis risk flag: ${holding.manualThesisRisk}`);
+    const riskLabel = holding.manualThesisRisk === 'high' ? 'alta' : holding.manualThesisRisk === 'medium' ? 'media' : holding.manualThesisRisk;
+    reasons.push(`Riesgo en tesis de inversión: ${riskLabel}`);
   }
 
-  if (state === 'REVIEW') reasons.push('Recommend reviewing thesis before adding');
-  if (state === 'REDUCE') reasons.push('Consider reducing exposure');
-  if (state === 'DO_NOTHING') reasons.push('Price close to recent highs — no action needed');
+  if (state === 'REVIEW') reasons.push('Revisa tu tesis antes de añadir más');
+  if (state === 'DO_NOTHING') reasons.push('Precio cercano a máximos recientes — sin acción');
+
+  return reasons;
+}
+
+function buildReduceReasons(
+  holding: PortfolioHolding,
+  unrealizedPnlPct: number,
+  concentrationPenalty: number,
+  concentration: ConcentrationData,
+  currentPrice: number
+): string[] {
+  const reasons: string[] = [];
+  // currentPrice is always EUR — the engine converts USD prices to EUR before analysis
+  const currency = '€';
+
+  // Target price reached
+  if (holding.targetPrice && holding.targetPrice > 0 && unrealizedPnlPct > 0) {
+    reasons.push(
+      `Has superado tu precio objetivo (+${unrealizedPnlPct.toFixed(0)}% de ganancia). ` +
+      `Es un buen momento para vender una parte y asegurar beneficios.`
+    );
+  }
+
+  if (unrealizedPnlPct >= 60) {
+    reasons.push(
+      `Ganancia en papel de +${unrealizedPnlPct.toFixed(0)}% — cerca de máximos. ` +
+      `Considera vender un 20-30% para asegurar beneficios y liberar capital`
+    );
+  }
+
+  if (concentrationPenalty > 0.65) {
+    const assetWeight = concentration.sectorWeights[`asset:${holding.id}`] ?? 0;
+    if (assetWeight > 0) {
+      reasons.push(
+        `Esta posición pesa un ${assetWeight.toFixed(0)}% de tu cartera. ` +
+        `Reducir un poco mejora el equilibrio y baja el riesgo total`
+      );
+    } else {
+      const heavyTags = holding.tags.filter(
+        (t) => (concentration.themeWeights[t] ?? 0) > 35
+      );
+      if (heavyTags.length > 0) {
+        reasons.push(
+          `Concentración elevada en ${heavyTags.join(', ')} — reducir esta posición equilibra la cartera`
+        );
+      }
+    }
+  }
+
+  if (holding.manualThesisRisk === 'high') {
+    reasons.push('Riesgo alto en la tesis de inversión — considera salir o reducir significativamente');
+  }
+
+  // Sell amount guidance
+  if (holding.units && holding.units > 0 && currentPrice != null && currentPrice > 0) {
+    const positionValue = holding.units * currentPrice;
+    const minSell = Math.round(positionValue * 0.20);
+    const maxSell = Math.round(positionValue * 0.25);
+    reasons.push(
+      `Vende el 20-25% ahora = aprox. ${currency}${minSell}–${currency}${maxSell}. ` +
+      `El resto: el motor te avisará si toca reducir de nuevo. También puedes poner un stop-loss del 10% desde el precio actual para proteger ganancias.`
+    );
+  }
 
   return reasons;
 }
@@ -202,33 +265,34 @@ export async function analyzeHolding(
 ): Promise<PortfolioAnalysis> {
   const overrides = getOverridesConfig();
 
-  // Use provided highs or fetch them
+  // Use provided highs — never fetch individually (daily engine pre-fetches everything)
   let highs = recentHighs;
   let priceError: string | undefined;
 
   if (!highs) {
-    const ticker = holding.ticker ?? holding.id.toUpperCase();
-    highs = await safeFetchHighs(ticker);
-    if (!highs) {
-      priceError = `Failed to fetch price data for ${ticker}`;
-      // Return a neutral analysis if price fetch fails
-      return {
-        holding,
-        currentPrice: 0,
-        avgPrice: holding.avgPrice,
-        unrealizedPnlPct: 0,
-        drawdown: { drawdown30d: 0, drawdown60d: 0, drawdown90d: 0, maxDrawdown: 0, primaryWindow: '30d' },
-        state: 'DO_NOTHING',
-        suggestedAmountEur: { min: 0, max: 0 },
-        reasons: [priceError],
-        concentrationPenalty: 0,
-        confidence: 'low',
-        priceError,
-      };
-    }
+    priceError = `No price data for ${holding.ticker ?? holding.id.toUpperCase()}`;
+    return {
+      holding,
+      currentPrice: null,
+      avgPrice: holding.avgPrice,
+      unrealizedPnlPct: null,
+      drawdown: { drawdown30d: 0, drawdown60d: 0, drawdown90d: 0, maxDrawdown: 0, primaryWindow: '30d' },
+      state: 'DO_NOTHING',
+      suggestedAmountEur: { min: 0, max: 0 },
+      reasons: [priceError],
+      concentrationPenalty: 0,
+      confidence: 'low',
+      priceError,
+    };
   }
 
-  const currentPrice = highs.currentPrice;
+  // Null out currentPrice for P&L if validation explicitly marks the price as unsuitable for
+  // exact accounting (e.g. currency_unconfirmed, usd_no_fx, proxy_drawdown_only).
+  // Backward-compat: providers without validation metadata (Twelve Data) are trusted as before.
+  const currentPrice: number | null =
+    highs.validation && !highs.validation.suitableForExactPnl
+      ? null
+      : highs.currentPrice;
   const maxDrawdown = Math.max(highs.drawdown30d, highs.drawdown60d, highs.drawdown90d);
   const primaryWindow =
     highs.drawdown90d === maxDrawdown ? '90d' :
@@ -252,8 +316,9 @@ export async function analyzeHolding(
     }
   }
 
-  // Override: extremely deep drawdown gets REVIEW instead of BUY_MORE
-  if (maxDrawdown > 50) {
+  // Override: deep drawdown → caution. At 35%+ from recent highs, something is wrong.
+  // This could be company-specific news, not just a market dip. Review before buying more.
+  if (maxDrawdown > 35) {
     state = 'REVIEW';
   }
 
@@ -266,19 +331,62 @@ export async function analyzeHolding(
 
   // Concentration check
   const concentrationPenalty = calcConcentrationPenalty(holding, concentration);
+  const unrealizedPnlPct = currentPrice != null ? calcPnlPct(holding.avgPrice, currentPrice) : null;
+
+  // --- Sell / Reduce signals ---
+  // Only check when not already in a buy state (price is near highs)
+  const isNearHigh = maxDrawdown < 5;
+  const profitThreshold = holding.core ? 80 : 50; // trim when position has run hard and is near highs
+
+  if (!['BUY_MORE', 'BUY_PARTIAL', 'BUY_SMALL', 'REVIEW'].includes(state)) {
+    // Profit-taking: big gain AND near recent high.
+    // ETFs are long-term core holdings — never reduce based on profit alone.
+    // Concentration-based REDUCE still applies to ETFs if they become too large.
+    if (isNearHigh && unrealizedPnlPct != null && unrealizedPnlPct >= profitThreshold && holding.type !== 'etf') {
+      state = 'REDUCE';
+    }
+    // Heavy concentration override (position too large regardless of price)
+    if (concentrationPenalty > 0.65 && state !== 'REDUCE') {
+      state = 'REDUCE';
+    }
+  }
+
+  // Target price reached → REDUCE
+  if (
+    holding.targetPrice &&
+    holding.targetPrice > 0 &&
+    currentPrice != null && currentPrice >= holding.targetPrice &&
+    !['BUY_MORE', 'BUY_PARTIAL', 'BUY_SMALL', 'REVIEW'].includes(state)
+  ) {
+    state = 'REDUCE';
+  }
 
   // Suggested amount
-  const suggestedAmountEur = calcSuggestedAmount(
+  let suggestedAmountEur = calcSuggestedAmount(
     state, holding, cashAvailable, targetReserve, concentrationPenalty
   );
+
+  // For REDUCE: override with suggested sell amount (20-25% of position value)
+  if (state === 'REDUCE' && holding.units && holding.units > 0 && currentPrice != null && currentPrice > 0) {
+    const positionValue = holding.units * currentPrice;
+    suggestedAmountEur = {
+      min: Math.round(positionValue * 0.20),
+      max: Math.round(positionValue * 0.25),
+    };
+  }
 
   // Confidence
   let confidence: 'low' | 'medium' | 'high' = 'medium';
   if (holding.convictionScore >= 9 && maxDrawdown >= 10 && concentrationPenalty < 0.5) confidence = 'high';
   if (concentrationPenalty > 0.6 || (holding.manualThesisRisk ?? 'none') !== 'none') confidence = 'low';
 
-  const reasons = buildReasons(holding, drawdown, state, concentrationPenalty, concentration);
-  const unrealizedPnlPct = calcPnlPct(holding.avgPrice, currentPrice);
+  // Build reasons — use dedicated REDUCE reasons when applicable
+  const reasons = state === 'REDUCE' && unrealizedPnlPct != null && currentPrice != null
+    ? [
+        ...buildReduceReasons(holding, unrealizedPnlPct, concentrationPenalty, concentration, currentPrice),
+        ...buildReasons(holding, drawdown, state, concentrationPenalty, concentration).slice(0, 1),
+      ]
+    : buildReasons(holding, drawdown, state, concentrationPenalty, concentration);
 
   return {
     holding,
@@ -381,10 +489,11 @@ export async function runPortfolioEngine(
 ): Promise<{ analyses: PortfolioAnalysis[]; concentration: ConcentrationData }> {
   const { holdings, cashAvailableEur, targetCashReserveEur } = portfolioConfig;
 
-  // Build current prices map
+  // Build current prices map — skip entries with null/zero currentPrice
+  // so calcConcentration falls back to holding.avgPrice for those positions
   const currentPrices: Record<string, number> = {};
   for (const [ticker, highs] of Object.entries(allHighs)) {
-    currentPrices[ticker] = highs.currentPrice;
+    if (highs.currentPrice != null && highs.currentPrice > 0) currentPrices[ticker] = highs.currentPrice;
   }
 
   // Calculate concentration first (used in per-holding analysis)

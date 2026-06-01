@@ -4,9 +4,11 @@
 import fs from 'fs';
 import path from 'path';
 
-const DATA_DIR = process.env.DATA_DIR
-  ? path.resolve(process.env.DATA_DIR)
-  : path.resolve(process.cwd(), 'src', 'data');
+const DATA_DIR = process.env.VERCEL === '1'
+  ? '/tmp/app-finanzas'
+  : process.env.DATA_DIR
+    ? path.resolve(process.env.DATA_DIR)
+    : path.resolve(process.cwd(), 'src', 'data');
 
 export function ensureDataDir(): void {
   if (!fs.existsSync(DATA_DIR)) {

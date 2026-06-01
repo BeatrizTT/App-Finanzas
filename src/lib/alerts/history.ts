@@ -75,12 +75,12 @@ export function shouldSendAlert(assetId: string, prev: PreviousStates): boolean 
 // --------------------------------------------------------------------------
 
 export function createAlert(
-  params: Omit<Alert, 'id' | 'timestamp' | 'telegramSent'>
+  params: Omit<Alert, 'id' | 'timestamp' | 'telegramSent'> & { telegramSent?: boolean }
 ): Alert {
   return {
     ...params,
     id: genId(),
     timestamp: new Date().toISOString(),
-    telegramSent: false,
+    telegramSent: params.telegramSent ?? false,
   };
 }

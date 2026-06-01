@@ -41,6 +41,67 @@ export type AllocationState =
   | 'SECOND_BEST'
   | 'HOLD_CASH';
 
+// --- Price Validation ---
+
+/**
+ * Who delivered the raw price data.
+ * 'cache' = value served from in-memory / file cache within TTL
+ * 'mock'  = test/development fixture
+ * 'none'  = no provider was reached (all failed or quota exceeded)
+ */
+export type PriceProviderId = 'eodhd' | 'twelvedata' | 'yahoo' | 'cache' | 'mock' | 'none';
+
+/**
+ * What processing or conversion was applied to the raw price.
+ * direct_eur_quote    — provider returned EUR natively (no conversion needed)
+ * usd_converted       — USD price multiplied by EUR/USD rate; result is EUR-equivalent
+ * usd_no_fx           — USD price available but no valid FX rate; P&L blocked
+ * gbp_converted       — GBP price (pounds) multiplied by GBP/EUR rate
+ * gbp_pence_converted — GBX or GBp (pence) divided by 100 then multiplied by GBP/EUR rate
+ * proxy_drawdown_only — USD proxy for a EUR instrument; only drawdown % is valid
+ * cached_last_valid   — stale cache value used after live fetch failed; may be outdated
+ * unavailable         — no usable data from any source
+ */
+export type PriceMethod =
+  | 'direct_eur_quote'
+  | 'usd_converted'
+  | 'usd_no_fx'
+  | 'gbp_converted'
+  | 'gbp_pence_converted'
+  | 'proxy_drawdown_only'
+  | 'currency_unconfirmed'  // price received but currency not returned by provider; inferred only
+  | 'cached_last_valid'
+  | 'unavailable';
+
+/**
+ * How a price value will be used. Different purposes require different accuracy guarantees.
+ * exact_pnl            — must be EUR-denominated and not a proxy
+ * buy_recommendation   — must be in known currency for sizing math
+ * drawdown             — percentage is currency-independent; proxies are allowed
+ * display              — shown to user; best-effort, no hard currency requirement
+ */
+export type PricingPurpose = 'exact_pnl' | 'buy_recommendation' | 'drawdown' | 'display';
+
+/**
+ * Per-instrument audit object produced alongside each price fetch.
+ * provider  — who delivered the raw data
+ * method    — what conversion/processing was applied
+ * Consumers use suitableFor* flags instead of re-deriving currency logic.
+ */
+export interface PriceValidation {
+  symbol: string;
+  provider: PriceProviderId;
+  method: PriceMethod;
+  fetchedCurrency: string | null;        // exact currency string returned by provider
+  expectedCurrency: string | null;       // currency we expected from instrument config
+  currencyConfirmed: boolean;            // fetchedCurrency matches expectedCurrency
+  suitableForExactPnl: boolean;          // EUR-denominated result, not a proxy
+  suitableForBuyRecommendation: boolean; // usable for EUR buy-size math
+  suitableForDrawdown: boolean;          // drawdown % is valid (proxy allowed)
+  isProxy: boolean;                      // USD proxy for a EUR instrument (e.g. QQQ→CNDX)
+  note?: string;
+}
+
 // --- Price Data ---
 
 export interface PriceData {
@@ -71,10 +132,12 @@ export interface RecentHighs {
   high30d: number;
   high60d: number;
   high90d: number;
-  currentPrice: number;
+  /** null = price unavailable (currency unconfirmed, proxy, or fetch failed); never use for P&L */
+  currentPrice: number | null;
   drawdown30d: number;      // percent, positive means below high
   drawdown60d: number;
   drawdown90d: number;
+  validation?: PriceValidation; // populated by providers that support it; absent = legacy/unknown
 }
 
 // --- Portfolio Config (from config/portfolio.json) ---
@@ -95,12 +158,22 @@ export interface PortfolioHolding {
   manualThesisRisk?: ThesisRisk;  // manual: escalate risk level
   maxWeightPercent?: number;      // max allowed portfolio weight %
   currency?: string;        // asset currency (USD, EUR) - defaults to USD
+  targetPrice?: number;        // target sell price in asset currency (optional)
+}
+
+export interface ClosedPosition {
+  isin: string;
+  ticker?: string;
+  name: string;
+  realizedPnl: number;
 }
 
 export interface PortfolioConfig {
   holdings: PortfolioHolding[];
   cashAvailableEur: number;
   targetCashReserveEur: number;
+  closedPositions?: ClosedPosition[];
+  totalRealizedPnl?: number;
 }
 
 // --- Universe Config (from config/universe.json) ---
@@ -112,6 +185,7 @@ export interface UniverseAsset {
   tags: string[];
   qualityScore: number;     // 1-10, used as base quality signal
   isSeed: boolean;          // true = priority seed, false = extended discovery
+  isin?: string;
   currency?: string;
   region?: string;          // 'us' | 'eu' | 'global'
   minMarketCapBillions?: number;
@@ -254,9 +328,11 @@ export interface ConcentrationData {
 
 export interface PortfolioAnalysis {
   holding: PortfolioHolding;
-  currentPrice: number;
+  /** null when price is unavailable (unconfirmed currency, proxy, or fetch failed) */
+  currentPrice: number | null;
   avgPrice: number;
-  unrealizedPnlPct: number;   // (current - avg) / avg * 100
+  /** null when currentPrice is null — cannot compute P&L without a valid price */
+  unrealizedPnlPct: number | null;
   drawdown: DrawdownData;
   state: PortfolioState;
   suggestedAmountEur: { min: number; max: number };
@@ -286,10 +362,12 @@ export interface Opportunity {
   name: string;
   type: AssetType;
   tags: string[];
+  isin?: string;
   isSeedUniverse: boolean;         // false = found via extended discovery
   score: OpportunityScore;
   state: OpportunityState;
-  currentPrice: number;
+  /** null when price currency is unconfirmed or unavailable */
+  currentPrice: number | null;
   currency: string;
   drawdown: DrawdownData;
   reasons: string[];
@@ -360,6 +438,7 @@ export interface Alert {
 export interface DailyEngineOutput {
   runAt: string;                 // ISO timestamp
   marketRegime: 'bullish' | 'neutral' | 'bearish';
+  eurUsdRate?: number;           // EUR/USD rate used for price conversion (e.g. 1.08)
   portfolioAnalyses: PortfolioAnalysis[];
   concentration: ConcentrationData;
   stockOpportunities: Opportunity[];
@@ -368,6 +447,8 @@ export interface DailyEngineOutput {
   allocationRecommendations: AllocationRecommendation[];
   alertsGenerated: Alert[];
   errors: string[];
+  closedPositions?: ClosedPosition[];
+  totalRealizedPnl?: number;
 }
 
 // --- Previous State Store (for change detection) ---

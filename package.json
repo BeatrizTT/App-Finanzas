@@ -9,6 +9,7 @@
     "lint": "next lint",
     "engine": "npx ts-node --project tsconfig.scripts.json scripts/run-engine.ts",
     "scheduler": "npx ts-node --project tsconfig.scripts.json scripts/scheduler.ts",
+    "test": "npx tsx scripts/run-tests.ts",
     "test:local": "npx ts-node --project tsconfig.scripts.json scripts/test-local.ts"
   },
   "dependencies": {
@@ -22,7 +23,7 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "recharts": "^2.12.7",
-    "yahoo-finance2": "^2.11.3",
+    "yahoo-finance2": "2.11.3",
     "zod": "^3.23.8"
   },
   "devDependencies": {

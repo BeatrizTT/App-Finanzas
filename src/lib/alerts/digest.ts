@@ -20,119 +20,119 @@ export function formatDigestMessage(
   allocationRecommendations: AllocationRecommendation[],
   concentration: ConcentrationData
 ): string {
-  const date = new Date().toLocaleDateString('en-GB', {
+  const date = new Date().toLocaleDateString('es-ES', {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
     day: 'numeric',
   });
 
-  let msg = `📅 *Daily Digest — ${date}*\n`;
+  let msg = `📅 *Resumen diario — ${date}*\n`;
   msg += `━━━━━━━━━━━━━━━━━━━━━━\n\n`;
 
-  // --- Top Portfolio Adds ---
+  // --- Compras recomendadas en cartera ---
   const topAdds = portfolioAnalyses
     .filter((a) => ['BUY_MORE', 'BUY_PARTIAL', 'BUY_SMALL'].includes(a.state))
     .sort((a, b) => b.drawdown.maxDrawdown - a.drawdown.maxDrawdown)
     .slice(0, 3);
 
-  msg += `*📊 Top Portfolio Adds (${topAdds.length})*\n`;
+  msg += `*📊 Compras recomendadas en cartera (${topAdds.length})*\n`;
   if (topAdds.length === 0) {
-    msg += `• No actionable adds in current portfolio\n`;
+    msg += `• Ningún activo de tu cartera en punto de compra ahora mismo\n`;
   } else {
     for (const a of topAdds) {
       const ticker = a.holding.ticker ?? a.holding.id.toUpperCase();
       const dd = `-${a.drawdown.maxDrawdown.toFixed(1)}%`;
       const amtStr = a.suggestedAmountEur.max > 0
         ? `€${a.suggestedAmountEur.min}–€${a.suggestedAmountEur.max}`
-        : 'review size';
-      msg += `• *${ticker}* | \`${a.state}\` | DD: ${dd} | ${amtStr}\n`;
+        : 'revisar tamaño';
+      msg += `• *${ticker}* | \`${a.state}\` | Caída: ${dd} | ${amtStr}\n`;
     }
   }
   msg += '\n';
 
-  // --- Top Stock Opportunities ---
+  // --- Oportunidades en acciones ---
   const topStocks = stockOpportunities
     .filter((o) => ['BUY', 'READY_TO_BUY'].includes(o.state))
     .slice(0, 3);
 
-  msg += `*📈 Top Stock Opportunities (${topStocks.length})*\n`;
+  msg += `*📈 Oportunidades en acciones (${topStocks.length})*\n`;
   if (topStocks.length === 0) {
-    msg += `• No strong stock entries detected\n`;
+    msg += `• Sin oportunidades claras en acciones hoy\n`;
   } else {
     for (const o of topStocks) {
       const dd = `-${o.drawdown.maxDrawdown.toFixed(1)}%`;
-      msg += `• *${o.ticker}* | Score: ${o.score.total}/10 | \`${o.state}\` | DD: ${dd}\n`;
+      msg += `• *${o.ticker}* | Puntuación: ${o.score.total}/10 | \`${o.state}\` | Caída: ${dd}\n`;
     }
   }
   msg += '\n';
 
-  // --- Top ETF Opportunities ---
+  // --- Oportunidades en ETFs ---
   const topEtfs = etfOpportunities
     .filter((o) => ['BUY', 'READY_TO_BUY'].includes(o.state))
     .slice(0, 3);
 
-  msg += `*📦 Top ETF Opportunities (${topEtfs.length})*\n`;
+  msg += `*📦 Oportunidades en ETFs (${topEtfs.length})*\n`;
   if (topEtfs.length === 0) {
-    msg += `• No strong ETF entries detected\n`;
+    msg += `• Sin oportunidades claras en ETFs hoy\n`;
   } else {
     for (const o of topEtfs) {
       const dd = `-${o.drawdown.maxDrawdown.toFixed(1)}%`;
-      msg += `• *${o.ticker}* | Score: ${o.score.total}/10 | \`${o.state}\` | DD: ${dd}\n`;
+      msg += `• *${o.ticker}* | Puntuación: ${o.score.total}/10 | \`${o.state}\` | Caída: ${dd}\n`;
     }
   }
   msg += '\n';
 
-  // --- Discoveries ---
+  // --- Descubrimientos ---
   const topDiscovered = discoveredOpportunities
     .filter((o) => ['BUY', 'READY_TO_BUY'].includes(o.state))
     .slice(0, 2);
 
   if (topDiscovered.length > 0) {
-    msg += `*🔍 New Discoveries (${topDiscovered.length})*\n`;
+    msg += `*🔍 Nuevos descubrimientos (${topDiscovered.length})*\n`;
     for (const o of topDiscovered) {
-      msg += `• *${o.ticker}* (${o.name}) | Score: ${o.score.total}/10 | \`${o.state}\`\n`;
+      msg += `• *${o.ticker}* (${o.name}) | Puntuación: ${o.score.total}/10 | \`${o.state}\`\n`;
     }
     msg += '\n';
   }
 
-  // --- Best Use of Cash ---
-  msg += `*💰 Best Use of Cash*\n`;
+  // --- Mejor uso del efectivo ---
+  msg += `*💰 Mejor uso del efectivo*\n`;
   for (const rec of allocationRecommendations.slice(0, 3)) {
     if (rec.holdCash) {
-      msg += `• €${rec.forAmount}: HOLD CASH — ${rec.holdCashReason ?? 'no strong opportunities'}\n`;
+      msg += `• €${rec.forAmount}: GUARDAR EFECTIVO — ${rec.holdCashReason ?? 'sin oportunidades claras'}\n`;
     } else {
       const best = rec.options[0];
       const second = rec.options[1];
       if (best) {
         msg += `• *€${rec.forAmount}:* ${best.asset} (€${best.amountEur})`;
-        if (second) msg += ` + ${second.asset} option`;
+        if (second) msg += ` + opción ${second.asset}`;
         msg += '\n';
       }
     }
   }
   msg += '\n';
 
-  // --- Concentration Warnings ---
+  // --- Advertencias de concentración ---
   if (concentration.highConcentrationWarnings.length > 0) {
-    msg += `*⚠️ Concentration Warnings*\n`;
+    msg += `*⚠️ Advertencias de concentración*\n`;
     for (const w of concentration.highConcentrationWarnings) {
       msg += `• ${w}\n`;
     }
     msg += '\n';
   }
 
-  // --- Stock vs ETF balance ---
+  // --- Equilibrio acciones vs ETFs ---
   const { stocks, etfs } = concentration.stockVsEtfRatio;
-  msg += `*⚖️ Balance:* Stocks ${stocks.toFixed(0)}% | ETFs ${etfs.toFixed(0)}%\n`;
+  msg += `*⚖️ Equilibrio:* Acciones ${stocks.toFixed(0)}% | ETFs ${etfs.toFixed(0)}%\n`;
 
-  // --- No-action summary ---
+  // --- Sin acción ---
   const noActionCount = portfolioAnalyses.filter((a) => a.state === 'DO_NOTHING').length;
   if (noActionCount > 0) {
-    msg += `\n_${noActionCount} portfolio positions at or near highs — no action needed_\n`;
+    msg += `\n_${noActionCount} posiciones en máximos o cerca — sin acción necesaria_\n`;
   }
 
-  msg += `\n_Run at ${new Date().toLocaleTimeString('en-GB')}_`;
+  msg += `\n_Ejecutado a las ${new Date().toLocaleTimeString('es-ES')}_`;
 
   return msg;
 }
@@ -160,7 +160,7 @@ export async function sendDailyDigest(
     type: 'daily_digest',
     message,
     telegramSent: sent,
-  } as any);
+  });
 
   saveAlert(alert);
   return alert;

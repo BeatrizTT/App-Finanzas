@@ -6,7 +6,7 @@ export function calcDrawdownPct(high: number, current: number): number {
 }
 
 export function calcPnlPct(avgPrice: number, currentPrice: number): number {
-  if (avgPrice <= 0) return 0;
+  if (avgPrice <= 0 || currentPrice <= 0) return 0;
   return ((currentPrice - avgPrice) / avgPrice) * 100;
 }
 
