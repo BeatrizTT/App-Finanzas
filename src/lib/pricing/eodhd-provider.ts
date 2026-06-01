@@ -64,12 +64,38 @@ const SYMBOL_MAP: Record<string, EodhdSymbolEntry> = {
   SMCI:  { eodhdTicker: 'SMCI.US',     inferredCurrency: 'USD', lseMaybePence: false, validated: true  }, // P2c-4: validated_usd_needs_fx
   TSLA:  { eodhdTicker: 'TSLA.US',     inferredCurrency: 'USD', lseMaybePence: false, validated: false },
   MU:    { eodhdTicker: 'MU.US',       inferredCurrency: 'USD', lseMaybePence: false, validated: false },
+  // --- P3-1 prep: extended discovery stocks (.US, USD) — smoke pending, validated:false ---
+  // These mirror universe.json extendedStocks not yet curated. `validated:false` is documentary
+  // only (never read at runtime). Until a real EODHD smoke adds them to the curated config,
+  // getRecentHighs() resolves them via usdNoFxValidation → currentPrice=null (no raw USD as EUR).
+  AAPL:  { eodhdTicker: 'AAPL.US',     inferredCurrency: 'USD', lseMaybePence: false, validated: false },
+  AMAT:  { eodhdTicker: 'AMAT.US',     inferredCurrency: 'USD', lseMaybePence: false, validated: false },
+  LRCX:  { eodhdTicker: 'LRCX.US',     inferredCurrency: 'USD', lseMaybePence: false, validated: false },
+  KLAC:  { eodhdTicker: 'KLAC.US',     inferredCurrency: 'USD', lseMaybePence: false, validated: false },
+  INTU:  { eodhdTicker: 'INTU.US',     inferredCurrency: 'USD', lseMaybePence: false, validated: false },
+  SHOP:  { eodhdTicker: 'SHOP.US',     inferredCurrency: 'USD', lseMaybePence: false, validated: false }, // Canadian ISIN, USD NYSE listing
+  SNOW:  { eodhdTicker: 'SNOW.US',     inferredCurrency: 'USD', lseMaybePence: false, validated: false },
+  NET:   { eodhdTicker: 'NET.US',      inferredCurrency: 'USD', lseMaybePence: false, validated: false },
+  V:     { eodhdTicker: 'V.US',        inferredCurrency: 'USD', lseMaybePence: false, validated: false },
+  MA:    { eodhdTicker: 'MA.US',       inferredCurrency: 'USD', lseMaybePence: false, validated: false },
+  UNH:   { eodhdTicker: 'UNH.US',      inferredCurrency: 'USD', lseMaybePence: false, validated: false },
+  JNJ:   { eodhdTicker: 'JNJ.US',      inferredCurrency: 'USD', lseMaybePence: false, validated: false },
+  COST:  { eodhdTicker: 'COST.US',     inferredCurrency: 'USD', lseMaybePence: false, validated: false },
   // --- Market proxies (USD, drawdown only) ---
   SPY:   { eodhdTicker: 'SPY.US',      inferredCurrency: 'USD', lseMaybePence: false, validated: false },
   QQQ:   { eodhdTicker: 'QQQ.US',      inferredCurrency: 'USD', lseMaybePence: false, validated: true  }, // P2c-1b: validated_usd_needs_fx
   VTV:   { eodhdTicker: 'VTV.US',      inferredCurrency: 'USD', lseMaybePence: false, validated: false },
   VOO:   { eodhdTicker: 'VOO.US',      inferredCurrency: 'USD', lseMaybePence: false, validated: false },
 };
+
+/**
+ * Read-only list of internal tickers known to SYMBOL_MAP. Used by integrity tests
+ * to assert the discovery universe is covered by the EODHD symbol map. Does not
+ * affect pricing, scanner, or BUY logic.
+ */
+export function listEodhdMappedTickers(): string[] {
+  return Object.keys(SYMBOL_MAP);
+}
 
 // ---------------------------------------------------------------------------
 // Budget tracking — scoped per engine run via resetEodhdBudget()

@@ -20,7 +20,9 @@ on:
       symbols:
         description: 'Comma-separated symbols (no spaces). Max 10 due to budget.'
         required: false
-        default: 'MRVL,MSFT,AMZN,GOOGL,ORCL,ADBE,CRM,NOW,FTNT,SMCI'
+        # P3-1 extended discovery stocks smoke. Run batch 1 (default below), then
+        # re-run with batch 2: UNH,JNJ,COST,MU
+        default: 'AAPL,AMAT,LRCX,KLAC,INTU,SHOP,SNOW,NET,V,MA'
 
 jobs:
   validate:

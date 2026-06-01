@@ -233,7 +233,7 @@ test('config JSON is valid JSON and has expected top-level keys', () => {
   assert('has source', typeof parsed.source === 'string');
   assert('has note', typeof parsed.note === 'string');
   assert('has symbols array', Array.isArray(parsed.symbols));
-  assert('has 15 symbols', (parsed.symbols as unknown[]).length === 15);
+  assert('has 29 symbols (15 + 14 P3-1)', (parsed.symbols as unknown[]).length === 29);
 });
 
 // ---------------------------------------------------------------------------
@@ -479,12 +479,69 @@ test('P2c-4: no P2c-4 symbol produces suitableForExactPnl=true without FX', () =
   }
 });
 
-test('P2c-4: curated config now has 15 symbols (5 original + 10 new)', () => {
+test('P2c-4: curated config has 29 symbols (5 original + 10 P2c-4 + 14 P3-1)', () => {
   resetCuratedConfigCache();
   const configPath = path.resolve(__dirname, '../../../../config/eodhd-symbol-validation.json');
   const raw = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-  assert('config has 15 symbols', raw.symbols.length === 15);
+  assert('config has 29 symbols', raw.symbols.length === 29);
   assert('source references P2c-4', (raw.source as string).includes('P2c-4'));
+});
+
+// ---------------------------------------------------------------------------
+// P3-1: 14 extended discovery stocks validated by real EODHD smoke on 2026-06-01.
+// Batch 1 (10): AAPL, AMAT, LRCX, KLAC, INTU, SHOP, SNOW, NET, V, MA
+// Batch 2 (4):  MU, UNH, JNJ, COST
+// All returned validated_usd_needs_fx, confirmedCurrency USD, warnings: [].
+// ---------------------------------------------------------------------------
+
+const P3_1_SYMBOLS: Array<{ ticker: string; eodhdSymbol: string; samplePrice: number }> = [
+  { ticker: 'AAPL', eodhdSymbol: 'AAPL.US', samplePrice: 312.06 },
+  { ticker: 'AMAT', eodhdSymbol: 'AMAT.US', samplePrice: 450.06 },
+  { ticker: 'LRCX', eodhdSymbol: 'LRCX.US', samplePrice: 318.18 },
+  { ticker: 'KLAC', eodhdSymbol: 'KLAC.US', samplePrice: 1921.71 },
+  { ticker: 'INTU', eodhdSymbol: 'INTU.US', samplePrice: 331.53 },
+  { ticker: 'SHOP', eodhdSymbol: 'SHOP.US', samplePrice: 118.71 },
+  { ticker: 'SNOW', eodhdSymbol: 'SNOW.US', samplePrice: 255.55 },
+  { ticker: 'NET',  eodhdSymbol: 'NET.US',  samplePrice: 241.82 },
+  { ticker: 'V',    eodhdSymbol: 'V.US',    samplePrice: 326.36 },
+  { ticker: 'MA',   eodhdSymbol: 'MA.US',   samplePrice: 493.98 },
+  { ticker: 'MU',   eodhdSymbol: 'MU.US',   samplePrice: 971 },
+  { ticker: 'UNH',  eodhdSymbol: 'UNH.US',  samplePrice: 380.31 },
+  { ticker: 'JNJ',  eodhdSymbol: 'JNJ.US',  samplePrice: 225.33 },
+  { ticker: 'COST', eodhdSymbol: 'COST.US', samplePrice: 956.32 },
+];
+
+test('P3-1: all 14 new symbols present in curated config with smoke-exact data', () => {
+  resetCuratedConfigCache();
+  for (const { ticker, eodhdSymbol, samplePrice } of P3_1_SYMBOLS) {
+    const entry = getEodhdCuratedEntry(ticker);
+    assert(`${ticker}: entry found`, entry !== null);
+    assert(`${ticker}: status is validated_usd_needs_fx`, entry?.status === 'validated_usd_needs_fx');
+    assert(`${ticker}: confirmedCurrency is USD`, entry?.confirmedCurrency === 'USD');
+    assert(`${ticker}: expectedCurrency is USD`, entry?.expectedCurrency === 'USD');
+    assert(`${ticker}: eodhdSymbol is ${eodhdSymbol}`, entry?.eodhdSymbol === eodhdSymbol);
+    assert(`${ticker}: samplePrice matches smoke (${samplePrice})`, entry?.samplePrice === samplePrice);
+    assert(`${ticker}: samplePrice > 0`, (entry?.samplePrice ?? 0) > 0);
+    assert(`${ticker}: warnings empty`, Array.isArray(entry?.warnings) && entry?.warnings.length === 0);
+  }
+});
+
+test('P3-1: all 14 new symbols are USD-needs-FX — no exact P&L / BUY without fresh FX', () => {
+  for (const { ticker } of P3_1_SYMBOLS) {
+    const entry = makeEntry({
+      internalTicker: ticker, status: 'validated_usd_needs_fx',
+      confirmedCurrency: 'USD', expectedCurrency: 'USD',
+    });
+    const vNoFx = buildValidationFromCurated(ticker, entry, false);
+    assert(`${ticker}: currentPriceUsable=false (raw USD must not appear as EUR)`,
+      isCuratedCurrentPriceUsable('validated_usd_needs_fx') === false);
+    assert(`${ticker}: suitableForExactPnl=false without FX`, vNoFx.suitableForExactPnl === false);
+    assert(`${ticker}: suitableForBuyRecommendation=false without FX`, vNoFx.suitableForBuyRecommendation === false);
+    assert(`${ticker}: suitableForDrawdown=true (currency-independent)`, vNoFx.suitableForDrawdown === true);
+    // WITH fresh FX, the same symbol becomes exact-P&L / BUY safe (usd_converted)
+    const vFx = buildValidationFromCurated(ticker, entry, true);
+    assert(`${ticker}: suitableForExactPnl=true WITH fresh FX`, vFx.suitableForExactPnl === true);
+  }
 });
 
 // ---------------------------------------------------------------------------
