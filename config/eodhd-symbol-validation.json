@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-05-07T18:26:17.859Z",
-  "source": "P2c-1b smoke (eodhd-smoke workflow, branch claude/personal-investing-app-BG2r1)",
+  "generatedAt": "2026-06-01T12:38:35.685Z",
+  "source": "P2c-1b + P2c-4 smoke (eodhd-smoke workflow, branch claude/p2c-4-eodhd-usd-holdings)",
   "note": "Curated from real EODHD search API responses. This file contains no credentials or tokens.",
   "symbols": [
     {
@@ -66,6 +66,126 @@
         "Currency mismatch: expected GBP, EODHD reports USD"
       ],
       "note": "Rejected. EODHD reports USD for a symbol expected to trade in GBP on LSE. Do not use for exact P&L or BUY. Seek alternative symbol or exchange listing."
+    },
+    {
+      "internalTicker": "MSFT",
+      "eodhdSymbol": "MSFT.US",
+      "exchange": "US",
+      "status": "validated_usd_needs_fx",
+      "confirmedCurrency": "USD",
+      "expectedCurrency": "USD",
+      "samplePrice": 450.24,
+      "samplePriceDate": "2026-05-29",
+      "warnings": [],
+      "note": "USD confirmed by EODHD search response. Exact P&L and buy sizing require a real EUR/USD FX rate — no hardcoded conversion."
+    },
+    {
+      "internalTicker": "AMZN",
+      "eodhdSymbol": "AMZN.US",
+      "exchange": "US",
+      "status": "validated_usd_needs_fx",
+      "confirmedCurrency": "USD",
+      "expectedCurrency": "USD",
+      "samplePrice": 270.64,
+      "samplePriceDate": "2026-05-29",
+      "warnings": [],
+      "note": "USD confirmed by EODHD search response. Exact P&L and buy sizing require a real EUR/USD FX rate — no hardcoded conversion."
+    },
+    {
+      "internalTicker": "SMCI",
+      "eodhdSymbol": "SMCI.US",
+      "exchange": "US",
+      "status": "validated_usd_needs_fx",
+      "confirmedCurrency": "USD",
+      "expectedCurrency": "USD",
+      "samplePrice": 46.09,
+      "samplePriceDate": "2026-05-29",
+      "warnings": [],
+      "note": "USD confirmed by EODHD search response. Exact P&L and buy sizing require a real EUR/USD FX rate — no hardcoded conversion."
+    },
+    {
+      "internalTicker": "CRM",
+      "eodhdSymbol": "CRM.US",
+      "exchange": "US",
+      "status": "validated_usd_needs_fx",
+      "confirmedCurrency": "USD",
+      "expectedCurrency": "USD",
+      "samplePrice": 191.1,
+      "samplePriceDate": "2026-05-29",
+      "warnings": [],
+      "note": "USD confirmed by EODHD search response. Exact P&L and buy sizing require a real EUR/USD FX rate — no hardcoded conversion."
+    },
+    {
+      "internalTicker": "NOW",
+      "eodhdSymbol": "NOW.US",
+      "exchange": "US",
+      "status": "validated_usd_needs_fx",
+      "confirmedCurrency": "USD",
+      "expectedCurrency": "USD",
+      "samplePrice": 124.37,
+      "samplePriceDate": "2026-05-29",
+      "warnings": [],
+      "note": "USD confirmed by EODHD search response. Exact P&L and buy sizing require a real EUR/USD FX rate — no hardcoded conversion."
+    },
+    {
+      "internalTicker": "ADBE",
+      "eodhdSymbol": "ADBE.US",
+      "exchange": "US",
+      "status": "validated_usd_needs_fx",
+      "confirmedCurrency": "USD",
+      "expectedCurrency": "USD",
+      "samplePrice": 259.21,
+      "samplePriceDate": "2026-05-29",
+      "warnings": [],
+      "note": "USD confirmed by EODHD search response. Exact P&L and buy sizing require a real EUR/USD FX rate — no hardcoded conversion."
+    },
+    {
+      "internalTicker": "ORCL",
+      "eodhdSymbol": "ORCL.US",
+      "exchange": "US",
+      "status": "validated_usd_needs_fx",
+      "confirmedCurrency": "USD",
+      "expectedCurrency": "USD",
+      "samplePrice": 225.78,
+      "samplePriceDate": "2026-05-29",
+      "warnings": [],
+      "note": "USD confirmed by EODHD search response. Exact P&L and buy sizing require a real EUR/USD FX rate — no hardcoded conversion."
+    },
+    {
+      "internalTicker": "GOOGL",
+      "eodhdSymbol": "GOOGL.US",
+      "exchange": "US",
+      "status": "validated_usd_needs_fx",
+      "confirmedCurrency": "USD",
+      "expectedCurrency": "USD",
+      "samplePrice": 380.34,
+      "samplePriceDate": "2026-05-29",
+      "warnings": [],
+      "note": "USD confirmed by EODHD search response. Exact P&L and buy sizing require a real EUR/USD FX rate — no hardcoded conversion."
+    },
+    {
+      "internalTicker": "FTNT",
+      "eodhdSymbol": "FTNT.US",
+      "exchange": "US",
+      "status": "validated_usd_needs_fx",
+      "confirmedCurrency": "USD",
+      "expectedCurrency": "USD",
+      "samplePrice": 137.97,
+      "samplePriceDate": "2026-05-29",
+      "warnings": [],
+      "note": "USD confirmed by EODHD search response. Exact P&L and buy sizing require a real EUR/USD FX rate — no hardcoded conversion."
+    },
+    {
+      "internalTicker": "MRVL",
+      "eodhdSymbol": "MRVL.US",
+      "exchange": "US",
+      "status": "validated_usd_needs_fx",
+      "confirmedCurrency": "USD",
+      "expectedCurrency": "USD",
+      "samplePrice": 205,
+      "samplePriceDate": "2026-05-29",
+      "warnings": [],
+      "note": "USD confirmed by EODHD search response. Exact P&L and buy sizing require a real EUR/USD FX rate — no hardcoded conversion."
     }
   ]
 }
