@@ -6,9 +6,9 @@
 //   1. SYMBOL_MAP (eodhd-provider.ts) — so getRecentHighs() can fetch it
 //   2. ALL_VALIDATION_TARGETS (validate-eodhd-symbols.ts) — so the smoke can validate it
 //
-// They deliberately do NOT assert curated-config membership or `validated`
-// status — those are flipped only by a real EODHD smoke (Phase B/C) and would
-// otherwise make this suite phase-dependent.
+// The structural map/target checks are smoke-independent. The Phase C block
+// additionally asserts curated-config membership now that the real EODHD smoke
+// (2026-06-01) has validated all 17 USD extendedStocks.
 
 import fs from 'fs';
 import path from 'path';
@@ -133,12 +133,45 @@ test('MU is wired for smoke (in map + targets) but not asserted validated here',
   assert('MU in validation targets', targets.has('MU'));
 });
 
-test('Phase A is config-only: curated config NOT modified for new symbols', () => {
-  // P3-1 Phase A must not add new symbols to the curated config — that happens
-  // only after a real smoke (Phase C). Curated config must still have 15 symbols.
+interface CuratedSymbol {
+  internalTicker: string;
+  status: string;
+  confirmedCurrency: string | null;
+  samplePrice: number | null;
+  warnings: string[];
+}
+
+function loadCurated(): Map<string, CuratedSymbol> {
   const configPath = path.resolve(ROOT, 'config', 'eodhd-symbol-validation.json');
-  const cfg = JSON.parse(fs.readFileSync(configPath, 'utf-8')) as { symbols: unknown[] };
-  assert('curated config still has exactly 15 symbols (no premature additions)', cfg.symbols.length === 15);
+  const cfg = JSON.parse(fs.readFileSync(configPath, 'utf-8')) as { symbols: CuratedSymbol[] };
+  return new Map(cfg.symbols.map(s => [s.internalTicker.toUpperCase(), s]));
+}
+
+test('P3-1 Phase C: every USD extended-discovery stock is curated as validated_usd_needs_fx', () => {
+  const curated = loadCurated();
+  const usd = loadExtendedUsdStocks();
+  // All 17 USD extendedStocks (CRM/MRVL/SMCI from P2c-4 + the 14 P3-1) must be covered.
+  for (const ticker of usd) {
+    const entry = curated.get(ticker);
+    assert(`${ticker}: present in curated config`, entry !== undefined);
+    assert(`${ticker}: status validated_usd_needs_fx`, entry?.status === 'validated_usd_needs_fx');
+    assert(`${ticker}: confirmedCurrency USD`, entry?.confirmedCurrency === 'USD');
+    assert(`${ticker}: samplePrice > 0`, (entry?.samplePrice ?? 0) > 0);
+    assert(`${ticker}: warnings empty`, Array.isArray(entry?.warnings) && entry!.warnings.length === 0);
+  }
+});
+
+test('P3-1 Phase C: curated config has 29 symbols total (15 + 14 new)', () => {
+  const curated = loadCurated();
+  assert('29 curated symbols', curated.size === 29);
+});
+
+test('P3-1 Phase C: EMIM explicitly NOT curated as validated (UCITS/LSE follow-up, out of scope)', () => {
+  const curated = loadCurated();
+  const emim = curated.get('EMIM');
+  // EMIM may be absent, or present but never validated_usd_needs_fx in P3-1.
+  assert('EMIM not validated in P3-1 curated config',
+    emim === undefined || emim.status !== 'validated_usd_needs_fx');
 });
 
 // ---------------------------------------------------------------------------

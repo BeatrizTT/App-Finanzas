@@ -33,6 +33,9 @@ export interface EodhdCuratedEntry {
   samplePriceDate: string | null;
   warnings: string[];
   note?: string;
+  // Provenance from the EODHD smoke artifact (P3-1+). Optional — older entries omit these.
+  timestamp?: string;
+  sourceEndpoint?: string;
 }
 
 interface EodhdCuratedConfig {
