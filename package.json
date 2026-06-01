@@ -9,6 +9,7 @@
     "lint": "next lint",
     "engine": "npx ts-node --project tsconfig.scripts.json scripts/run-engine.ts",
     "scheduler": "npx ts-node --project tsconfig.scripts.json scripts/scheduler.ts",
+    "test": "npx tsx scripts/run-tests.ts",
     "test:local": "npx ts-node --project tsconfig.scripts.json scripts/test-local.ts"
   },
   "dependencies": {
