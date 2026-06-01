@@ -406,6 +406,155 @@ test('15. No double conversion — ASML EUR price not multiplied by any FX facto
 });
 
 // ---------------------------------------------------------------------------
+// 16–17: G2 — getFxRate with invalid rate values from API (0, null)
+// ---------------------------------------------------------------------------
+
+test('16. getFxRate — API returns rate:0 → unavailable, not cached as fresh', async () => {
+  resetFxCache();
+  const origFetch = globalThis.fetch;
+  (globalThis as Record<string, unknown>).fetch = mockFetch(() => ({
+    base: 'USD', date: '2026-06-01', rates: { EUR: 0 },
+  }));
+  try {
+    const r = await getFxRate('USD', 'EUR');
+    assert('rate:0 → freshness=unavailable', r.freshness === 'unavailable');
+    assert('rate:0 → rate=0 (sentinel)', r.rate === 0);
+    assert('rate:0 → provider=none', r.provider === 'none');
+    assert('rate:0 → warning set', typeof r.warning === 'string' && r.warning.length > 0);
+    // Not cached as fresh — second call with blocked network must still be unavailable
+    (globalThis as Record<string, unknown>).fetch = mockFetch(() => ({
+      base: 'USD', date: '2026-06-01', rates: { EUR: 0 },
+    }));
+    const r2 = await getFxRate('USD', 'EUR');
+    assert('rate:0 → second call also unavailable (not cached as fresh)', r2.freshness === 'unavailable');
+  } finally {
+    (globalThis as Record<string, unknown>).fetch = origFetch;
+    resetFxCache();
+  }
+});
+
+test('17. getFxRate — API returns rate:null → unavailable, not cached as fresh', async () => {
+  resetFxCache();
+  const origFetch = globalThis.fetch;
+  (globalThis as Record<string, unknown>).fetch = mockFetch(() => ({
+    base: 'USD', date: '2026-06-01', rates: { EUR: null },
+  }));
+  try {
+    const r = await getFxRate('USD', 'EUR');
+    assert('rate:null → freshness=unavailable', r.freshness === 'unavailable');
+    assert('rate:null → rate=0 (sentinel)', r.rate === 0);
+    assert('rate:null → provider=none', r.provider === 'none');
+    assert('rate:null → warning set', typeof r.warning === 'string' && r.warning.length > 0);
+  } finally {
+    (globalThis as Record<string, unknown>).fetch = origFetch;
+    resetFxCache();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// 18: G3 — Sweep all validated_usd_needs_fx symbols: no raw USD exposed when FX absent
+// ---------------------------------------------------------------------------
+
+test('18. EODHD sweep: all validated_usd_needs_fx symbols → currentPrice=null when FX unavailable', async () => {
+  const configPath = path.resolve(process.cwd(), 'config', 'eodhd-symbol-validation.json');
+  const config = JSON.parse(fs.readFileSync(configPath, 'utf-8')) as {
+    symbols: Array<{ status: string; internalTicker: string }>;
+  };
+  const usdSymbols = config.symbols.filter(s => s.status === 'validated_usd_needs_fx');
+  assert(`sweep: curated config contains at least 12 validated_usd_needs_fx symbols`, usdSymbols.length >= 12);
+
+  process.env.EODHD_API_KEY = 'test-key';
+  const origFetch = globalThis.fetch;
+  try {
+    for (const entry of usdSymbols) {
+      const symbol = entry.internalTicker;
+      resetFxCache();
+      resetEodhdBudget();
+      // FX network error (no cache) — EODHD returns valid rows
+      (globalThis as Record<string, unknown>).fetch = makeDualFetch(null, USD_ROWS);
+      const provider = new EodhdPriceProvider();
+      const r = await provider.getRecentHighs(symbol);
+      assert(`${symbol}: currentPrice=null (no raw USD as EUR)`, r.currentPrice === null);
+      assert(`${symbol}: suitableForExactPnl=false`, r.validation?.suitableForExactPnl === false);
+      assert(`${symbol}: suitableForBuyRecommendation=false`, r.validation?.suitableForBuyRecommendation === false);
+      assert(`${symbol}: suitableForDrawdown=true (drawdown unaffected by FX)`, r.validation?.suitableForDrawdown === true);
+      assert(`${symbol}: method=usd_no_fx`, r.validation?.method === 'usd_no_fx');
+    }
+  } finally {
+    (globalThis as Record<string, unknown>).fetch = origFetch;
+    delete process.env.EODHD_API_KEY;
+    resetFxCache();
+    resetEodhdBudget();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// 19: G4 — Non-curated USD symbol → currentPrice=null (conservative fallback)
+// ---------------------------------------------------------------------------
+
+test('19. EODHD: non-curated USD symbol (TSLA) → currentPrice=null, no raw USD exposed (G4)', async () => {
+  resetFxCache();
+  resetEodhdBudget();
+  process.env.EODHD_API_KEY = 'test-key';
+  const origFetch = globalThis.fetch;
+  // TSLA is in SYMBOL_MAP but absent from curated config → hits non-curated USD fallback
+  (globalThis as Record<string, unknown>).fetch = async (rawUrl: string | URL | Request) => {
+    const url = String(rawUrl);
+    if (url.includes('frankfurter')) {
+      // FX must not be called for the non-curated fallback path
+      throw new Error('FX should not be called for non-curated USD symbol (test invariant)');
+    }
+    return { ok: true, json: async () => makeEodhdRows(USD_ROWS) } as Response;
+  };
+  try {
+    const provider = new EodhdPriceProvider();
+    const r = await provider.getRecentHighs('TSLA');
+    assert('non-curated USD: currentPrice=null (conservative — raw USD not exposed)', r.currentPrice === null);
+    assert('non-curated USD: suitableForExactPnl=false', r.validation?.suitableForExactPnl === false);
+    assert('non-curated USD: suitableForBuyRecommendation=false', r.validation?.suitableForBuyRecommendation === false);
+    assert('non-curated USD: method=usd_no_fx', r.validation?.method === 'usd_no_fx');
+    assert('non-curated USD: suitableForDrawdown=true', r.validation?.suitableForDrawdown === true);
+  } finally {
+    (globalThis as Record<string, unknown>).fetch = origFetch;
+    delete process.env.EODHD_API_KEY;
+    resetFxCache();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// 20: G5 — EodhdPriceProvider.getCurrentPrice returns raw native-currency quote
+// ---------------------------------------------------------------------------
+
+test('20. EodhdPriceProvider.getCurrentPrice — raw native-currency quote (USD), no FX conversion (G5)', async () => {
+  resetFxCache();
+  resetEodhdBudget();
+  process.env.EODHD_API_KEY = 'test-key';
+  const rawMsftClose = 452.10;
+  let fxCalled = false;
+  const origFetch = globalThis.fetch;
+  (globalThis as Record<string, unknown>).fetch = async (rawUrl: string | URL | Request) => {
+    const url = String(rawUrl);
+    if (url.includes('frankfurter')) {
+      fxCalled = true;
+      return { ok: true, json: async () => makeFrankfurterResponse(0.92) } as Response;
+    }
+    return { ok: true, json: async () => makeEodhdRows([{ date: '2026-05-29', close: rawMsftClose }]) } as Response;
+  };
+  try {
+    const provider = new EodhdPriceProvider();
+    const r = await provider.getCurrentPrice('MSFT');
+    assert('getCurrentPrice: currentPrice equals raw close (not EUR-converted)', r.currentPrice === rawMsftClose);
+    assert('getCurrentPrice: currency is USD (native, not EUR)', r.currency === 'USD');
+    assert('getCurrentPrice: FX was not called', !fxCalled);
+    assert('getCurrentPrice: currentPrice != close × 0.92 (no FX multiplication)', r.currentPrice !== rawMsftClose * 0.92);
+  } finally {
+    (globalThis as Record<string, unknown>).fetch = origFetch;
+    delete process.env.EODHD_API_KEY;
+    resetFxCache();
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Runner
 // ---------------------------------------------------------------------------
 

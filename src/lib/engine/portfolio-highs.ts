@@ -32,7 +32,13 @@ export function buildPortfolioHighs(
     } else {
       // Legacy provider (Twelve Data, Yahoo, mock) — apply EUR/USD for USD holdings
       if (usdTickers.has(ticker) && highs.currentPrice != null && highs.currentPrice > 0) {
-        result[ticker] = { ...highs, currentPrice: highs.currentPrice / eurUsdRate };
+        // Guard: an invalid/unavailable FX rate (0 or negative) must not produce Infinity
+        // or a nonsense negative price. Return null to force P&L unavailable.
+        if (eurUsdRate <= 0) {
+          result[ticker] = { ...highs, currentPrice: null };
+        } else {
+          result[ticker] = { ...highs, currentPrice: highs.currentPrice / eurUsdRate };
+        }
       } else {
         result[ticker] = highs;
       }

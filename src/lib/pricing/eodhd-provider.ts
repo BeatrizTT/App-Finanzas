@@ -273,9 +273,12 @@ function buildValidation(
 
   // Fallback: infer from exchange suffix (symbols not yet in curated config)
   if (entry.inferredCurrency === 'USD') {
+    // Conservative: raw USD must not be exposed as a usable currentPrice until
+    // the symbol is in the curated config with a confirmed status. Without
+    // confirmation, treating USD as EUR would silently produce wrong P&L.
     return {
       validation: usdNoFxValidation(symbol, 'eodhd'),
-      currentPriceUsable: true,
+      currentPriceUsable: false,
     };
   }
   if (entry.inferredCurrency === 'EUR') {
@@ -304,6 +307,9 @@ function buildValidation(
 export class EodhdPriceProvider implements PriceProvider {
   readonly providerName = 'eodhd';
 
+  // Returns the provider's raw native-currency quote (entry.inferredCurrency).
+  // For USD instruments (.US) this is a USD price — NOT EUR-converted.
+  // Use getRecentHighs() via ChainedPriceProvider for EUR-converted, validation-aware pricing.
   async getCurrentPrice(symbol: string): Promise<PriceData> {
     const entry = SYMBOL_MAP[symbol.toUpperCase()];
     if (!entry) throw new Error(`[EODHD] Symbol not in map: ${symbol}`);
