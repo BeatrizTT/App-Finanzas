@@ -54,11 +54,14 @@ const SYMBOL_MAP: Record<string, EodhdSymbolEntry> = {
   NVDA:  { eodhdTicker: 'NVDA.US',     inferredCurrency: 'USD', lseMaybePence: false, validated: true  }, // P2c-1b: validated_usd_needs_fx
   MSFT:  { eodhdTicker: 'MSFT.US',     inferredCurrency: 'USD', lseMaybePence: false, validated: false },
   AMZN:  { eodhdTicker: 'AMZN.US',     inferredCurrency: 'USD', lseMaybePence: false, validated: false },
-  SMCI:  { eodhdTicker: 'SMCI.US',     inferredCurrency: 'USD', lseMaybePence: false, validated: false },
+  GOOGL: { eodhdTicker: 'GOOGL.US',    inferredCurrency: 'USD', lseMaybePence: false, validated: false },
+  ORCL:  { eodhdTicker: 'ORCL.US',     inferredCurrency: 'USD', lseMaybePence: false, validated: false },
+  ADBE:  { eodhdTicker: 'ADBE.US',     inferredCurrency: 'USD', lseMaybePence: false, validated: false },
   CRM:   { eodhdTicker: 'CRM.US',      inferredCurrency: 'USD', lseMaybePence: false, validated: false },
   NOW:   { eodhdTicker: 'NOW.US',      inferredCurrency: 'USD', lseMaybePence: false, validated: false },
-  ADBE:  { eodhdTicker: 'ADBE.US',     inferredCurrency: 'USD', lseMaybePence: false, validated: false },
-  ORCL:  { eodhdTicker: 'ORCL.US',     inferredCurrency: 'USD', lseMaybePence: false, validated: false },
+  FTNT:  { eodhdTicker: 'FTNT.US',     inferredCurrency: 'USD', lseMaybePence: false, validated: false },
+  MRVL:  { eodhdTicker: 'MRVL.US',     inferredCurrency: 'USD', lseMaybePence: false, validated: false },
+  SMCI:  { eodhdTicker: 'SMCI.US',     inferredCurrency: 'USD', lseMaybePence: false, validated: false },
   TSLA:  { eodhdTicker: 'TSLA.US',     inferredCurrency: 'USD', lseMaybePence: false, validated: false },
   MU:    { eodhdTicker: 'MU.US',       inferredCurrency: 'USD', lseMaybePence: false, validated: false },
   // --- Market proxies (USD, drawdown only) ---

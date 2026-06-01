@@ -20,7 +20,7 @@ on:
       symbols:
         description: 'Comma-separated symbols (no spaces). Max 10 due to budget.'
         required: false
-        default: 'ASML,CNDX,IWVL,NVDA,QQQ'
+        default: 'MRVL,MSFT,AMZN,GOOGL,ORCL,ADBE,CRM,NOW,FTNT,SMCI'
 
 jobs:
   validate:
@@ -31,8 +31,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: claude/personal-investing-app-BG2r1
 
       - name: Setup Node.js 22
         uses: actions/setup-node@v4
