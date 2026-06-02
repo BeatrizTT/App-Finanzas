@@ -19,6 +19,7 @@ import {
   applyOverridesToPortfolio,
 } from '../utils/config-loader';
 import { saveEngineOutput } from '../utils/engine-store';
+import { persistDiscoverySnapshots } from '../discovery/snapshots';
 import { buildPortfolioHighs } from './portfolio-highs';
 import type {
   DailyEngineOutput,
@@ -414,6 +415,14 @@ export async function runDailyEngine(options?: {
   // Persist output — KV in production, file-store in dev; non-fatal either way
   const { warnings: storeWarnings } = await saveEngineOutput(output);
   for (const w of storeWarnings) errors.push(w);
+
+  // Persist discovery snapshots — rolling 30-day store; failure must not affect output
+  try {
+    persistDiscoverySnapshots(discoveredOpportunities, runAt);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn('[Engine] Discovery snapshot persistence failed:', msg);
+  }
 
   console.log(`[Engine] Run complete. Alerts: ${sentAlerts.length}, Errors: ${errors.length}`);
   return output;
