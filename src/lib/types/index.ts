@@ -481,3 +481,59 @@ export interface AlertHistoryStore {
   alerts: Alert[];
   lastDigestAt?: string;
 }
+
+// --- Discovery Snapshot Store ---
+
+/**
+ * Immutable snapshot of a single discovered opportunity captured at a specific engine run.
+ * Rolling window — persisted to discovery-snapshots.json (runtime, not committed).
+ */
+export interface DiscoverySnapshot {
+  /** ISO timestamp of the engine run that produced this snapshot. Also used as the time-series key. */
+  runId: string;
+  ticker: string;
+  name: string;
+  type: AssetType;
+  score: OpportunityScore;
+  state: OpportunityState;
+  /** State from the most-recent prior snapshot for this ticker; null on first appearance. */
+  previousState: OpportunityState | null;
+  pricingMethod: PriceMethod | undefined;
+  pricingDataAvailable: boolean | undefined;
+  /** null when no EUR-usable price is available — never coerced to 0. */
+  currentPrice: number | null;
+  drawdown30d: number;
+  drawdown60d: number;
+  drawdown90d: number;
+  qualityGates: {
+    liquidity: boolean;
+    quality: boolean;
+    volatility: boolean;
+    portfolioFit: boolean;
+    riskReward: boolean;
+    notSpeculative: boolean;
+  };
+  reasons: string[];
+  suggestedAmountEur: { min: number; max: number };
+  confidence: Confidence;
+  /**
+   * Data-quality composite score (0–10). null until P3-3g implements the model.
+   * Guards BUY_CANDIDATE promotion — low quality blocks actionable states.
+   */
+  dataQualityScore: number | null;
+  /**
+   * Where this asset appeared in the engine output for this run.
+   * undefined = unknown (snapshots predating this field).
+   * surfaced_top5 = in discoveredOpportunities (top 5 shown on dashboard).
+   * qualified / below_threshold / gate_rejected reserved for future scanner output expansion.
+   */
+  visibility?: 'surfaced_top5' | 'qualified' | 'below_threshold' | 'gate_rejected';
+  snapshotVersion: 1;
+}
+
+export interface DiscoverySnapshotsFile {
+  /** ISO timestamp of the most-recent append. */
+  lastUpdatedAt: string;
+  maxAgeDays: number;
+  snapshots: DiscoverySnapshot[];
+}
