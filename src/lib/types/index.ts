@@ -537,3 +537,59 @@ export interface DiscoverySnapshotsFile {
   maxAgeDays: number;
   snapshots: DiscoverySnapshot[];
 }
+
+// --- Discovery Watchlist ---
+
+export type WatchlistState =
+  | 'DISCOVERED'           // reserved — not actively assigned in P3-3c
+  | 'WATCH_RESEARCH'       // EUR-usable price available; score in range; monitoring
+  | 'WATCH_PRICING_BLOCKED' // quality OK but no EUR-usable price (usd_no_fx / proxy / unavailable)
+  | 'BUY_CANDIDATE'        // BUY/READY_TO_BUY state + buy-safe pricing; actionable
+  | 'REJECTED'             // terminal — no auto-transitions
+  | 'STALE'                // absent from discovery output for ≥ WATCHLIST_STALE_AFTER_RUNS runs
+  | 'BOUGHT';              // terminal — no auto-transitions
+
+export interface WatchlistEntry {
+  ticker: string;
+  name: string;
+  type: AssetType;
+  watchlistState: WatchlistState;
+  firstSeenAt: string;      // ISO — set once on creation
+  lastSeenAt: string;       // ISO — updated each run the asset appears
+  lastUpdatedAt: string;    // ISO — updated only on watchlistState transitions
+  consecutiveRunsSeen: number;
+  consecutiveRunsAbsent: number;
+  highestScore: number;     // historical maximum — never decrements
+  latestScore: number;
+  latestOpportunityState: OpportunityState;
+  latestPricingMethod: PriceMethod | undefined;
+  latestPricingDataAvailable: boolean | undefined;
+  /** ISO — set once on the first run where pricingDataAvailable becomes true. Never overwritten. */
+  pricingUnlockedAt: string | null;
+  /** ISO — set once on the first promotion to BUY_CANDIDATE. Never overwritten. */
+  promotedToBuyAt: string | null;
+  latestReasons: string[];
+  latestConfidence: Confidence;
+  /** Composite data-quality score (0–10). null until P3-3g implements the model. */
+  dataQualityScore: number | null;
+  notes?: string;
+  watchlistVersion: 1;
+}
+
+/**
+ * A single state transition recorded by updateWatchlistFromDiscoveries.
+ * Not sent as an alert — consumed by P3-3d alert engine.
+ */
+export interface WatchlistTransition {
+  ticker: string;
+  from: WatchlistState | null;  // null = first discovery
+  to: WatchlistState;
+  reason: string;
+  occurredAt: string;           // ISO — runId of the engine run that triggered this
+}
+
+export interface WatchlistFile {
+  /** ISO timestamp of the most-recent write. */
+  lastUpdatedAt: string;
+  entries: WatchlistEntry[];
+}
