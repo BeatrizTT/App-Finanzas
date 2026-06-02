@@ -61,14 +61,30 @@ export function getTopEtfOpportunities(
     .slice(0, n);
 }
 
+/**
+ * Top discoveries for the dashboard. Surfaces actionable (BUY/READY_TO_BUY) first, then WATCH
+ * candidates so the panel is never empty just because pricing/FX degraded everything to WATCH.
+ *
+ * Ordering contract (relied on by the UI to render a visual separator):
+ *   - all BUY/READY_TO_BUY, sorted by score desc
+ *   - then all WATCH, sorted by score desc
+ *   - capped at n
+ *
+ * WATCH items carry their own "why not BUY" reason (see scanner.ts) so they are never presented
+ * as buy recommendations. AVOID/REVIEW/EXIT are excluded.
+ */
 export function getTopDiscoveries(
   discoveries: Opportunity[],
-  n = 3
+  n = 5
 ): Opportunity[] {
-  return discoveries
+  const byScore = (a: Opportunity, b: Opportunity) => b.score.total - a.score.total;
+  const actionable = discoveries
     .filter((o) => ACTIONABLE_OPPORTUNITY_STATES.includes(o.state))
-    .sort((a, b) => b.score.total - a.score.total)
-    .slice(0, n);
+    .sort(byScore);
+  const watch = discoveries
+    .filter((o) => o.state === 'WATCH')
+    .sort(byScore);
+  return [...actionable, ...watch].slice(0, n);
 }
 
 export function getReviewItems(

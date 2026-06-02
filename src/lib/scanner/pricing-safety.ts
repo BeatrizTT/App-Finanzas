@@ -52,3 +52,63 @@ export function applyPricingSafety(
     confidence: 'low',
   };
 }
+
+/**
+ * Derive a single boolean for "do we have a usable EUR-denominated price?".
+ *
+ * Rules:
+ *  - currentPrice === null               → false (nothing usable)
+ *  - no validation (legacy provider)     → true  (price present, trusted for backward compat)
+ *  - validation present                  → true only if EUR-usable for exact P&L or buy sizing
+ *
+ * Returns false for usd_no_fx, proxy_drawdown_only, currency_unconfirmed, unavailable, and
+ * stale non-EUR cache — all of which leave currentPrice null upstream anyway, but the explicit
+ * check keeps this safe if a provider ever sets a price it shouldn't.
+ */
+export function derivePricingDataAvailable(
+  currentPrice: number | null,
+  validation: PriceValidation | undefined,
+): boolean {
+  if (currentPrice == null) return false;
+  if (!validation) return true; // legacy/unknown provider — price present is enough
+  return validation.suitableForExactPnl || validation.suitableForBuyRecommendation;
+}
+
+/**
+ * For a final WATCH opportunity whose pricing is not buy-safe, return a single
+ * "why this isn't a BUY" reason explaining the pricing limitation — otherwise null.
+ *
+ * Returns null when:
+ *  - state is not WATCH (AVOID and actionable states don't need buy-context here)
+ *  - validation is absent (legacy) or already buy-safe (no limitation to explain)
+ *  - reasons already contain the applyPricingSafety degradation warning (avoid duplicate
+ *    for the BUY→WATCH path — Scenario A)
+ *
+ * Fires for WATCH assets that never reached BUY (Scenario B) and for WATCH assets whose
+ * state did not change but whose pricing is degraded (Scenario C).
+ */
+export function buildWhyNotBuyPricingReason(
+  state: OpportunityState,
+  reasons: string[],
+  validation: PriceValidation | undefined,
+): string | null {
+  if (state !== 'WATCH') return null;
+  if (!validation || validation.suitableForBuyRecommendation) return null;
+  // applyPricingSafety already prepended a "no apto" warning for the BUY→WATCH path.
+  if (reasons.some((r) => r.includes('no apto'))) return null;
+
+  switch (validation.method) {
+    case 'usd_no_fx':
+      return 'USD confirmado · sin FX fresco — sizing y P&L exacto bloqueados; solo análisis de caída válido';
+    case 'proxy_drawdown_only':
+      return 'Precio es proxy USD — solo % de caída válido; sin precio EUR no hay BUY ni sizing';
+    case 'currency_unconfirmed':
+      return 'Moneda no confirmada por el proveedor — sin BUY ni P&L exacto hasta validar divisa';
+    case 'cached_last_valid':
+      return 'Precio desde caché (posiblemente desactualizado) — sin BUY hasta refrescar precio';
+    case 'unavailable':
+      return 'Sin precio disponible — solo análisis cualitativo; no es recomendación de compra';
+    default:
+      return 'Precio no apto para recomendación de compra — solo análisis de caída';
+  }
+}

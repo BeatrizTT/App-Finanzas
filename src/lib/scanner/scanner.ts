@@ -6,7 +6,7 @@ import { calcOpportunityScore, stateFromScore, buildOpportunityReasons } from '.
 import { runQualityGates, filterDiscoveryUniverse } from './discovery';
 import { getAllocationConfig, getOverridesConfig, getRulesConfig } from '../utils/config-loader';
 import { clamp } from '../utils/math';
-import { applyPricingSafety } from './pricing-safety';
+import { applyPricingSafety, derivePricingDataAvailable, buildWhyNotBuyPricingReason } from './pricing-safety';
 import type {
   UniverseConfig,
   PortfolioConfig,
@@ -137,6 +137,13 @@ function scoreAsset(
   // Legacy providers without validation metadata are trusted (backward compat).
   const safe = applyPricingSafety(state, suggestedAmountEur, reasons, confidence, highs.validation);
 
+  // Why-not-BUY transparency: for a final WATCH whose pricing is not buy-safe, prepend a
+  // pricing-limitation reason so the user understands the WATCH is data-driven, not just a low
+  // score. Prepended so it survives the UI's reasons.slice(0, 2). Null for non-WATCH / legacy /
+  // already-degraded (no duplicate of applyPricingSafety's warning).
+  const whyNotBuy = buildWhyNotBuyPricingReason(safe.state, safe.reasons, highs.validation);
+  const finalReasons = whyNotBuy ? [whyNotBuy, ...safe.reasons] : safe.reasons;
+
   return {
     ticker: assetDef.ticker,
     name: assetDef.name,
@@ -148,6 +155,8 @@ function scoreAsset(
     state: safe.state,
     currentPrice: highs.currentPrice,
     currency: assetDef.currency ?? 'USD',
+    pricingMethod: highs.validation?.method,
+    pricingDataAvailable: derivePricingDataAvailable(highs.currentPrice, highs.validation),
     drawdown: {
       drawdown30d: highs.drawdown30d,
       drawdown60d: highs.drawdown60d,
@@ -155,7 +164,7 @@ function scoreAsset(
       maxDrawdown: maxDD,
       primaryWindow,
     },
-    reasons: safe.reasons,
+    reasons: finalReasons,
     suggestedAmountEur: safe.suggestedAmountEur,
     confidence: safe.confidence,
     qualityGates: {
