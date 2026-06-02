@@ -593,3 +593,48 @@ export interface WatchlistFile {
   lastUpdatedAt: string;
   entries: WatchlistEntry[];
 }
+
+// --- Discovery Alerts ---
+
+export type DiscoveryAlertType =
+  | 'WATCH_TO_BUY_CANDIDATE'   // opportunity became BUY_CANDIDATE with buy-safe pricing
+  | 'PRICING_UNLOCKED'         // EUR-usable price now available (was blocked)
+  | 'SCORE_CROSSED_THRESHOLD'  // score crossed from below 6.5 to ≥ 6.5
+  | 'DRAWDOWN_SWEET_SPOT'      // drawdown90d entered the 15–25% buy-on-dip zone
+  | 'QUALITY_GATES_PASSED'     // all quality gates now pass (at least one was failing)
+  | 'PERSISTENT_CANDIDATE'     // in top 5 for ≥ 5 consecutive runs with score ≥ 6.5
+  | 'SHARP_DRAWDOWN_QUALITY'   // reserved — fires when dataQualityScore ≥ 9 (P3-3g)
+  | 'RANKING_TOP5_ENTRY'       // first appearance in discovery top 5
+  | 'PRICING_DEGRADED'         // EUR-usable price lost (BUY_CANDIDATE now blocked)
+  | 'STALE_CANDIDATE';         // absent from top 5 for ≥ WATCHLIST_STALE_AFTER_RUNS runs
+
+export type DiscoveryAlertSeverity = 'low' | 'medium' | 'high';
+
+export interface DiscoveryAlert {
+  id: string;                          // deterministic: ticker_type_runId
+  ticker: string;
+  name: string;
+  type: DiscoveryAlertType;
+  severity: DiscoveryAlertSeverity;
+  createdAt: string;                   // ISO — when the alert was generated
+  runId: string;                       // ISO — engine run that triggered this
+  title: string;                       // short display title
+  message: string;                     // human-readable detail for UI / future Telegram
+  fromState?: WatchlistState | null;   // watchlist state before transition
+  toState?: WatchlistState | null;     // watchlist state after transition
+  score?: number;
+  previousScore?: number | null;
+  scoreDelta?: number | null;
+  pricingMethod?: PriceMethod;
+  previousPricingMethod?: PriceMethod | null;
+  pricingDataAvailable?: boolean;
+  dedupeKey: string;                   // ticker__type__YYYY-MM-DD — used for same-day dedup
+  cooldownUntil: string | null;        // ISO — no new alerts of this type before this time
+  alertVersion: 1;
+}
+
+export interface DiscoveryAlertsFile {
+  lastUpdatedAt: string;
+  maxAgeDays: number;
+  alerts: DiscoveryAlert[];
+}
