@@ -638,3 +638,71 @@ export interface DiscoveryAlertsFile {
   maxAgeDays: number;
   alerts: DiscoveryAlert[];
 }
+
+// --- Drawdown Opportunity Radar ---
+
+/**
+ * Drawdown zone classification for a discovered asset.
+ * Priority order (highest to lowest): recovery_trap > deep_value > sharp_crash > classic_dip > no_dip.
+ */
+export type DrawdownZoneClassification =
+  | 'no_dip'          // drawdown90d < 10% — not an entry opportunity
+  | 'sharp_crash'     // drawdown30d >= 12% AND drawdown90d < 20% — fast recent shock
+  | 'classic_dip'     // drawdown90d 15–30% AND drawdown30d >= 8% — buy-on-dip sweet spot
+  | 'deep_value'      // drawdown90d 30–45% — high potential but needs quality
+  | 'recovery_trap';  // drawdown90d > 45% OR deep fall with weak quality — structural risk
+
+/** Value trap risk based on technical and editorial signals (no fundamentals). */
+export type ValueTrapRisk = 'low' | 'medium' | 'high';
+
+/**
+ * Recommended interpretation of the drawdown opportunity.
+ * Blocking rules always override the raw score.
+ */
+export type DrawdownRadarActionable =
+  | 'buy_candidate_possible'        // pricing safe + quality + fit + score ≥ 6.5
+  | 'watch_research'                // opportunity present but score or conditions not yet buy-ready
+  | 'blocked_pricing'               // pricingDataAvailable !== true — buy sizing impossible
+  | 'blocked_quality'               // companyStrengthScore < 6 — quality insufficient
+  | 'blocked_concentration'         // portfolioFitScore too low — cartera already overexposed
+  | 'needs_fundamental_research';   // value trap risk high or recovery_trap zone
+
+/**
+ * Pure radar assessment for a single discovered opportunity.
+ * Scores combine drawdown severity, editorial quality signals, and portfolio fit.
+ *
+ * Limitations: company strength reflects editorial + gate signals only.
+ * Revenue, earnings, margins, and cash flow are not assessed here — those require P3-3g fundamentals.
+ * Do not interpret companyStrengthScore as a guarantee of fundamental quality.
+ */
+export interface DrawdownRadarAssessment {
+  ticker: string;
+
+  drawdownOpportunityScore: number;  // 0–10 composite (severity + strength + fit + pricing + risk/reward)
+  companyStrengthScore: number;      // 0–10 editorial/gate quality proxy
+  portfolioFitScore: number;         // 0–10 portfolio alignment
+  drawdownSeverityScore: number;     // 0–10 how attractive the drawdown depth is
+
+  /**
+   * Spread between the 90d and 30d drawdown windows (drawdown90d - drawdown30d).
+   * Positive = long-term losses exceed recent losses (accumulated decline).
+   * This is a WINDOW COMPARISON, not a temporal rate of change.
+   * Use drawdownChangeRate for temporal acceleration/deceleration.
+   */
+  drawdownTermSpread: number | null;
+
+  /**
+   * Rate of change in drawdown90d vs. the most-recent prior snapshot.
+   * Positive = drawdown worsening; negative = recovering.
+   * null when no prior snapshot is available — never coerced to 0.
+   */
+  drawdownChangeRate: number | null;
+
+  zone: DrawdownZoneClassification;
+  valueTrapRisk: ValueTrapRisk;
+
+  reasons: string[];   // human-readable opportunity signals
+  warnings: string[];  // human-readable risk / data-quality caveats
+
+  actionable: DrawdownRadarActionable;
+}
