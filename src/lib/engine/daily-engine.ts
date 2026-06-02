@@ -21,6 +21,7 @@ import {
 import { saveEngineOutput } from '../utils/engine-store';
 import { persistDiscoverySnapshots } from '../discovery/snapshots';
 import { persistWatchlist } from '../discovery/watchlist';
+import { persistDiscoveryAlerts } from '../discovery/alerts';
 import { buildPortfolioHighs } from './portfolio-highs';
 import type {
   DailyEngineOutput,
@@ -426,11 +427,20 @@ export async function runDailyEngine(options?: {
   }
 
   // Update discovery watchlist — lifecycle tracking; failure must not affect output
+  let watchlistTransitions: ReturnType<typeof persistWatchlist> = [];
   try {
-    persistWatchlist(discoveredOpportunities, runAt);
+    watchlistTransitions = persistWatchlist(discoveredOpportunities, runAt);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.warn('[Engine] Discovery watchlist persistence failed:', msg);
+  }
+
+  // Generate discovery alerts from transitions + current state; failure must not affect output
+  try {
+    persistDiscoveryAlerts(discoveredOpportunities, watchlistTransitions, runAt);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn('[Engine] Discovery alert persistence failed:', msg);
   }
 
   console.log(`[Engine] Run complete. Alerts: ${sentAlerts.length}, Errors: ${errors.length}`);
