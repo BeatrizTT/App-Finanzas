@@ -369,6 +369,15 @@ export interface Opportunity {
   /** null when price currency is unconfirmed or unavailable */
   currentPrice: number | null;
   currency: string;
+  /** Pricing method used to derive currentPrice; absent = legacy provider without validation metadata */
+  pricingMethod?: PriceMethod;
+  /**
+   * true when currentPrice is present AND EUR-usable for P&L/buy sizing (direct_eur_quote,
+   * usd_converted, or legacy provider with a price). false when currentPrice is null or the
+   * method is usd_no_fx / proxy_drawdown_only / currency_unconfirmed / unavailable / stale-non-EUR cache.
+   * Derived once in scoreAsset() so UI/ranking need not re-infer from pricingMethod.
+   */
+  pricingDataAvailable?: boolean;
   drawdown: DrawdownData;
   reasons: string[];
   suggestedAmountEur: { min: number; max: number };

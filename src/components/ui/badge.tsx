@@ -1,6 +1,7 @@
 'use client';
 
-import type { PortfolioState, OpportunityState, AllocationState, AssetType, Confidence } from '@/lib/types';
+import type { PortfolioState, OpportunityState, AllocationState, AssetType, Confidence, PriceMethod } from '@/lib/types';
+import { pricingMethodBadgeConfig } from '@/lib/pricing/pricing-method-display';
 
 type AnyState = PortfolioState | OpportunityState | AllocationState | string;
 
@@ -85,6 +86,16 @@ export function ConfidenceBadge({ confidence }: { confidence: Confidence | strin
   return (
     <span className={`text-xs ${colors[confidence] ?? 'text-slate-400'}`} title="Indica qué tan segura está la app de su recomendación, basado en la cantidad y calidad de datos disponibles.">
       {labels[confidence] ?? confidence.toUpperCase()}
+    </span>
+  );
+}
+
+export function PricingMethodBadge({ method }: { method?: PriceMethod }) {
+  const config = pricingMethodBadgeConfig(method);
+  if (!config) return null;
+  return (
+    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs ${config.color}`} title={config.tooltip}>
+      {config.label}
     </span>
   );
 }
