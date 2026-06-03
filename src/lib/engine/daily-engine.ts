@@ -22,6 +22,11 @@ import { saveEngineOutput } from '../utils/engine-store';
 import { persistDiscoverySnapshots } from '../discovery/snapshots';
 import { persistWatchlist } from '../discovery/watchlist';
 import { persistDiscoveryAlerts } from '../discovery/alerts';
+import {
+  readScanCursor,
+  selectExtendedBatch,
+  advanceScanCursor,
+} from '../discovery/scan-cursor';
 import { buildPortfolioHighs } from './portfolio-highs';
 import type {
   DailyEngineOutput,
@@ -255,13 +260,28 @@ export async function runDailyEngine(options?: {
     .filter(Boolean);
 
   const isVercel = !!process.env.VERCEL;
+  // DISCOVERY_INCLUDE_EXTENDED_ON_VERCEL=false opts out; default is true (rotating batches)
+  const includeExtendedOnVercel = process.env.DISCOVERY_INCLUDE_EXTENDED_ON_VERCEL !== 'false';
 
-  // On Vercel Hobby (60s limit) skip extended universe — seed + portfolio is enough
+  // Extended assets are rotated in small batches on Vercel to respect the 60s limit.
+  // Local / non-Vercel runs include the full extended universe.
+  const allExtended = [...universeConfig.extendedStocks, ...universeConfig.extendedEtfs];
+  const scanCursor = readScanCursor();
+  const { extendedBatch, mode: scanMode, nextPointer } = selectExtendedBatch(
+    allExtended,
+    isVercel,
+    includeExtendedOnVercel,
+    scanCursor
+  );
+  // Persist cursor advance; failure is logged but never crashes the run
+  if (isVercel && includeExtendedOnVercel) {
+    advanceScanCursor(scanCursor, extendedBatch, nextPointer, scanMode);
+  }
+
   const allUniverseAssets: UniverseAsset[] = [
     ...universeConfig.seedStocks,
     ...universeConfig.seedEtfs,
-    ...(isVercel ? [] : universeConfig.extendedStocks),
-    ...(isVercel ? [] : universeConfig.extendedEtfs),
+    ...extendedBatch,
   ];
   const universeTickers = allUniverseAssets.map((a) => a.ticker);
 
