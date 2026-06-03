@@ -121,6 +121,22 @@ A personal investment decision-support app. It scans a curated universe of stock
 
 ---
 
+## Acciones manuales en Vercel — resumen
+
+Ver `docs/RUNBOOK.md` sección **"Acciones manuales obligatorias en Vercel antes de producción real"** para instrucciones paso a paso.
+
+| Variable | Obligatoria | Estado | Nota |
+|---|---|---|---|
+| `CRON_SECRET` | Sí | ⚠ pendiente en Vercel | Sin esto el cron devuelve 503 |
+| `PRICE_PROVIDER=yahoo` | Sí | ⚠ pendiente en Vercel | Sin esto usa precios mock |
+| `KV_REST_API_URL` | Sí (persistencia) | ⚠ pendiente | Sale de Vercel KV / Upstash |
+| `KV_REST_API_TOKEN` | Sí (persistencia) | ⚠ pendiente | Sale de Vercel KV / Upstash |
+| `TELEGRAM_BOT_TOKEN` | Recomendada | ⚠ pendiente | Alertas van sólo a logs si falta |
+| `TELEGRAM_CHAT_ID` | Recomendada | ⚠ pendiente | Va junto con BOT_TOKEN |
+| `ENGINE_API_SECRET` | **No configurar** | — | Dashboard hace POST sin auth; configurar esto rompe el botón Analizar |
+
+---
+
 ## What is blocked
 
 | Item | Blocker |
