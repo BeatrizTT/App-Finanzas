@@ -4,6 +4,177 @@ Operational procedures. Keep this up to date as infrastructure changes.
 
 ---
 
+## Acciones manuales obligatorias en Vercel antes de producción real
+
+Esta sección está escrita para el propietario del proyecto, no para un desarrollador.
+Sigue los pasos en orden. Sin estas variables, la app usa precios falsos y el cron no funciona.
+
+---
+
+### Paso 1 — Configurar las variables de entorno en Vercel
+
+**Cómo llegar:**
+1. Abre [https://vercel.com/dashboard](https://vercel.com/dashboard) en el navegador
+2. Haz clic en el proyecto **App-Finanzas**
+3. Haz clic en **Settings** (pestaña superior)
+4. Haz clic en **Environment Variables** (menú lateral izquierdo)
+5. Para cada variable de la lista de abajo: haz clic en **Add**, escribe el nombre exacto, pega el valor, marca al menos **Production**, y haz clic en **Save**
+6. Una vez añadidas todas, ve a la pestaña **Deployments**, haz clic en los tres puntos del último deployment, y selecciona **Redeploy** para que el servidor use las nuevas variables
+
+---
+
+### Variables obligatorias
+
+#### `CRON_SECRET`
+- **Obligatoria.** Sin esto, el cron devuelve 503 y no ejecuta nada.
+- Genera un valor seguro con este comando en tu terminal:
+  ```bash
+  openssl rand -hex 32
+  ```
+  O usa cualquier generador de contraseñas seguras (mínimo 32 caracteres aleatorios).
+- Copia el resultado y pégalo como valor de la variable.
+
+#### `PRICE_PROVIDER`
+- **Obligatoria.** Sin esto la app usa precios ficticios (mock).
+- Valor: `yahoo`
+- No requiere ninguna API key adicional.
+
+#### `KV_REST_API_URL`
+- **Obligatoria para persistencia real.** Sin esto, los datos del motor se pierden en cada invocación de Vercel.
+- El valor sale de Vercel KV / Upstash (ver Paso 2 más abajo).
+
+#### `KV_REST_API_TOKEN`
+- **Obligatoria para persistencia real.** Va junto con `KV_REST_API_URL`.
+- El valor sale de Vercel KV / Upstash (ver Paso 2 más abajo).
+
+#### `TELEGRAM_BOT_TOKEN`
+- **Necesaria para recibir alertas.** Sin esto, las alertas sólo se escriben en los logs de Vercel.
+- Obtén el token creando un bot con [@BotFather](https://t.me/BotFather) en Telegram (comando `/newbot`).
+
+#### `TELEGRAM_CHAT_ID`
+- **Necesaria para recibir alertas.** Va junto con `TELEGRAM_BOT_TOKEN`.
+- Para obtener tu chat ID: envía un mensaje a tu bot, luego abre en el navegador:
+  ```
+  https://api.telegram.org/bot<TU_TOKEN>/getUpdates
+  ```
+  Busca el campo `"id"` dentro de `"chat"`. Ese número es tu `TELEGRAM_CHAT_ID`.
+
+---
+
+### Variable que NO debes configurar todavía
+
+#### `ENGINE_API_SECRET` — NO configurar por ahora
+- **No la añadas todavía.**
+- Motivo: el botón "Analizar" del dashboard hace una llamada POST a `/api/engine/run` sin cabecera de autorización. Si configuras esta variable antes de que el dashboard esté actualizado para enviar el header correcto, el botón dejará de funcionar (recibirás 401).
+- Cerrar ese endpoint requiere una actualización posterior del dashboard. No es urgente para un uso personal.
+- Si en el futuro decides activarla: primero actualiza `page.tsx` para enviar `Authorization: Bearer $ENGINE_API_SECRET` en el POST, luego añade la variable.
+
+---
+
+### Paso 2 — Crear y conectar el almacén Vercel KV (Upstash)
+
+El almacén KV permite que el motor guarde y recupere datos entre ejecuciones. Sin él, cada vez que Vercel arranca un contenedor nuevo los datos del análisis anterior desaparecen.
+
+**Cómo crear el KV:**
+1. En el proyecto **App-Finanzas** en Vercel, haz clic en la pestaña **Storage**
+2. Haz clic en **Create Database** (o **Connect Store** si ya tienes uno)
+3. Selecciona **KV** (Upstash) y haz clic en **Continue**
+4. Ponle un nombre (ej. `app-finanzas-kv`) y selecciona la región más cercana
+5. Haz clic en **Create** y confirma
+6. Vercel conecta el store automáticamente y añade `KV_REST_API_URL` y `KV_REST_API_TOKEN` como variables de entorno del proyecto
+7. Verifica que ambas variables aparecen en **Settings → Environment Variables** con scope **Production**
+
+---
+
+### Paso 3 — Configurar Telegram (si quieres alertas)
+
+1. En Telegram, abre la app y busca [@BotFather](https://t.me/BotFather)
+2. Envíale el comando `/newbot` y sigue las instrucciones (elige nombre y username)
+3. BotFather te dará un token con el formato `123456789:ABCdef...` — ese es tu `TELEGRAM_BOT_TOKEN`
+4. Envía cualquier mensaje a tu bot para iniciar el chat
+5. Abre en el navegador:
+   ```
+   https://api.telegram.org/bot<TU_TOKEN>/getUpdates
+   ```
+6. Busca `"chat": { "id": <número> }` — ese número es tu `TELEGRAM_CHAT_ID`
+7. Añade ambas variables en Vercel (ver Paso 1)
+
+---
+
+### Paso 4 — Verificar que todo funciona
+
+Después de añadir las variables y redeployar, ejecuta estos comandos para confirmar que Vercel las ha cargado. Sustituye `<URL>` por la URL de tu proyecto en Vercel y `<SECRET>` por el valor de `CRON_SECRET`.
+
+```bash
+BASE="https://<URL>"
+SECRET="<tu-CRON_SECRET>"
+```
+
+**Verificar que el endpoint de estado reconoce la configuración:**
+```bash
+curl -s "$BASE/api/config/status" | jq .
+```
+Respuesta esperada tras configurar todo:
+```json
+{
+  "priceProvider": "yahoo",
+  "cronSecretSet": true,
+  "telegramConfigured": true,
+  "isVercel": true
+}
+```
+- `priceProvider` debe ser `"yahoo"`, no `"mock"`
+- `cronSecretSet` debe ser `true`
+- `telegramConfigured` será `true` sólo si has añadido ambas variables de Telegram
+
+**Verificar protección del cron:**
+```bash
+# Sin header → debe devolver 401
+curl -s -o /dev/null -w "%{http_code}" "$BASE/api/cron/daily"
+
+# Header incorrecto → debe devolver 401
+curl -s -o /dev/null -w "%{http_code}" "$BASE/api/cron/daily" \
+  -H "Authorization: Bearer valorincorrecto"
+
+# Header correcto → debe devolver 200 (el motor se ejecuta)
+curl -s "$BASE/api/cron/daily" \
+  -H "Authorization: Bearer $SECRET"
+```
+
+**Verificar que el motor produce datos reales:**
+```bash
+# Ejecutar el motor manualmente (POST sin auth, porque ENGINE_API_SECRET no está configurado)
+curl -s -X POST "$BASE/api/engine/run" | jq '{success, pricingMethod: .pricingMethod, alertsCount}'
+```
+- `success` debe ser `true`
+- `pricingMethod` debe ser `"yahoo"`, no `"mock"`
+
+**Verificar persistencia (si KV está configurado):**
+```bash
+# Después de ejecutar el motor, recuperar el último resultado guardado
+curl -s "$BASE/api/engine/run" | jq '{runAt, pricingMethod: .pricingMethod}'
+```
+- `runAt` debe mostrar una fecha reciente (la del último run)
+
+**Verificar Telegram:**
+- Después de ejecutar el motor con `POST /api/engine/run`, deberías recibir un mensaje en Telegram en menos de 30 segundos.
+
+---
+
+### Resumen rápido — qué debe estar hecho antes del primer cron real
+
+| Variable | Estado necesario | Consecuencia si falta |
+|---|---|---|
+| `CRON_SECRET` | ✓ Configurada | Cron devuelve 503 y no ejecuta |
+| `PRICE_PROVIDER=yahoo` | ✓ Configurada | App usa precios mock |
+| `KV_REST_API_URL` | ✓ Configurada | Datos del motor se pierden entre runs |
+| `KV_REST_API_TOKEN` | ✓ Configurada | Datos del motor se pierden entre runs |
+| `TELEGRAM_BOT_TOKEN` | Opcional pero recomendada | Alertas van sólo a logs de Vercel |
+| `TELEGRAM_CHAT_ID` | Opcional pero recomendada | Alertas van sólo a logs de Vercel |
+| `ENGINE_API_SECRET` | **NO configurar todavía** | Si se configura, el botón Analizar se rompe |
+
+---
+
 ## Running tests locally
 
 ```bash
@@ -77,25 +248,28 @@ TELEGRAM_CHAT_ID   = <personal chat ID>
 
 **Why `PRICE_PROVIDER=yahoo`**: simplest path to real prices. No Twelve Data key needed. Can add `chain` later when a second provider is needed.
 
-**Why `CRON_SECRET` first**: the cron route now returns 503 if this is missing — it cannot execute. Set this before any scheduled run.
+**Why `CRON_SECRET` first**: the cron route returns 503 if this is missing — it cannot execute. Set this before any scheduled run.
+
+**Note on `ENGINE_API_SECRET`**: the manual trigger endpoint (`POST /api/engine/run`) is fail-open when this is not set. The dashboard calls POST without an Authorization header, so this is intentional for personal use. If you want to close the endpoint, set `ENGINE_API_SECRET` and add the header to the dashboard fetch in `page.tsx`. See CTO_BACKLOG P0-7.
 
 ### Optional
 
 ```
-PRICE_PROVIDER_CHAIN        = yahoo          # if using PRICE_PROVIDER=chain
-TWELVE_DATA_API_KEY         = <key>          # only if adding Twelve Data to chain
-EODHD_API_KEY               = <key>          # only if activating EODHD pricing
-EODHD_ENABLED               = true           # required if using EODHD_API_KEY
-DISCOVERY_INCLUDE_EXTENDED_ON_VERCEL = true  # default true; set false to disable batches
-DISCOVERY_EXTENDED_BATCH_SIZE        = 8     # default 8; max 20
-MOCK_MODE                   = false          # set true to force mock provider
+ENGINE_API_SECRET               = <random hex>     # closes POST /api/engine/run if set
+PRICE_PROVIDER_CHAIN            = yahoo            # if using PRICE_PROVIDER=chain
+TWELVE_DATA_API_KEY             = <key>            # only if adding Twelve Data to chain
+EODHD_API_KEY                   = <key>            # only if activating EODHD pricing
+EODHD_ENABLED                   = true             # required if using EODHD_API_KEY
+DISCOVERY_INCLUDE_EXTENDED_ON_VERCEL = true        # default true; set false to disable batches
+DISCOVERY_EXTENDED_BATCH_SIZE        = 8           # default 8; max 20
+MOCK_MODE                       = false            # set true to force mock provider
 ```
 
 ---
 
 ## Verifying cron protection — manual test
 
-Once `CRON_SECRET` is set in Vercel (and after deploying), verify all 4 cases:
+Once `CRON_SECRET` is set in Vercel (and after deploying), verify:
 
 ```bash
 BASE="https://<your-vercel-url>"
@@ -130,23 +304,54 @@ Push to `main` — Vercel auto-deploys. No manual steps.
 
 ## Triggering the engine manually
 
+**Important**: `/api/engine/run` uses `ENGINE_API_SECRET`, not `CRON_SECRET`. These are separate secrets.
+
 ```bash
-curl -s "https://<your-vercel-url>/api/engine/run" \
-  -H "Authorization: Bearer $CRON_SECRET"
+# POST — triggers a full engine run (stores output to KV + file-store)
+# If ENGINE_API_SECRET is not set in Vercel, this endpoint is open (no auth required):
+curl -s -X POST "https://<your-vercel-url>/api/engine/run"
+
+# If ENGINE_API_SECRET is set:
+curl -s -X POST "https://<your-vercel-url>/api/engine/run" \
+  -H "Authorization: Bearer $ENGINE_API_SECRET"
+
+# GET — returns the latest persisted output (KV-aware, no auth required)
+curl -s "https://<your-vercel-url>/api/engine/run"
 ```
 
-Response includes `success`, `runAt`, `alerts` count, `errors` array.
+Response includes `success`, `runAt`, `alertsCount`, `errors` array, plus full `portfolioAnalyses`, `stockOpportunities`, `etfOpportunities`.
 
 ---
 
 ## Verifying production is working
 
 1. Set `PRICE_PROVIDER=yahoo` + `KV_REST_API_URL/TOKEN` in Vercel
-2. Trigger engine: `GET /api/engine/run` with correct Authorization
-3. Check `GET /api/opportunities` — should return engine output with real prices
+2. Trigger engine: `POST /api/engine/run` (or wait for cron)
+3. Check `GET /api/engine/run` — should return engine output with real prices
 4. Confirm `pricingMethod` in output is `yahoo`, not `mock`
 5. Confirm `currentPrice` is non-null and non-zero for AAPL, MSFT, NVDA
 6. Check Telegram — digest should arrive within 30 seconds of engine run
+
+**Note**: `GET /api/opportunities` and `GET /api/portfolio` read from file-store directly (not KV-aware as of PR #13). On Vercel, they may return empty data between invocations even if KV is configured. Use `GET /api/engine/run` as the authoritative source until `p0-read-endpoints-kv-consistency` is implemented.
+
+---
+
+## Known risks and open questions
+
+### R1: `/api/opportunities` and `/api/portfolio` are not KV-aware
+Both endpoints call `readJsonFile('engine-output.json', null)` directly, bypassing `loadEngineOutput()`. On Vercel, the file-store is in `/tmp` and is wiped between invocations. Even with KV configured, these endpoints return empty data after a cold start.
+
+**Impact**: Low for now — the dashboard does not call these endpoints (it uses `/api/engine/run` GET). Impact grows if any future UI or external consumer calls these endpoints.
+
+**Fix**: Next code PR `p0-read-endpoints-kv-consistency` — replace `readJsonFile` with `loadEngineOutput()` in both routes.
+
+### R2: `ENGINE_API_SECRET` is optional — POST engine trigger is fail-open
+If `ENGINE_API_SECRET` is not set in Vercel, `POST /api/engine/run` is publicly triggerable. Any caller can run a full engine run. See CTO_BACKLOG P0-7 for options.
+
+### R3: `../../config/portfolio.json` path risk
+Both `GET /api/engine/run` and `POST /api/engine/run` call `readJsonFile('../../config/portfolio.json', {})` to read `closedPositions` and `totalRealizedPnl`. This path is relative to `src/data/` (the file-store DATA_DIR). If DATA_DIR changes (e.g., a future migration), this path will break silently.
+
+`GET /api/portfolio` uses `getEffectivePortfolioConfig()` for portfolio config (reads committed `config/` files — stable) and `readJsonFile('engine-output.json')` for analyses. The `../../config/portfolio.json` path issue applies to `engine/run/route.ts` and `portfolio/import/route.ts`.
 
 ---
 
@@ -213,7 +418,7 @@ CSV parsing works end-to-end. On Vercel, writing back to `config/portfolio.json`
 
 **Workaround until persistence is fixed**: import locally (`npm run dev`), the write succeeds, commit the updated `config/portfolio.json`.
 
-**Permanent fix needed (P0/P1)**: extend KV or use a writable store for portfolio CSV data.
+**Permanent fix needed (P0-6)**: store portfolio CSV data in KV using the same pattern as `engine-store.ts`.
 
 ---
 
