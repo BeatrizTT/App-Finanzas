@@ -1,0 +1,129 @@
+# P3-3f-0: Multi-source discovery provider capability smoke — manual only
+#
+# What this does:
+#   - Runs unit tests for the provider-capability module (pure functions, no API calls)
+#   - Calls each provider's API with real keys (when set) or records missing_key
+#   - Validates the report does not contain any secret values
+#   - Uploads src/data/provider-capability-smoke.json as artifact
+#
+# What this does NOT do:
+#   - Does not modify any production code or config files
+#   - Does not commit or push any file
+#   - Does not activate any provider as default
+#   - Does not write BUY recommendations
+#
+# Secrets (all optional — missing key → missing_key in report, no crash):
+#   EODHD_API_KEY        — screener; 5 call units per run
+#   FMP_API_KEY          — stock screener
+#   FINNHUB_API_KEY      — quote endpoint (free tier)
+#   ALPHA_VANTAGE_API_KEY — time series (compact)
+#   TWELVE_DATA_API_KEY  — single price
+#
+# Trigger: manual only (Actions → Multi-source capability smoke → Run workflow)
+
+name: Multi-source capability smoke (P3-3f-0)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    name: Provider capability smoke
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run provider-capability unit tests
+        run: |
+          echo "=== Running provider-capability unit tests ==="
+          npx tsx src/lib/discovery/__tests__/provider-capability.test.ts
+
+      - name: Run multi-source capability smoke
+        env:
+          EODHD_API_KEY: ${{ secrets.EODHD_API_KEY }}
+          FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+          ALPHA_VANTAGE_API_KEY: ${{ secrets.ALPHA_VANTAGE_API_KEY }}
+          TWELVE_DATA_API_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}
+        run: |
+          echo "=== Running provider capability smoke ==="
+          npx tsx scripts/smoke-discovery-providers.ts
+
+      - name: Security check — report must not contain secrets
+        env:
+          EODHD_API_KEY: ${{ secrets.EODHD_API_KEY }}
+          FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+          ALPHA_VANTAGE_API_KEY: ${{ secrets.ALPHA_VANTAGE_API_KEY }}
+          TWELVE_DATA_API_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}
+        run: |
+          REPORT="src/data/provider-capability-smoke.json"
+
+          if [ ! -f "${REPORT}" ]; then
+            echo "::error::Report file not found — smoke script may have failed"
+            exit 1
+          fi
+
+          echo "Checking report for sensitive strings..."
+
+          # Structural patterns that must never appear in a clean report
+          for PATTERN in "api_token=" "apikey=" "&token=" "secret" "EODHD_API_KEY" "FMP_API_KEY" "FINNHUB_API_KEY" "ALPHA_VANTAGE_API_KEY" "TWELVE_DATA_API_KEY"; do
+            if grep -qiF "${PATTERN}" "${REPORT}"; then
+              echo "::error::Pattern '${PATTERN}' found in report — potential secret leak"
+              rm -f "${REPORT}"
+              exit 1
+            fi
+          done
+
+          # Check that no actual secret value appears in the file
+          for KEY_VAR in EODHD_API_KEY FMP_API_KEY FINNHUB_API_KEY ALPHA_VANTAGE_API_KEY TWELVE_DATA_API_KEY; do
+            KEY_VAL="${!KEY_VAR}"
+            if [ -n "${KEY_VAL}" ] && [ "${#KEY_VAL}" -gt 4 ] && grep -qF "${KEY_VAL}" "${REPORT}"; then
+              echo "::error::Actual ${KEY_VAR} value found in report — deleting file and failing"
+              rm -f "${REPORT}"
+              exit 1
+            fi
+          done
+
+          echo "Report is clean — no secrets detected."
+          echo ""
+          echo "=== Report summary ==="
+          node -e "
+            const r = JSON.parse(require('fs').readFileSync('${REPORT}', 'utf-8'));
+            console.log('Run at:  ', r.runAt);
+            console.log('Version: ', r.version);
+            console.log('');
+            console.log('Results:');
+            r.results.forEach(res => {
+              const flag = res.supported ? '✓' : '✗';
+              const warns = res.warnings.length ? '  warnings: ' + res.warnings.join(', ') : '';
+              console.log('  ' + flag + ' ' + res.provider.padEnd(22) + ' usableFor=' + res.usableFor + warns);
+            });
+            console.log('');
+            console.log('Summary:');
+            console.log('  Recommended:  ', r.summary.recommendedNextProvider ?? 'none');
+            console.log('  Discovery:    ', r.summary.candidateDiscoveryProviders.join(', ') || 'none');
+            console.log('  Pricing:      ', r.summary.pricingValidationProviders.join(', ') || 'none');
+            console.log('  Historical:   ', r.summary.historicalDrawdownProviders.join(', ') || 'none');
+            console.log('  Research:     ', r.summary.researchOnlyProviders.join(', ') || 'none');
+            if (r.summary.warnings.length) console.log('  Warnings:     ', r.summary.warnings.join(', '));
+          "
+
+      - name: Upload capability smoke report
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: provider-capability-smoke
+          path: src/data/provider-capability-smoke.json
+          retention-days: 30
