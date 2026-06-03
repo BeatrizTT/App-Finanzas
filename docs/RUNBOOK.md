@@ -77,25 +77,28 @@ TELEGRAM_CHAT_ID   = <personal chat ID>
 
 **Why `PRICE_PROVIDER=yahoo`**: simplest path to real prices. No Twelve Data key needed. Can add `chain` later when a second provider is needed.
 
-**Why `CRON_SECRET` first**: the cron route now returns 503 if this is missing — it cannot execute. Set this before any scheduled run.
+**Why `CRON_SECRET` first**: the cron route returns 503 if this is missing — it cannot execute. Set this before any scheduled run.
+
+**Note on `ENGINE_API_SECRET`**: the manual trigger endpoint (`POST /api/engine/run`) is fail-open when this is not set. The dashboard calls POST without an Authorization header, so this is intentional for personal use. If you want to close the endpoint, set `ENGINE_API_SECRET` and add the header to the dashboard fetch in `page.tsx`. See CTO_BACKLOG P0-7.
 
 ### Optional
 
 ```
-PRICE_PROVIDER_CHAIN        = yahoo          # if using PRICE_PROVIDER=chain
-TWELVE_DATA_API_KEY         = <key>          # only if adding Twelve Data to chain
-EODHD_API_KEY               = <key>          # only if activating EODHD pricing
-EODHD_ENABLED               = true           # required if using EODHD_API_KEY
-DISCOVERY_INCLUDE_EXTENDED_ON_VERCEL = true  # default true; set false to disable batches
-DISCOVERY_EXTENDED_BATCH_SIZE        = 8     # default 8; max 20
-MOCK_MODE                   = false          # set true to force mock provider
+ENGINE_API_SECRET               = <random hex>     # closes POST /api/engine/run if set
+PRICE_PROVIDER_CHAIN            = yahoo            # if using PRICE_PROVIDER=chain
+TWELVE_DATA_API_KEY             = <key>            # only if adding Twelve Data to chain
+EODHD_API_KEY                   = <key>            # only if activating EODHD pricing
+EODHD_ENABLED                   = true             # required if using EODHD_API_KEY
+DISCOVERY_INCLUDE_EXTENDED_ON_VERCEL = true        # default true; set false to disable batches
+DISCOVERY_EXTENDED_BATCH_SIZE        = 8           # default 8; max 20
+MOCK_MODE                       = false            # set true to force mock provider
 ```
 
 ---
 
 ## Verifying cron protection — manual test
 
-Once `CRON_SECRET` is set in Vercel (and after deploying), verify all 4 cases:
+Once `CRON_SECRET` is set in Vercel (and after deploying), verify:
 
 ```bash
 BASE="https://<your-vercel-url>"
@@ -130,23 +133,54 @@ Push to `main` — Vercel auto-deploys. No manual steps.
 
 ## Triggering the engine manually
 
+**Important**: `/api/engine/run` uses `ENGINE_API_SECRET`, not `CRON_SECRET`. These are separate secrets.
+
 ```bash
-curl -s "https://<your-vercel-url>/api/engine/run" \
-  -H "Authorization: Bearer $CRON_SECRET"
+# POST — triggers a full engine run (stores output to KV + file-store)
+# If ENGINE_API_SECRET is not set in Vercel, this endpoint is open (no auth required):
+curl -s -X POST "https://<your-vercel-url>/api/engine/run"
+
+# If ENGINE_API_SECRET is set:
+curl -s -X POST "https://<your-vercel-url>/api/engine/run" \
+  -H "Authorization: Bearer $ENGINE_API_SECRET"
+
+# GET — returns the latest persisted output (KV-aware, no auth required)
+curl -s "https://<your-vercel-url>/api/engine/run"
 ```
 
-Response includes `success`, `runAt`, `alerts` count, `errors` array.
+Response includes `success`, `runAt`, `alertsCount`, `errors` array, plus full `portfolioAnalyses`, `stockOpportunities`, `etfOpportunities`.
 
 ---
 
 ## Verifying production is working
 
 1. Set `PRICE_PROVIDER=yahoo` + `KV_REST_API_URL/TOKEN` in Vercel
-2. Trigger engine: `GET /api/engine/run` with correct Authorization
-3. Check `GET /api/opportunities` — should return engine output with real prices
+2. Trigger engine: `POST /api/engine/run` (or wait for cron)
+3. Check `GET /api/engine/run` — should return engine output with real prices
 4. Confirm `pricingMethod` in output is `yahoo`, not `mock`
 5. Confirm `currentPrice` is non-null and non-zero for AAPL, MSFT, NVDA
 6. Check Telegram — digest should arrive within 30 seconds of engine run
+
+**Note**: `GET /api/opportunities` and `GET /api/portfolio` read from file-store directly (not KV-aware as of PR #13). On Vercel, they may return empty data between invocations even if KV is configured. Use `GET /api/engine/run` as the authoritative source until `p0-read-endpoints-kv-consistency` is implemented.
+
+---
+
+## Known risks and open questions
+
+### R1: `/api/opportunities` and `/api/portfolio` are not KV-aware
+Both endpoints call `readJsonFile('engine-output.json', null)` directly, bypassing `loadEngineOutput()`. On Vercel, the file-store is in `/tmp` and is wiped between invocations. Even with KV configured, these endpoints return empty data after a cold start.
+
+**Impact**: Low for now — the dashboard does not call these endpoints (it uses `/api/engine/run` GET). Impact grows if any future UI or external consumer calls these endpoints.
+
+**Fix**: Next code PR `p0-read-endpoints-kv-consistency` — replace `readJsonFile` with `loadEngineOutput()` in both routes.
+
+### R2: `ENGINE_API_SECRET` is optional — POST engine trigger is fail-open
+If `ENGINE_API_SECRET` is not set in Vercel, `POST /api/engine/run` is publicly triggerable. Any caller can run a full engine run. See CTO_BACKLOG P0-7 for options.
+
+### R3: `../../config/portfolio.json` path risk
+Both `GET /api/engine/run` and `POST /api/engine/run` call `readJsonFile('../../config/portfolio.json', {})` to read `closedPositions` and `totalRealizedPnl`. This path is relative to `src/data/` (the file-store DATA_DIR). If DATA_DIR changes (e.g., a future migration), this path will break silently.
+
+`GET /api/portfolio` uses `getEffectivePortfolioConfig()` for portfolio config (reads committed `config/` files — stable) and `readJsonFile('engine-output.json')` for analyses. The `../../config/portfolio.json` path issue applies to `engine/run/route.ts` and `portfolio/import/route.ts`.
 
 ---
 
@@ -213,7 +247,7 @@ CSV parsing works end-to-end. On Vercel, writing back to `config/portfolio.json`
 
 **Workaround until persistence is fixed**: import locally (`npm run dev`), the write succeeds, commit the updated `config/portfolio.json`.
 
-**Permanent fix needed (P0/P1)**: extend KV or use a writable store for portfolio CSV data.
+**Permanent fix needed (P0-6)**: store portfolio CSV data in KV using the same pattern as `engine-store.ts`.
 
 ---
 

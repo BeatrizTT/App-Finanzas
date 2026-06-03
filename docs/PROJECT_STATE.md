@@ -1,6 +1,6 @@
 # App Finanzas — Project State
 
-Last updated: 2026-06-03 · Branch: `main` (PR #12 merged `3e095ae`)
+Last updated: 2026-06-03 · Branch: `main` (PR #13 merged `021e89f`)
 
 ---
 
@@ -29,7 +29,7 @@ A personal investment decision-support app. It scans a curated universe of stock
 
 ## Active branch
 
-`main` — PR #12 merged. P0 branch: `claude/p0-production-activation` (in progress).
+`main` — PR #13 merged `021e89f`. No active feature branches open.
 
 ---
 
@@ -39,7 +39,7 @@ A personal investment decision-support app. It scans a curated universe of stock
 |---|---|---|
 | App deployed on Vercel | ✓ | `main` auto-deploys |
 | Vercel cron wired | ✓ | `vercel.json` — 07:00 + 16:00 UTC Mon-Fri |
-| `CRON_SECRET` | ⚠ needs env var in Vercel dashboard | **Fixed in P0 branch: now returns 503 if missing (was open)** |
+| `CRON_SECRET` cron auth | ✓ code done | **PR #13: fail-closed — 503 if missing, 401 if wrong. Still needs env var in Vercel dashboard.** |
 | `PRICE_PROVIDER` | ⚠ needs `yahoo` in Vercel env | Default is `mock` — **production uses mock prices** |
 | Vercel KV connected | ⚠ needs `KV_REST_API_URL` + `KV_REST_API_TOKEN` | Code exists; without KV, engine output ephemeral in `/tmp` |
 | Telegram configured | ⚠ needs `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` | Graceful degradation: logs to console |
@@ -51,26 +51,46 @@ A personal investment decision-support app. It scans a curated universe of stock
 
 ---
 
+## Engine API authentication — two separate secrets
+
+**`CRON_SECRET`** — protects `GET /api/cron/daily` (Vercel Cron route):
+- Fail-closed: returns 503 if `CRON_SECRET` is not set in env
+- Returns 401 if `Authorization: Bearer` header is missing or wrong
+- Implemented in `checkCronAuth()` in `src/app/api/cron/daily/route.ts`, verified by 7 unit tests
+
+**`ENGINE_API_SECRET`** — optional protection for `POST /api/engine/run` (manual trigger):
+- Fail-open by design: if `ENGINE_API_SECRET` is not set, POST proceeds without auth
+- This is intentional — the dashboard (`page.tsx`) calls POST without an Authorization header
+- If set, POST requires `Authorization: Bearer $ENGINE_API_SECRET`
+- `GET /api/engine/run` has no auth — it only reads persisted output (KV or file-store)
+
+---
+
 ## Persistence — verified (not assumed)
 
 | Data | Storage | Survives Vercel invocation? |
 |---|---|---|
 | Portfolio config | `config/portfolio.json` (committed to repo) | **Yes — stable** |
-| Engine output | KV (if configured) + `/tmp` fallback | **Yes if KV configured, No otherwise** |
+| Engine output (write path) | `saveEngineOutput()` → KV first + file-store always | **Yes if KV configured, No otherwise** |
+| Engine output (read: `/api/engine/run` GET) | `loadEngineOutput()` → KV first, file-store fallback | **Yes if KV configured** |
+| Engine output (read: `/api/opportunities`) | `readJsonFile('engine-output.json')` — file-store only | **No — NOT KV-aware** |
+| Engine output (read: `/api/portfolio`) | `readJsonFile('engine-output.json')` — file-store only | **No — NOT KV-aware** |
 | Portfolio CSV import | Tries to write `config/portfolio.json` — **catches write error silently** | **No — `saved: false` on Vercel** |
 | Alert history | file-store → `/tmp/app-finanzas` | **No — resets each invocation** |
 | Previous states (drawdown) | file-store → `/tmp/app-finanzas` | **No — resets each invocation** |
 | Discovery watchlist | file-store → `/tmp/app-finanzas` | **No — resets each invocation** |
 | Discovery snapshots | file-store → `/tmp/app-finanzas` | **No — resets each invocation** |
 
-**Not done yet**: CSV import persistence on Vercel (P0/P1). Alert history, watchlist, snapshots via KV (P1).
+**Key inconsistency**: `/api/engine/run` GET is KV-aware; `/api/opportunities` and `/api/portfolio` are not. On Vercel, if KV is configured and the file-store is empty, those two endpoints will return stale/empty data even after a successful engine run. Next code PR: `p0-read-endpoints-kv-consistency`.
+
+**Not done yet**: Read-endpoint KV consistency (P0). CSV import persistence on Vercel (P0/P1). Alert history, watchlist, snapshots via KV (P1).
 
 ---
 
 ## What is already built
 
 ### P1 — Portfolio engine
-- Universe: 24 seed stocks + ETFs, 18 extended (rotating batches on Vercel)
+- Universe: 21 seed symbols (15 stocks + 6 ETFs), 18 extended (17 stocks + 1 ETF), rotating batches on Vercel
 - Pricing chain: mock → Yahoo → EODHD (optional) → Twelve Data (optional)
 - FX: USD→EUR via Yahoo FX; GBX→GBP hardcoded conversion
 - Scoring: `computeScore()` — technicals, drawdown, momentum
@@ -95,7 +115,8 @@ A personal investment decision-support app. It scans a curated universe of stock
 - Telegram sender: graceful degradation
 - Digest builder: daily summary format
 - CSV portfolio importer: parsing works; Vercel write fails silently
-- Cron route: **now fails closed if CRON_SECRET missing (503)** — fixed in P0 branch
+- Cron route: **fail-closed if CRON_SECRET missing (503)** — fixed in PR #13
+- `/api/config/status`: health info — returns `priceProvider`, `telegramConfigured`, `cronSecretSet`, `isVercel`
 - 4 docs: PROJECT_STATE, CTO_BACKLOG, DECISIONS, RUNBOOK
 
 ---
@@ -106,9 +127,10 @@ A personal investment decision-support app. It scans a curated universe of stock
 |---|---|
 | Real prices in production | Set `PRICE_PROVIDER=yahoo` in Vercel |
 | Persistent engine state | Set `KV_REST_API_URL` + `KV_REST_API_TOKEN` in Vercel |
-| Cron protection | Set `CRON_SECRET` in Vercel (code fix already in P0 branch) |
+| Cron protection (env) | Set `CRON_SECRET` in Vercel (code already done in PR #13) |
 | Alert delivery | Set `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` in Vercel |
-| CSV persistence on Vercel | Not implemented yet — needs KV or separate DB (P0/P1) |
+| `/api/opportunities` + `/api/portfolio` KV consistency | Code PR needed: `p0-read-endpoints-kv-consistency` |
+| CSV persistence on Vercel | Code PR needed: `p0-csv-persistence` (KV write on import) |
 | Alert history persistence | file-store only → needs KV extension (P1) |
 | Multi-source discovery | Smoke only; run GitHub Actions workflow with real keys first |
 
@@ -118,6 +140,7 @@ A personal investment decision-support app. It scans a curated universe of stock
 
 | PR | Title | State |
 |---|---|---|
+| #13 | P0: fail closed cron auth and document production env | Merged `021e89f` |
 | #12 | P3-3f-0: Multi-source discovery capability smoke | Merged `3e095ae` |
 | #11 | P3-3f-a: Rotating discovery scan batches | Merged `b7dda4a` |
 

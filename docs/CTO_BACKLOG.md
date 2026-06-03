@@ -1,6 +1,6 @@
 # CTO Backlog — App Finanzas
 
-Last updated: 2026-06-03 (P0 branch in progress)
+Last updated: 2026-06-03 (docs handover verification — post PR #13)
 
 Ordered by priority. P0 = production is broken or silent without these. Do not advance to P1 until P0 is solid.
 
@@ -8,10 +8,9 @@ Ordered by priority. P0 = production is broken or silent without these. Do not a
 
 ## P0 — Production basics (app is broken without these)
 
-### P0-0: Close open cron route ✓ FIXED IN CODE
-**Status**: Fixed in `claude/p0-production-activation`. Cron route now returns 503 if `CRON_SECRET` is not set. Previously returned 200 to any caller (fail open).
-**Still required**: Set `CRON_SECRET` in Vercel env vars.
-**Verification**: 7 unit tests in `src/app/api/cron/__tests__/cron-auth.test.ts`.
+### P0-0: Close open cron route ✓ DONE (PR #13, `021e89f`)
+**Status**: Implemented. `checkCronAuth()` in `src/app/api/cron/daily/route.ts` returns 503 if `CRON_SECRET` is not set, 401 if header is missing or wrong. Verified by 7 unit tests in `src/app/api/cron/__tests__/cron-auth.test.ts`.
+**Still required**: Set `CRON_SECRET` in Vercel env vars (the code is deployed; the secret is not).
 
 ---
 
@@ -24,12 +23,12 @@ PRICE_PROVIDER = yahoo
 ```
 Use `yahoo` directly for the first go-live. Add `chain` when a second real provider is needed.
 
-**Acceptance**: `/api/engine/run` returns real prices for AAPL, MSFT, etc. `pricingMethod` in output shows `yahoo` not `mock`.
+**Acceptance**: `/api/engine/run` POST response shows real prices for AAPL, MSFT, etc. `pricingMethod` in output shows `yahoo` not `mock`.
 
 ---
 
 ### P0-2: Connect Vercel KV
-**Problem**: Engine output is stored in `/tmp/app-finanzas` on Vercel — wiped between invocations. `/api/opportunities` always returns stale or empty data.
+**Problem**: Engine output is stored in `/tmp/app-finanzas` on Vercel — wiped between invocations. `/api/engine/run` GET is KV-aware but without KV configured it falls back to file-store (ephemeral). `/api/opportunities` and `/api/portfolio` are not KV-aware and will return empty data between invocations even if KV is later added (see P0-5).
 
 **Fix**: Create a Vercel KV store in the dashboard. Set env vars:
 ```
@@ -38,12 +37,12 @@ KV_REST_API_TOKEN = <token>
 ```
 Code in `engine-store.ts` is already written and handles KV with file-store fallback.
 
-**Acceptance**: Run engine via cron, then call `/api/opportunities` — gets back the same run's data. Persist through a second cron run.
+**Acceptance**: Run engine via cron, then call `/api/engine/run` GET — gets back the same run's data. Persists through a second cron run.
 
 ---
 
-### P0-3: Set CRON_SECRET
-**Problem**: Without `CRON_SECRET`, `/api/cron/daily` is open to anyone.
+### P0-3: Set CRON_SECRET (env var)
+**Problem**: Code is fail-closed (503 if missing) but the env var has not been set in Vercel. Without it, the cron route will not execute.
 
 **Fix**: Generate a strong random string. Set in Vercel:
 ```
@@ -51,7 +50,7 @@ CRON_SECRET = <random-64-char-hex>
 ```
 Vercel injects it automatically in cron `Authorization: Bearer` headers.
 
-**Acceptance**: Direct `GET /api/cron/daily` without header returns 401. Vercel-scheduled cron succeeds.
+**Acceptance**: Vercel-scheduled cron runs and returns 200. Direct `GET /api/cron/daily` without header returns 401.
 
 ---
 
@@ -64,12 +63,29 @@ TELEGRAM_BOT_TOKEN = <token>
 TELEGRAM_CHAT_ID = <your-chat-id>
 ```
 
-**Acceptance**: Run engine manually (`/api/engine/run`), confirm Telegram message received within 30 seconds.
+**Acceptance**: Run engine manually (`POST /api/engine/run`), confirm Telegram message received within 30 seconds.
 
 ---
 
-### P0-5: CSV import persistence on Vercel
-**Status**: **Verified broken.** `/api/portfolio/import` parses CSV correctly but write to `config/portfolio.json` silently fails on Vercel (`saved: false` in response). Portfolio reads from committed `config/portfolio.json` (stable) but CSV updates don't persist.
+### P0-5: Read-endpoint KV consistency (`p0-read-endpoints-kv-consistency`)
+**Status**: Not implemented yet. **Next code PR.**
+
+**Problem**: `/api/opportunities` and `/api/portfolio` both read engine output via `readJsonFile('engine-output.json', null)` — file-store only. On Vercel, this file is in `/tmp` and is wiped between invocations. Even with KV configured, these two endpoints will return empty data because they bypass `loadEngineOutput()`.
+
+**Context**: The dashboard (`page.tsx`) does NOT call these endpoints — it uses `/api/engine/run` GET directly. But any direct API consumer or future UI change depending on `/api/opportunities` or `/api/portfolio` will get stale data on Vercel after a restart.
+
+**Fix**: Replace `readJsonFile('engine-output.json', null)` in both routes with `loadEngineOutput()` from `engine-store.ts`. Same KV-first, file-store fallback pattern already used by `/api/engine/run` GET.
+
+**Risk**: `loadEngineOutput()` is async — both routes need `async GET()`. Verify return shape is compatible.
+
+**Acceptance**: After a cron run with KV configured, `GET /api/opportunities` and `GET /api/portfolio` return the same run's data through a Vercel cold start.
+
+---
+
+### P0-6: CSV import persistence on Vercel (`p0-csv-persistence`)
+**Status**: Verified broken. **Second next code PR (after P0-5).**
+
+**Problem**: `/api/portfolio/import` parses CSV correctly but write to `config/portfolio.json` silently fails on Vercel (`saved: false` in response). Portfolio reads from committed `config/portfolio.json` (stable) but CSV updates don't persist.
 
 **Workaround**: Import locally (`npm run dev`), commit updated `config/portfolio.json`.
 
@@ -84,15 +100,32 @@ TELEGRAM_CHAT_ID = <your-chat-id>
 
 ---
 
+### P0-7: ENGINE_API_SECRET design risk (document, not fix)
+**Current behavior**: `POST /api/engine/run` is fail-open when `ENGINE_API_SECRET` is not set — any caller can trigger a full engine run. This is intentional: the dashboard (`page.tsx` line 140) calls POST without an Authorization header.
+
+**Risk**: Without `ENGINE_API_SECRET`, the engine endpoint is publicly triggerable and will consume API rate limits / KV writes from any source.
+
+**Options**:
+- A: Accept current design — dashboard works, risk is low for a personal app on Vercel Hobby
+- B: Set `ENGINE_API_SECRET` in Vercel and add the header to the dashboard fetch — closes the endpoint
+- C: Move dashboard trigger to use the cron route instead (uses `CRON_SECRET`)
+
+**Recommended**: Option A for now (personal app, Vercel Hobby rate limiting provides natural protection). If exposed publicly, implement B.
+
+**Not a code blocker**: engine still runs correctly. Document and decide before go-live.
+
+---
+
 ## P1 — Automation and reliability
 
 ### P1-1: Verify end-to-end cron → alert → Telegram
 Run through the full loop manually:
-1. Trigger `/api/cron/daily` with `Authorization: Bearer $CRON_SECRET`
+1. Trigger `POST /api/engine/run` (or `GET /api/cron/daily` with `Authorization: Bearer $CRON_SECRET`)
 2. Confirm engine runs, prices load, scoring completes
 3. Confirm alerts generated and pushed to Telegram
 4. Confirm engine output saved to KV
-5. Confirm `/api/opportunities` returns fresh data
+5. Confirm `GET /api/engine/run` returns fresh data (KV-aware)
+6. Confirm `/api/opportunities` returns fresh data (after P0-5 is implemented)
 
 Document any gaps found.
 
@@ -179,18 +212,26 @@ Current logging is ad-hoc console logs. Add:
 - Alerts generated count, Telegram success/fail
 - KV write success/fail
 
-Write structured JSON to `/api/engine/run` response for debugging.
+Write structured JSON to `POST /api/engine/run` response for debugging.
 
 ---
 
-### P3-2: Health check endpoint
-`/api/health` returns:
-- KV connected (yes/no)
-- Last engine run (timestamp, from KV)
-- Pricing provider active
-- Telegram configured (yes/no, not the token)
-- Universe size (seed + extended)
-- Test suite status (cached from CI)
+### P3-2: Extend `/api/config/status` health check
+**Note**: `/api/config/status` already exists at `src/app/api/config/status/route.ts`. It currently returns:
+```json
+{
+  "priceProvider": "mock" | "yahoo" | ...,
+  "telegramConfigured": true | false,
+  "cronSecretSet": true | false,
+  "isVercel": true | false
+}
+```
+
+**Extend** (do not recreate) to also return:
+- KV connected (yes/no) — attempt a lightweight KV ping
+- Last engine run (timestamp, from KV if available)
+- Universe size (seed + extended count)
+- Test suite status (cached from CI, optional)
 
 ---
 
