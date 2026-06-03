@@ -1,6 +1,6 @@
 # CTO Backlog — App Finanzas
 
-Last updated: 2026-06-03
+Last updated: 2026-06-03 (P0 branch in progress)
 
 Ordered by priority. P0 = production is broken or silent without these. Do not advance to P1 until P0 is solid.
 
@@ -8,15 +8,21 @@ Ordered by priority. P0 = production is broken or silent without these. Do not a
 
 ## P0 — Production basics (app is broken without these)
 
+### P0-0: Close open cron route ✓ FIXED IN CODE
+**Status**: Fixed in `claude/p0-production-activation`. Cron route now returns 503 if `CRON_SECRET` is not set. Previously returned 200 to any caller (fail open).
+**Still required**: Set `CRON_SECRET` in Vercel env vars.
+**Verification**: 7 unit tests in `src/app/api/cron/__tests__/cron-auth.test.ts`.
+
+---
+
 ### P0-1: Set real pricing provider in Vercel
-**Problem**: `PRICE_PROVIDER` defaults to `'mock'` when not set. Production is scoring your portfolio against fake prices.
+**Problem**: `PRICE_PROVIDER` defaults to `'mock'` when not set. Production scores your portfolio against fake prices.
 
 **Fix**: In Vercel dashboard → Environment Variables → set:
 ```
-PRICE_PROVIDER = chain
-PRICE_PROVIDER_CHAIN = yahoo
+PRICE_PROVIDER = yahoo
 ```
-Or use `yahoo` directly if Twelve Data is not wanted.
+Use `yahoo` directly for the first go-live. Add `chain` when a second real provider is needed.
 
 **Acceptance**: `/api/engine/run` returns real prices for AAPL, MSFT, etc. `pricingMethod` in output shows `yahoo` not `mock`.
 
@@ -62,12 +68,19 @@ TELEGRAM_CHAT_ID = <your-chat-id>
 
 ---
 
-### P0-5: Verify CSV persistence
-**Problem**: Portfolio CSV import (`/api/portfolio/import`) writes to `/tmp` on Vercel — ephemeral.
+### P0-5: CSV import persistence on Vercel
+**Status**: **Verified broken.** `/api/portfolio/import` parses CSV correctly but write to `config/portfolio.json` silently fails on Vercel (`saved: false` in response). Portfolio reads from committed `config/portfolio.json` (stable) but CSV updates don't persist.
 
-**Fix**: Investigate whether the `/api/portfolio` GET endpoint reads from KV or file-store. If file-store only: extend KV to cover portfolio CSV, or store portfolio as a committed config file.
+**Workaround**: Import locally (`npm run dev`), commit updated `config/portfolio.json`.
 
-**Note**: Portfolio data is personal and sensitive — weigh whether to store in KV, committed config, or a DB before implementing.
+**Fix options**:
+- A: Store portfolio holdings in Vercel KV (prefixed key `portfolio:config`) — cleaner, no git noise
+- B: Store CSV data in KV, merge on read — more complex
+- C: Treat `config/portfolio.json` as the source of truth and update it manually — current workaround
+
+**Recommended**: Option A. Use same KV pattern as `engine-store.ts`. The portfolio import route then does: parse CSV → update config → write to KV → return `saved: true`.
+
+**Not blocked**: engine scoring reads from `config/portfolio.json` (committed) — scoring works. Only UI updates from CSV don't persist.
 
 ---
 
