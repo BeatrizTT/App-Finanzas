@@ -332,18 +332,11 @@ Response includes `success`, `runAt`, `alertsCount`, `errors` array, plus full `
 5. Confirm `currentPrice` is non-null and non-zero for AAPL, MSFT, NVDA
 6. Check Telegram — digest should arrive within 30 seconds of engine run
 
-**Note**: `GET /api/opportunities` and `GET /api/portfolio` read from file-store directly (not KV-aware as of PR #13). On Vercel, they may return empty data between invocations even if KV is configured. Use `GET /api/engine/run` as the authoritative source until `p0-read-endpoints-kv-consistency` is implemented.
+**Note**: All three read endpoints (`/api/engine/run` GET, `/api/opportunities`, `/api/portfolio`) are now KV-aware via `loadEngineOutput()`. With KV configured, all three return consistent data after a Vercel cold start.
 
 ---
 
 ## Known risks and open questions
-
-### R1: `/api/opportunities` and `/api/portfolio` are not KV-aware
-Both endpoints call `readJsonFile('engine-output.json', null)` directly, bypassing `loadEngineOutput()`. On Vercel, the file-store is in `/tmp` and is wiped between invocations. Even with KV configured, these endpoints return empty data after a cold start.
-
-**Impact**: Low for now — the dashboard does not call these endpoints (it uses `/api/engine/run` GET). Impact grows if any future UI or external consumer calls these endpoints.
-
-**Fix**: Next code PR `p0-read-endpoints-kv-consistency` — replace `readJsonFile` with `loadEngineOutput()` in both routes.
 
 ### R2: `ENGINE_API_SECRET` is optional — POST engine trigger is fail-open
 If `ENGINE_API_SECRET` is not set in Vercel, `POST /api/engine/run` is publicly triggerable. Any caller can run a full engine run. See CTO_BACKLOG P0-7 for options.
@@ -426,7 +419,7 @@ CSV parsing works end-to-end. On Vercel, writing back to `config/portfolio.json`
 
 ```bash
 npm ci                  # Clean install from lock file
-npm test                # 19 suites, 1481 asserts
+npm test                # 21 suites, 1493 asserts
 npm run build           # Production build
 npx tsc --noEmit        # Type-check
 npm run dev             # Local dev server :3000

@@ -88,13 +88,12 @@ Esto cambiará cuando se implemente autenticación del dashboard (pendiente en `
 
 El estado real y actualizado está en `docs/PROJECT_STATE.md`. No asumir el estado a partir de este archivo.
 
-Resumen a fecha de última actualización de este archivo (2026-06-03, PR #14 `70e1220`):
+Resumen a fecha de última actualización de este archivo (2026-06-04, PR #16):
 - Cron fail-closed: implementado en código (PR #13). Falta configurar `CRON_SECRET` en Vercel.
 - Precios: producción usa mock. Falta configurar `PRICE_PROVIDER=yahoo` en Vercel.
 - Persistencia KV: código listo. Falta configurar `KV_REST_API_URL` + `KV_REST_API_TOKEN` en Vercel.
 - Telegram: código listo. Falta configurar `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` en Vercel.
-- `/api/engine/run` GET: KV-aware.
-- `/api/opportunities` y `/api/portfolio`: NO KV-aware (leen file-store directamente). Próximo PR: `p0-read-endpoints-kv-consistency`.
+- `/api/engine/run` GET, `/api/opportunities`, `/api/portfolio`: todos KV-aware via `loadEngineOutput()` (PR #16).
 - CSV import: parsea correctamente, pero write a `config/portfolio.json` falla en Vercel (`saved: false`). Próximo PR de código: `p0-csv-persistence`.
 - `/api/config/status`: ya existe (devuelve `priceProvider`, `cronSecretSet`, `telegramConfigured`, `isVercel`).
 
@@ -104,8 +103,7 @@ Resumen a fecha de última actualización de este archivo (2026-06-03, PR #14 `7
 
 Ver `docs/CTO_BACKLOG.md` para detalle completo. Orden actual:
 
-1. `p0-read-endpoints-kv-consistency` — hacer `/api/opportunities` y `/api/portfolio` KV-aware usando `loadEngineOutput()`
-2. `p0-csv-persistence` — hacer que CSV import persista en KV en lugar de intentar escribir `config/portfolio.json`
+1. `p0-csv-persistence` — hacer que CSV import persista en KV en lugar de intentar escribir `config/portfolio.json`
 
 No iniciar ninguno sin confirmación del propietario.
 
