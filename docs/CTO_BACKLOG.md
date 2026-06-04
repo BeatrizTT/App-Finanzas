@@ -28,16 +28,20 @@ Use `yahoo` directly for the first go-live. Add `chain` when a second real provi
 ---
 
 ### P0-2: Connect Vercel KV
-**Problem**: Engine output is stored in `/tmp/app-finanzas` on Vercel — wiped between invocations. `/api/engine/run` GET is KV-aware but without KV configured it falls back to file-store (ephemeral). `/api/opportunities` and `/api/portfolio` are not KV-aware and will return empty data between invocations even if KV is later added (see P0-5).
+**Problem**: Engine output is stored in `/tmp/app-finanzas` on Vercel — wiped between invocations. Without KV configured, engine output and portfolio config are ephemeral.
 
 **Fix**: Create a Vercel KV store in the dashboard. Set env vars:
 ```
 KV_REST_API_URL = https://...upstash.io
 KV_REST_API_TOKEN = <token>
 ```
-Code in `engine-store.ts` is already written and handles KV with file-store fallback.
+All KV-aware code is already written and deployed:
+- `engine-store.ts`: engine output — KV-first, file-store fallback
+- `portfolio-store.ts`: portfolio config — KV-first, `config/portfolio.json` fallback (PR #17)
+- All three read endpoints (`/api/engine/run` GET, `/api/opportunities`, `/api/portfolio`) use `loadEngineOutput()` (PR #16)
+- `POST /api/portfolio/import` saves to KV via `savePortfolioConfig()` (PR #17)
 
-**Acceptance**: Run engine via cron, then call `/api/engine/run` GET — gets back the same run's data. Persists through a second cron run.
+**Acceptance**: Run engine via cron, then call `/api/engine/run` GET — gets back the same run's data. Persists through a second cron run. `POST /api/portfolio/import` returns `saved: true`.
 
 ---
 
@@ -70,7 +74,7 @@ TELEGRAM_CHAT_ID = <your-chat-id>
 ### P0-5: Read-endpoint KV consistency ✓ DONE (PR #16)
 **Status**: Implemented. Both `/api/opportunities` and `/api/portfolio` now use `loadEngineOutput()` from `engine-store.ts` — KV-first, file-store fallback. Pure response builders (`buildOpportunitiesResponse`, `buildPortfolioResponse`) exported and covered by 12 new unit tests including wiring tests with mocked KV fetch.
 
-**Verification**: 21 suites · 1493 asserts · 0 failed.
+**Verification at merge**: 21 suites · 1493 asserts · 0 failed. (Current suite: 23 suites · 1509 asserts — includes PR #17 additions.)
 
 ---
 
@@ -105,13 +109,14 @@ TELEGRAM_CHAT_ID = <your-chat-id>
 ## P1 — Automation and reliability
 
 ### P1-1: Verify end-to-end cron → alert → Telegram
-Run through the full loop manually:
+Run through the full loop manually (requires Vercel env vars configured first — see RUNBOOK):
 1. Trigger `POST /api/engine/run` (or `GET /api/cron/daily` with `Authorization: Bearer $CRON_SECRET`)
-2. Confirm engine runs, prices load, scoring completes
+2. Confirm engine runs, prices load, scoring completes (`pricingMethod: "yahoo"`, no `currentPrice: null`)
 3. Confirm alerts generated and pushed to Telegram
 4. Confirm engine output saved to KV
-5. Confirm `GET /api/engine/run` returns fresh data (KV-aware)
-6. Confirm `/api/opportunities` returns fresh data (after P0-5 is implemented)
+5. Confirm `GET /api/engine/run` returns fresh data (KV-aware, implemented PR #16)
+6. Confirm `/api/opportunities` returns fresh data (KV-aware, implemented PR #16)
+7. Confirm `/api/portfolio` reflects latest portfolio config from KV (implemented PR #17)
 
 Document any gaps found.
 
@@ -140,6 +145,56 @@ Review digest format (`digest.ts`). Ensure:
 - Every BUY/REDUCE signal includes: ticker, current price, distance from 52W high/low, conviction, reason, suggested amount, data age, source
 - Digest shows portfolio summary: NAV, daily change, biggest moves
 - No "current price = null" or "0" visible to user
+
+---
+
+## Roadmap — orden recomendado tras P0 completado
+
+El código P0 está completo (PRs #13–#17). Las siguientes fases en orden:
+
+### Inmediato — acción del propietario (sin código)
+
+---
+
+#### ACCIÓN MANUAL PARA EL PROPIETARIO
+
+**Qué:** Configurar variables de entorno en Vercel para activar producción real.
+
+**Dónde:** [vercel.com/dashboard](https://vercel.com/dashboard) → proyecto App-Finanzas → Settings → Environment Variables
+
+**Cuándo:** Antes del primer cron real. El código está listo y desplegado; solo faltan estas variables.
+
+**Variables a configurar:**
+```
+CRON_SECRET        = <openssl rand -hex 32>
+PRICE_PROVIDER     = yahoo
+KV_REST_API_URL    = <de Vercel KV / Upstash>
+KV_REST_API_TOKEN  = <de Vercel KV / Upstash>
+TELEGRAM_BOT_TOKEN = <de @BotFather>
+TELEGRAM_CHAT_ID   = <tu chat ID>
+```
+
+**Qué pasa si no se hace:** cron devuelve 503, precios son mock, datos ephemeral, sin alertas Telegram.
+
+**Qué NO tocar:** `ENGINE_API_SECRET` — NO configurar. El botón "Analizar" del dashboard llama POST sin Authorization header; configurar esto rompe el botón. Ver CTO_BACKLOG P0-7.
+
+Ver instrucciones paso a paso en `docs/RUNBOOK.md` → "Acciones manuales obligatorias en Vercel".
+
+---
+
+### P1 — Fiabilidad y persistencia completa (código)
+
+1. **`p1-alert-history-kv`** (P1-3): mover `history.ts` (dedupe ring buffer) a KV → alertas no se repiten entre invocaciones de Vercel.
+2. **`p1-discovery-state-kv`** (P1-2): mover watchlist y snapshots a KV con prefijo `discovery:` → trend tracking funciona entre runs.
+3. **Verificación end-to-end** (P1-1): loop completo manual con Vercel configurado → cron → precios reales → KV → Telegram → dashboard.
+
+### P2 — Experiencia de decisión
+
+4. **`p2-single-asset-live-check`** (ver P2-5 más abajo): botón "Verificar ahora" por oportunidad → precio real actual → recalcular señal → explicación interna del motor.
+
+### P3 — Explicación externa / noticias
+
+5. **`p3-single-asset-news-and-thesis-explainer`** (ver P3-5 más abajo): noticias recientes, explicación de caída, riesgos, tesis de entrada — solo después de decidir proveedor y reglas de seguridad.
 
 ---
 
@@ -185,6 +240,75 @@ Each BUY or REDUCE output must include all of:
 - [ ] Data source (`yahoo`, `eodhd`, etc.)
 - [ ] Confidence level
 - [ ] What would flip this recommendation
+
+---
+
+### P2-5: Single-asset live check (`p2-single-asset-live-check`)
+
+**Objetivo**: Cuando el motor produce una recomendación (BUY, ALMOST_READY, WATCH, REDUCE), el usuario puede pulsar un botón "Verificar ahora" para obtener un análisis actualizado de ese activo concreto en ese momento.
+
+**Motivación**: El motor corre cada día (07:00 + 16:00 UTC). Si el precio de un activo cambia significativamente entre runs, la señal guardada puede estar obsoleta. Este endpoint permite verificar si la señal sigue siendo válida con precio fresco.
+
+#### Funcionalidad
+
+**Nuevo endpoint propuesto**: `GET /api/engine/asset?ticker=NVDA` (o `POST` con body `{ ticker }`)
+- Recarga precio real de ese ticker vía pricing chain (bypass de caché en memoria, o `forceRefresh: true`)
+- Recalcula la señal con el motor existente (`computeScore()`, `classifyDrawdownZone()`)
+- Aplica todos los safety gates: no BUY si `suitableForBuyRecommendation: false`, no BUY si `dataQualityScore` bajo, no precio USD como EUR
+- Devuelve:
+  - `previousSignal` (del último output del motor en KV)
+  - `currentSignal` (recalculado ahora)
+  - `priceNow` (precio actual obtenido)
+  - `priceAtLastRun` (precio en el último run del motor)
+  - `priceChange` (diferencia y porcentaje)
+  - `signalChanged` (boolean: ¿cambió la señal?)
+  - `explanation` (qué recomendaba antes, qué dice ahora, por qué)
+  - `dataAge` (timestamp del precio obtenido)
+  - `dataSource` (`yahoo`, `eodhd`, etc.)
+  - `safetyGates` (qué gates se comprobaron y su resultado)
+
+**UI**: botón "Verificar ahora" en cada tarjeta de oportunidad/señal en el dashboard. Muestra resultado inline sin navegar.
+
+#### Dependencias
+- Pricing chain existente (`chain-provider.ts`) — no cambia
+- Scoring existente (`computeScore()`, `scoring.ts`) — no cambia
+- `loadEngineOutput()` para leer `previousSignal` del KV — ya disponible
+- `loadPortfolioConfig()` para contexto de portfolio — ya disponible
+- Safety gates existentes (`suitableForExactPnl`, `suitableForBuyRecommendation`) — no cambian
+
+#### Qué NO toca
+- No modifica el motor global ni su output en KV
+- No cambia `runDailyEngine()` ni el cron
+- No añade proveedores externos
+- No toca scoring weights ni BUY thresholds globales
+- No accede a fundamentals, noticias, ni datos externos (eso es P3-5)
+
+#### Riesgos
+- Rate limiting de Yahoo si se llama muchas veces seguidas — mitigar con TTL corto de caché por ticker (ej. 60 segundos)
+- Sin `ENGINE_API_SECRET` configurado, este endpoint también sería público — acepta el mismo riesgo que `POST /api/engine/run` (Vercel Hobby rate limiting como protección natural)
+- El ticker debe existir en el universo del motor o en la cartera; no debe aceptar tickers arbitrarios externos sin validación
+
+#### Preguntas del CTO — respondidas
+
+**¿Está de acuerdo con que vaya después de P1?** Sí. P1 es prerequisito real: sin alert history KV funcional y sin verificación end-to-end, no tiene sentido añadir un live check. El valor de este botón depende de que el motor global ya funcione correctamente en producción con precios reales.
+
+**¿Qué datos podemos explicar con el motor actual sin añadir proveedores externos?**
+- Precio actual y variación respecto al último run del motor
+- Distancia desde máximo 52W y mínimo 52W
+- Fase de drawdown (`classifyDrawdownZone`)
+- Convicción y señal recalculadas
+- Comparación con promedio de coste del portfolio
+- Antigüedad del dato y fuente de pricing
+- Safety gates aplicados y resultado
+- Por qué el motor recomienda o no recomienda (texto generado desde scoring interno)
+
+**¿Qué datos requieren proveedor externo y decisión arquitectónica?** Todo lo de P3-5: noticias recientes, calidad de empresa, explicación de caída por fundamentals, catalizadores externos. Estos requieren un proveedor de noticias/fundamentals (NewsAPI, Financial Modeling Prep, Finnhub noticias) — decisión de arquitectura separada.
+
+**¿Cómo evitar recomendaciones BUY inseguras?** Mismos safety gates del motor global:
+- `suitableForBuyRecommendation: false` → no BUY (precio no validado, FX no disponible, dato stale)
+- `dataQualityScore` bajo → no BUY
+- `currentPrice: null` o `0` → no BUY, devolver error claro al usuario
+- No USD como EUR en ningún caso
 
 ---
 
@@ -238,6 +362,39 @@ Automate the most common ops tasks:
 - Alert on KV write failure (fallback to Telegram "KV is down" message)
 - Alert on engine crash (catch unhandled, send to Telegram)
 - Health check on cron start (before scoring, verify KV + pricing respond)
+
+---
+
+### P3-5: Single-asset news and thesis explainer (`p3-single-asset-news-and-thesis-explainer`)
+
+**Objetivo**: Fase posterior a P2-5. Cuando el usuario verifica una señal, la app también explica el contexto externo: por qué la empresa es fuerte, qué ha hecho caer la acción, noticias recientes relevantes, riesgos actuales, qué invalidaría la tesis.
+
+**Estado**: Diseñado, NO implementar todavía.
+
+**Prerequisitos antes de implementar**:
+1. P2-5 funcionando (live check de precio y señal)
+2. Decisión sobre proveedor de noticias/fundamentals (NewsAPI, FMP noticias, Finnhub)
+3. Smoke evidence de que el proveedor elegido devuelve datos útiles para los tickers del universo
+4. Reglas de seguridad claras: qué narrativa se puede generar, cómo evitar que noticias stale o incorrectas generen recomendaciones BUY erróneas
+
+**Riesgos que deben resolverse antes de implementar**:
+- Noticias de baja calidad o desactualizadas pueden generar narrativas que parezcan sólidas pero sean engañosas
+- Ninguna noticia externa debe modificar `computeScore()`, scoring weights ni BUY thresholds — la explicación es informativa, no operativa
+- Si el dato de noticias no está disponible, la respuesta debe decirlo claramente en lugar de generar texto vacío o inventado
+- Proveedor de noticias requiere API key nueva → nueva env var → nueva acción manual del propietario → nueva decisión arquitectónica en `DECISIONS.md`
+
+**Lo que puede incluir (sujeto a decisión de proveedor)**:
+- Noticias recientes (últimas 48h) relevantes al ticker
+- Resumen de por qué el precio ha caído (basado en titulares, no en análisis propio)
+- Factores de riesgo conocidos (sin inventar fundamentals)
+- Qué eventos próximos podrían mover el precio (earnings, macro)
+- Qué invalidaría la tesis de entrada (precio rebasa umbral, cambio de contexto macro)
+
+**Lo que NO puede hacer** (restricciones de seguridad permanentes):
+- No usar fundamentals (P/E, EPS, revenue) para modificar señales BUY
+- No añadir nuevos símbolos al universo basándose en noticias
+- No emitir BUY si pricing/FX no es apto — las noticias no cambian este gate
+- No hardcodear narrativas ni inventar datos
 
 ---
 

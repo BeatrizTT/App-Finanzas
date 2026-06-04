@@ -102,10 +102,19 @@ Resumen a fecha de última actualización de este archivo (2026-06-04, PR #17):
 
 ## Próximos PRs recomendados (según backlog)
 
-Ver `docs/CTO_BACKLOG.md` para detalle completo. Orden actual (P1):
+Ver `docs/CTO_BACKLOG.md` sección "Roadmap" para detalle completo. Orden actual:
 
-1. `p1-alert-history-kv` — mover `history.ts` (alert history/deduplication) a KV para que funcione entre invocaciones de Vercel
+**Inmediato (acción del propietario, sin código)**: configurar env vars de Vercel — `CRON_SECRET`, `PRICE_PROVIDER=yahoo`, `KV_REST_API_URL`, `KV_REST_API_TOKEN`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`. NO configurar `ENGINE_API_SECRET`.
+
+**P1 (código)**:
+1. `p1-alert-history-kv` — mover `history.ts` (alert history/deduplication) a KV
 2. `p1-discovery-state-kv` — mover watchlist y snapshots a KV (prefijo `discovery:`)
+
+**P2 (código, después de P1 estable)**:
+3. `p2-single-asset-live-check` — botón "Verificar ahora" por oportunidad: precio fresco, recalcular señal, explicación interna
+
+**P3 (después de P2 y decisión de proveedor)**:
+4. `p3-single-asset-news-and-thesis-explainer` — noticias recientes, explicación externa, riesgos
 
 No iniciar ninguno sin confirmación del propietario.
 

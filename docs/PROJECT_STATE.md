@@ -1,6 +1,6 @@
 # App Finanzas — Project State
 
-Last updated: 2026-06-04 · Branch: `main` (PR #16 merged `6801160`, PR #17 in progress)
+Last updated: 2026-06-04 · Branch: `main` (PR #17 merged — all P0 code complete)
 
 > Agentes/IA: leer `AGENTS.md` en la raíz del repo antes de cualquier cambio.
 
@@ -24,14 +24,14 @@ A personal investment decision-support app. It scans a curated universe of stock
 | FX | USD→EUR via Yahoo FX pair; GBX→GBP built-in |
 | Alerts | Telegram Bot API via `node-telegram-bot-api` |
 | Cron | Vercel Cron — 07:00 UTC + 16:00 UTC Mon–Fri |
-| Test runner | `npx tsx scripts/run-tests.ts` (not Jest) — 19 suites, 1481 asserts |
+| Test runner | `npx tsx scripts/run-tests.ts` (not Jest) — 23 suites, 1509 asserts |
 | Scripts | `npx tsx scripts/<name>.ts` |
 
 ---
 
 ## Active branch
 
-`main` — PR #13 merged `021e89f`. No active feature branches open.
+`main` — PR #17 merged. All P0 code items complete. No active feature branches open.
 
 ---
 
@@ -49,7 +49,7 @@ A personal investment decision-support app. It scans a curated universe of stock
 | Discovery state (watchlist, snapshots) | ephemeral | file-store → `/tmp` on Vercel; resets per invocation |
 | Alert history / previous states | ephemeral | Same — file-store → `/tmp` |
 
-**Summary: The app runs and processes but uses mock prices and has no persistent state across Vercel invocations. P0 env vars must be set before the app is useful.**
+**Summary: All P0 code is complete. The app runs correctly but production requires Vercel env vars to be configured (see table above and RUNBOOK). Without them: mock prices, ephemeral state, no Telegram alerts.**
 
 ---
 
@@ -116,10 +116,11 @@ A personal investment decision-support app. It scans a curated universe of stock
   - GitHub Actions workflow: `workflow_dispatch` + anti-secret scan + artifact upload
 
 ### Infrastructure
-- Vercel KV store (`engine-store.ts`): KV-first with file-store fallback
+- Vercel KV store (`engine-store.ts`): KV-first with file-store fallback for engine output
+- Portfolio config store (`portfolio-store.ts`): KV-first with `config/portfolio.json` fallback (PR #17)
 - Telegram sender: graceful degradation
 - Digest builder: daily summary format
-- CSV portfolio importer: parsing works; Vercel write fails silently
+- CSV portfolio importer: parsing + KV persistence — `saved: true` in Vercel with KV (PR #17)
 - Cron route: **fail-closed if CRON_SECRET missing (503)** — fixed in PR #13
 - `/api/config/status`: health info — returns `priceProvider`, `telegramConfigured`, `cronSecretSet`, `isVercel`
 - 4 docs: PROJECT_STATE, CTO_BACKLOG, DECISIONS, RUNBOOK
@@ -160,7 +161,7 @@ Ver `docs/RUNBOOK.md` sección **"Acciones manuales obligatorias en Vercel antes
 
 | PR | Title | State |
 |---|---|---|
-| #17 | P0: CSV persistence — portfolio config KV-aware | In progress |
+| #17 | P0: CSV persistence — portfolio config KV-aware | Merged `6af45c0` |
 | #16 | P0: make /api/opportunities and /api/portfolio KV-aware | Merged `6801160` |
 | #15 | docs: living documentation process — AGENTS.md, PR template | Merged `518bcb4` |
 | #14 | docs: correct handover verification — align docs with code reality | Merged `70e1220` |
@@ -171,5 +172,5 @@ Ver `docs/RUNBOOK.md` sección **"Acciones manuales obligatorias en Vercel antes
 ## Test suite
 
 ```
-npm test   →  23 suites · 1509 asserts · 0 failed
+npx tsx scripts/run-tests.ts   →  23 suites · 1509 asserts · 0 failed
 ```

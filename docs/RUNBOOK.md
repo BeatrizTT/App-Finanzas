@@ -183,7 +183,7 @@ npm test
 npx tsx scripts/run-tests.ts
 ```
 
-Runs all 19 suites. Exits 0 if all pass.
+Runs all 23 suites. Exits 0 if all pass.
 
 To run a single suite:
 ```bash
@@ -341,10 +341,8 @@ Response includes `success`, `runAt`, `alertsCount`, `errors` array, plus full `
 ### R2: `ENGINE_API_SECRET` is optional — POST engine trigger is fail-open
 If `ENGINE_API_SECRET` is not set in Vercel, `POST /api/engine/run` is publicly triggerable. Any caller can run a full engine run. See CTO_BACKLOG P0-7 for options.
 
-### R3: `../../config/portfolio.json` path risk
-Both `GET /api/engine/run` and `POST /api/engine/run` call `readJsonFile('../../config/portfolio.json', {})` to read `closedPositions` and `totalRealizedPnl`. This path is relative to `src/data/` (the file-store DATA_DIR). If DATA_DIR changes (e.g., a future migration), this path will break silently.
-
-`GET /api/portfolio` uses `getEffectivePortfolioConfig()` for portfolio config (reads committed `config/` files — stable) and `readJsonFile('engine-output.json')` for analyses. The `../../config/portfolio.json` path issue applies to `engine/run/route.ts` and `portfolio/import/route.ts`.
+### R3: `../../config/portfolio.json` path risk ✓ RESOLVED (PR #17)
+All portfolio config consumers (`GET /api/engine/run`, `POST /api/engine/run`, `GET /api/portfolio`, `POST /api/portfolio/import`, `runDailyEngine`) now use `loadPortfolioConfig()` from `portfolio-store.ts`. This reads KV first (`portfolio:config`) and falls back to `config/portfolio.json` directly (not via a relative file-store path). The fragile `readJsonFile('../../config/portfolio.json', {})` path has been eliminated.
 
 ---
 
@@ -441,7 +439,7 @@ curl -s "$BASE/api/portfolio" | jq '{holdingsCount: (.config.holdings | length),
 
 ```bash
 npm ci                  # Clean install from lock file
-npm test                # 21 suites, 1493 asserts
+npm test                # 23 suites, 1509 asserts
 npm run build           # Production build
 npx tsc --noEmit        # Type-check
 npm run dev             # Local dev server :3000
