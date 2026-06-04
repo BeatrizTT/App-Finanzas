@@ -67,23 +67,15 @@ TELEGRAM_CHAT_ID = <your-chat-id>
 
 ---
 
-### P0-5: Read-endpoint KV consistency (`p0-read-endpoints-kv-consistency`)
-**Status**: Not implemented yet. **Next code PR.**
+### P0-5: Read-endpoint KV consistency ✓ DONE (PR #16)
+**Status**: Implemented. Both `/api/opportunities` and `/api/portfolio` now use `loadEngineOutput()` from `engine-store.ts` — KV-first, file-store fallback. Pure response builders (`buildOpportunitiesResponse`, `buildPortfolioResponse`) exported and covered by 12 new unit tests including wiring tests with mocked KV fetch.
 
-**Problem**: `/api/opportunities` and `/api/portfolio` both read engine output via `readJsonFile('engine-output.json', null)` — file-store only. On Vercel, this file is in `/tmp` and is wiped between invocations. Even with KV configured, these two endpoints will return empty data because they bypass `loadEngineOutput()`.
-
-**Context**: The dashboard (`page.tsx`) does NOT call these endpoints — it uses `/api/engine/run` GET directly. But any direct API consumer or future UI change depending on `/api/opportunities` or `/api/portfolio` will get stale data on Vercel after a restart.
-
-**Fix**: Replace `readJsonFile('engine-output.json', null)` in both routes with `loadEngineOutput()` from `engine-store.ts`. Same KV-first, file-store fallback pattern already used by `/api/engine/run` GET.
-
-**Risk**: `loadEngineOutput()` is async — both routes need `async GET()`. Verify return shape is compatible.
-
-**Acceptance**: After a cron run with KV configured, `GET /api/opportunities` and `GET /api/portfolio` return the same run's data through a Vercel cold start.
+**Verification**: 21 suites · 1493 asserts · 0 failed.
 
 ---
 
 ### P0-6: CSV import persistence on Vercel (`p0-csv-persistence`)
-**Status**: Verified broken. **Second next code PR (after P0-5).**
+**Status**: Verified broken. **Next code PR.**
 
 **Problem**: `/api/portfolio/import` parses CSV correctly but write to `config/portfolio.json` silently fails on Vercel (`saved: false` in response). Portfolio reads from committed `config/portfolio.json` (stable) but CSV updates don't persist.
 

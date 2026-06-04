@@ -1,6 +1,6 @@
 # App Finanzas — Project State
 
-Last updated: 2026-06-03 · Branch: `main` (PR #14 merged `70e1220`)
+Last updated: 2026-06-04 · Branch: `main` (PR #15 merged `518bcb4`, PR #16 in progress)
 
 > Agentes/IA: leer `AGENTS.md` en la raíz del repo antes de cualquier cambio.
 
@@ -75,17 +75,17 @@ A personal investment decision-support app. It scans a curated universe of stock
 | Portfolio config | `config/portfolio.json` (committed to repo) | **Yes — stable** |
 | Engine output (write path) | `saveEngineOutput()` → KV first + file-store always | **Yes if KV configured, No otherwise** |
 | Engine output (read: `/api/engine/run` GET) | `loadEngineOutput()` → KV first, file-store fallback | **Yes if KV configured** |
-| Engine output (read: `/api/opportunities`) | `readJsonFile('engine-output.json')` — file-store only | **No — NOT KV-aware** |
-| Engine output (read: `/api/portfolio`) | `readJsonFile('engine-output.json')` — file-store only | **No — NOT KV-aware** |
+| Engine output (read: `/api/opportunities`) | `loadEngineOutput()` → KV first, file-store fallback | **Yes if KV configured** |
+| Engine output (read: `/api/portfolio`) | `loadEngineOutput()` → KV first, file-store fallback | **Yes if KV configured** |
 | Portfolio CSV import | Tries to write `config/portfolio.json` — **catches write error silently** | **No — `saved: false` on Vercel** |
 | Alert history | file-store → `/tmp/app-finanzas` | **No — resets each invocation** |
 | Previous states (drawdown) | file-store → `/tmp/app-finanzas` | **No — resets each invocation** |
 | Discovery watchlist | file-store → `/tmp/app-finanzas` | **No — resets each invocation** |
 | Discovery snapshots | file-store → `/tmp/app-finanzas` | **No — resets each invocation** |
 
-**Key inconsistency**: `/api/engine/run` GET is KV-aware; `/api/opportunities` and `/api/portfolio` are not. On Vercel, if KV is configured and the file-store is empty, those two endpoints will return stale/empty data even after a successful engine run. Next code PR: `p0-read-endpoints-kv-consistency`.
+**All three read endpoints are now KV-aware**: `/api/engine/run` GET, `/api/opportunities`, and `/api/portfolio` all use `loadEngineOutput()` — KV first, file-store fallback. With KV configured, all three survive Vercel cold starts.
 
-**Not done yet**: Read-endpoint KV consistency (P0). CSV import persistence on Vercel (P0/P1). Alert history, watchlist, snapshots via KV (P1).
+**Not done yet**: CSV import persistence on Vercel (P0/P1 — next code PR: `p0-csv-persistence`). Alert history, watchlist, snapshots via KV (P1).
 
 ---
 
@@ -147,7 +147,6 @@ Ver `docs/RUNBOOK.md` sección **"Acciones manuales obligatorias en Vercel antes
 | Persistent engine state | Set `KV_REST_API_URL` + `KV_REST_API_TOKEN` in Vercel |
 | Cron protection (env) | Set `CRON_SECRET` in Vercel (code already done in PR #13) |
 | Alert delivery | Set `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` in Vercel |
-| `/api/opportunities` + `/api/portfolio` KV consistency | Code PR needed: `p0-read-endpoints-kv-consistency` |
 | CSV persistence on Vercel | Code PR needed: `p0-csv-persistence` (KV write on import) |
 | Alert history persistence | file-store only → needs KV extension (P1) |
 | Multi-source discovery | Smoke only; run GitHub Actions workflow with real keys first |
@@ -158,14 +157,15 @@ Ver `docs/RUNBOOK.md` sección **"Acciones manuales obligatorias en Vercel antes
 
 | PR | Title | State |
 |---|---|---|
+| #16 | P0: make /api/opportunities and /api/portfolio KV-aware | In progress |
+| #15 | docs: living documentation process — AGENTS.md, PR template | Merged `518bcb4` |
+| #14 | docs: correct handover verification — align docs with code reality | Merged `70e1220` |
 | #13 | P0: fail closed cron auth and document production env | Merged `021e89f` |
-| #12 | P3-3f-0: Multi-source discovery capability smoke | Merged `3e095ae` |
-| #11 | P3-3f-a: Rotating discovery scan batches | Merged `b7dda4a` |
 
 ---
 
 ## Test suite
 
 ```
-npm test   →  19 suites · 1481 asserts · 0 failed
+npm test   →  21 suites · 1493 asserts · 0 failed
 ```
