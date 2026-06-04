@@ -405,13 +405,35 @@ Decision tree:
 
 ---
 
-## CSV portfolio import — current state
+## CSV portfolio import
 
-CSV parsing works end-to-end. On Vercel, writing back to `config/portfolio.json` **silently fails** — response includes `"saved": false`.
+CSV parsing works end-to-end. With KV configured in Vercel, import now persists and returns `saved: true`.
 
-**Workaround until persistence is fixed**: import locally (`npm run dev`), the write succeeds, commit the updated `config/portfolio.json`.
+**How it works after PR #17**:
+- `POST /api/portfolio/import` saves the updated portfolio config to KV key `portfolio:config`
+- All consumers (`GET /api/portfolio`, `runDailyEngine`, `/api/engine/run`) load portfolio config KV-first via `loadPortfolioConfig()`
+- Without KV, the response includes `saved: false` and the engine continues using `config/portfolio.json` from the repo
 
-**Permanent fix needed (P0-6)**: store portfolio CSV data in KV using the same pattern as `engine-store.ts`.
+**Requirements for `saved: true` in production**:
+- `KV_REST_API_URL` and `KV_REST_API_TOKEN` must be set in Vercel (see section "Acciones manuales obligatorias en Vercel")
+- These variables were already required for engine output persistence — no new Vercel action needed for this feature
+
+**Verifying import persistence after deploy**:
+```bash
+BASE="https://<your-vercel-url>"
+
+# 1. Upload a CSV — expect saved:true with KV configured
+curl -s -X POST "$BASE/api/portfolio/import" \
+  -F "csv=@your-trades.csv" | jq '{saved, saveSource, holdingsUpdated}'
+# Expected: {"saved": true, "saveSource": "kv", "holdingsUpdated": N}
+
+# 2. Verify the loaded config reflects the import
+curl -s "$BASE/api/portfolio" | jq '{holdingsCount: (.config.holdings | length), lastRunAt}'
+```
+
+**Local dev (without KV)**: import still works — falls back to writing `config/portfolio.json`. Returns `saved: true, saveSource: "file"` if the write succeeds, or `saved: false, saveSource: "none"` if restricted.
+
+**Fallback**: if KV is down or not configured, engine uses committed `config/portfolio.json` automatically.
 
 ---
 

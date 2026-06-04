@@ -51,8 +51,8 @@ export async function POST(req: NextRequest) {
     const output = await runDailyEngine({ sendDigest, sendAlertMessages });
 
     stage = 'merge_portfolio_config';
-    const { readJsonFile } = await import('@/lib/utils/file-store');
-    const portfolioConfig = readJsonFile<any>('../../config/portfolio.json', {});
+    const { loadPortfolioConfig } = await import('@/lib/utils/portfolio-store');
+    const { config: portfolioConfig } = await loadPortfolioConfig();
 
     stage = 'serialize';
     return NextResponse.json({
@@ -98,8 +98,8 @@ export async function GET() {
     }
 
     console.log(`[API GET /engine/run] Loaded from ${source}`);
-    const { readJsonFile } = await import('@/lib/utils/file-store');
-    const portfolioConfig = readJsonFile<any>('../../config/portfolio.json', {});
+    const { loadPortfolioConfig } = await import('@/lib/utils/portfolio-store');
+    const { config: portfolioConfig } = await loadPortfolioConfig();
     return NextResponse.json({
       ...output,
       closedPositions: portfolioConfig.closedPositions ?? [],

@@ -12,12 +12,12 @@ import { getPriceProvider, resetPriceProvider } from '../pricing/factory';
 import { resetEodhdBudget } from '../pricing/eodhd-provider';
 import { loadPriceCache, savePriceCache, getCached, setCached, countStale, getEurUsdRate, setEurUsdRate } from '../pricing/price-cache';
 import {
-  getEffectivePortfolioConfig,
   getUniverseConfig,
   getOverridesConfig,
   clearConfigCache,
   applyOverridesToPortfolio,
 } from '../utils/config-loader';
+import { loadPortfolioConfig } from '../utils/portfolio-store';
 import { saveEngineOutput } from '../utils/engine-store';
 import { persistDiscoverySnapshots } from '../discovery/snapshots';
 import { persistWatchlist } from '../discovery/watchlist';
@@ -250,7 +250,9 @@ export async function runDailyEngine(options?: {
     if (evicted) savePriceCache(cache);
   }
 
-  const portfolioConfig = applyOverridesToPortfolio(getEffectivePortfolioConfig());
+  const { config: basePortfolioConfig, source: configSource } = await loadPortfolioConfig();
+  console.log(`[Engine] Portfolio config loaded from ${configSource}`);
+  const portfolioConfig = applyOverridesToPortfolio(basePortfolioConfig);
   const universeConfig = getUniverseConfig();
   const overrides = getOverridesConfig();
 

@@ -20,12 +20,13 @@ export function buildPortfolioResponse(
 
 export async function GET() {
   try {
-    const { getEffectivePortfolioConfig } = await import('@/lib/utils/config-loader');
+    const { loadPortfolioConfig } = await import('@/lib/utils/portfolio-store');
     const { loadEngineOutput } = await import('@/lib/utils/engine-store');
 
-    const portfolioConfig = getEffectivePortfolioConfig();
+    const { config: portfolioConfig, source: configSource } = await loadPortfolioConfig();
+    console.log(`[API /portfolio] Config loaded from ${configSource}`);
     const { output, source } = await loadEngineOutput();
-    console.log(`[API /portfolio] Loaded from ${source}`);
+    console.log(`[API /portfolio] Engine output loaded from ${source}`);
 
     return NextResponse.json(buildPortfolioResponse(portfolioConfig, output));
   } catch (err) {
