@@ -432,3 +432,33 @@ npx tsc --noEmit        # Type-check
 npm run dev             # Local dev server :3000
 npm run lint            # ESLint
 ```
+
+---
+
+## Cómo mantener la documentación viva
+
+La documentación de este proyecto vive en cuatro archivos. Cada uno tiene un propósito distinto.
+Todo PR funcional debe revisar si estos documentos siguen siendo correctos.
+Si no se actualizan, el PR debe explicar explícitamente por qué no aplica.
+
+### Cuándo tocar cada documento
+
+| Documento | Qué contiene | Cuándo actualizar |
+|---|---|---|
+| `docs/PROJECT_STATE.md` | Estado actual verificado: qué está hecho, qué está bloqueado, qué persiste y dónde | En todo PR que cambie endpoints, persistencia, env vars, estado de producción o PRs mergeados |
+| `docs/CTO_BACKLOG.md` | Prioridades, próximos PRs, bloqueos técnicos, orden de trabajo | Cuando se cierra un ítem, se añade uno nuevo, o cambia el orden de prioridad |
+| `docs/RUNBOOK.md` | Operación manual: Vercel, env vars, Telegram, comandos de verificación | Cuando cambia cualquier operación manual, env var, endpoint, o se añade un riesgo conocido |
+| `docs/DECISIONS.md` | Decisiones arquitectónicas con razonamiento y tradeoffs | Cuando se toma una decisión técnica relevante o se revierte una anterior |
+| `AGENTS.md` | Instrucciones para agentes/IA: qué leer, qué no tocar, acciones manuales | Cuando cambia el estado de producción, las restricciones o el orden de los próximos PRs |
+
+### Regla
+
+> **Todo PR funcional debe revisar si estos documentos siguen siendo correctos.**
+> Si no se actualizan, el PR debe explicar en el body por qué no aplica.
+> No es aceptable cerrar un PR funcional dejando los docs desactualizados.
+
+### Acciones manuales para el propietario
+
+Si un PR requiere que el propietario haga algo en Vercel, Telegram, GitHub Actions u otro servicio externo, debe aparecer en el PR y en los docs con el formato `ACCIÓN MANUAL PARA EL PROPIETARIO` descrito en `AGENTS.md`.
+
+Las instrucciones deben estar en español y escritas para una persona no técnica.

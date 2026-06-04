@@ -1,6 +1,8 @@
 # App Finanzas — Project State
 
-Last updated: 2026-06-03 · Branch: `main` (PR #13 merged `021e89f`)
+Last updated: 2026-06-03 · Branch: `main` (PR #14 merged `70e1220`)
+
+> Agentes/IA: leer `AGENTS.md` en la raíz del repo antes de cualquier cambio.
 
 ---
 
