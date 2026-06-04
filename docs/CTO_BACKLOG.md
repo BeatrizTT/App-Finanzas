@@ -1,6 +1,6 @@
 # CTO Backlog — App Finanzas
 
-Last updated: 2026-06-04 (post PR #17)
+Last updated: 2026-06-04 (post PR #19 — production reality reconciled)
 
 Ordered by priority. P0 = production is broken or silent without these. Do not advance to P1 until P0 is solid.
 
@@ -9,65 +9,38 @@ Ordered by priority. P0 = production is broken or silent without these. Do not a
 ## P0 — Production basics (app is broken without these)
 
 ### P0-0: Close open cron route ✓ DONE (PR #13, `021e89f`)
-**Status**: Implemented. `checkCronAuth()` in `src/app/api/cron/daily/route.ts` returns 503 if `CRON_SECRET` is not set, 401 if header is missing or wrong. Verified by 7 unit tests in `src/app/api/cron/__tests__/cron-auth.test.ts`.
-**Still required**: Set `CRON_SECRET` in Vercel env vars (the code is deployed; the secret is not).
+**Status**: Implemented and active. `checkCronAuth()` returns 503 if `CRON_SECRET` is not set, 401 if header is missing or wrong.
+`CRON_SECRET` configured in Vercel since April 30, 2026. `/api/config/status` → `cronSecretSet: true`.
 
 ---
 
-### P0-1: Set real pricing provider in Vercel
-**Problem**: `PRICE_PROVIDER` defaults to `'mock'` when not set. Production scores your portfolio against fake prices.
-
-**Fix**: In Vercel dashboard → Environment Variables → set:
-```
-PRICE_PROVIDER = yahoo
-```
-Use `yahoo` directly for the first go-live. Add `chain` when a second real provider is needed.
-
-**Acceptance**: `/api/engine/run` POST response shows real prices for AAPL, MSFT, etc. `pricingMethod` in output shows `yahoo` not `mock`.
+### P0-1: Set real pricing provider in Vercel ✓ DONE
+**Status**: `PRICE_PROVIDER=twelvedata` configured since May 5, 2026. `TWELVE_DATA_API_KEY` also configured.
+**Important correction**: Earlier docs said to use `yahoo`. That was wrong — Yahoo Finance aggressively rate-limits from Vercel cloud IPs. Twelve Data works reliably from cloud and supports batch. Do NOT change to `yahoo`. See `docs/DECISIONS.md`.
+`/api/config/status` → `priceProvider: "twelvedata"`.
 
 ---
 
-### P0-2: Connect Vercel KV
-**Problem**: Engine output is stored in `/tmp/app-finanzas` on Vercel — wiped between invocations. Without KV configured, engine output and portfolio config are ephemeral.
-
-**Fix**: Create a Vercel KV store in the dashboard. Set env vars:
-```
-KV_REST_API_URL = https://...upstash.io
-KV_REST_API_TOKEN = <token>
-```
-All KV-aware code is already written and deployed:
+### P0-2: Connect Vercel KV ✓ DONE (env configured)
+**Status**: `KV_REST_API_URL` and `KV_REST_API_TOKEN` (plus `KV_URL`, `REDIS_URL`, `KV_REST_API_READ_ONLY_TOKEN`) configured in Vercel since May 6, 2026.
+All KV-aware code is deployed (PRs #16 + #17):
 - `engine-store.ts`: engine output — KV-first, file-store fallback
-- `portfolio-store.ts`: portfolio config — KV-first, `config/portfolio.json` fallback (PR #17)
-- All three read endpoints (`/api/engine/run` GET, `/api/opportunities`, `/api/portfolio`) use `loadEngineOutput()` (PR #16)
-- `POST /api/portfolio/import` saves to KV via `savePortfolioConfig()` (PR #17)
+- `portfolio-store.ts`: portfolio config — KV-first, `config/portfolio.json` fallback
+- All three read endpoints use `loadEngineOutput()`, import uses `savePortfolioConfig()`
 
-**Acceptance**: Run engine via cron, then call `/api/engine/run` GET — gets back the same run's data. Persists through a second cron run. `POST /api/portfolio/import` returns `saved: true`.
-
----
-
-### P0-3: Set CRON_SECRET (env var)
-**Problem**: Code is fail-closed (503 if missing) but the env var has not been set in Vercel. Without it, the cron route will not execute.
-
-**Fix**: Generate a strong random string. Set in Vercel:
-```
-CRON_SECRET = <random-64-char-hex>
-```
-Vercel injects it automatically in cron `Authorization: Bearer` headers.
-
-**Acceptance**: Vercel-scheduled cron runs and returns 200. Direct `GET /api/cron/daily` without header returns 401.
+**Pending**: End-to-end live verification (Phase 1) — confirm KV writes actually survive a Vercel invocation boundary.
 
 ---
 
-### P0-4: Connect Telegram
-**Problem**: Alerts are computed but go nowhere — logged to console only.
+### P0-3: Set CRON_SECRET (env var) ✓ DONE
+**Status**: Configured since April 30, 2026. `/api/config/status` → `cronSecretSet: true`.
+Live cron execution log review pending (Phase 1).
 
-**Fix**: Create Telegram bot via @BotFather. Get chat ID. Set in Vercel:
-```
-TELEGRAM_BOT_TOKEN = <token>
-TELEGRAM_CHAT_ID = <your-chat-id>
-```
+---
 
-**Acceptance**: Run engine manually (`POST /api/engine/run`), confirm Telegram message received within 30 seconds.
+### P0-4: Connect Telegram ✓ DONE (env configured)
+**Status**: `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` configured since April 30, 2026. `/api/config/status` → `telegramConfigured: true`.
+**Pending**: Confirm actual message delivery after a live engine run (Phase 1).
 
 ---
 
@@ -148,53 +121,57 @@ Review digest format (`digest.ts`). Ensure:
 
 ---
 
-## Roadmap — orden recomendado tras P0 completado
+## Roadmap — fases post-P0
 
-El código P0 está completo (PRs #13–#17). Las siguientes fases en orden:
+El código P0 está completo (PRs #13–#17). Las env vars de producción están configuradas (reconciliado en PR #19). Las siguientes fases en orden:
 
-### Inmediato — acción del propietario (sin código)
+### Fase 0 — Reconciliar producción real ✓ DONE (PR #19)
+- Docs alineados con producción real.
+- Pricing: Twelve Data en producción, no Yahoo.
+- Env vars de Vercel: CRON_SECRET, KV, Telegram, PRICE_PROVIDER=twelvedata — todos configurados.
+- DECISIONS.md actualizado. AGENTS.md actualizado.
 
----
+### Fase 1 — Verificación end-to-end real
 
-#### ACCIÓN MANUAL PARA EL PROPIETARIO
+Antes de construir más código, confirmar que lo que tenemos funciona de extremo a extremo en producción:
 
-**Qué:** Configurar variables de entorno en Vercel para activar producción real.
+1. `/api/config/status` → `priceProvider: "twelvedata"`, `cronSecretSet: true`, `telegramConfigured: true`, `isVercel: true`
+2. `POST /api/engine/run` (sin header, porque `ENGINE_API_SECRET` no está configurado) → `success: true`, `pricingMethod` con precios reales, no mock
+3. `GET /api/engine/run` → mismo output del run anterior (confirma KV write → read)
+4. `GET /api/opportunities` → datos reales, no vacío
+5. `GET /api/portfolio` → config real de cartera
+6. `POST /api/portfolio/import` con CSV real → `saved: true`, `saveSource: "kv"`
+7. Telegram → confirmar que llega mensaje después del engine run
+8. Cron → revisar logs de Vercel y confirmar que el cron ejecutó sin error
 
-**Dónde:** [vercel.com/dashboard](https://vercel.com/dashboard) → proyecto App-Finanzas → Settings → Environment Variables
+Ver `docs/RUNBOOK.md` para comandos exactos.
 
-**Cuándo:** Antes del primer cron real. El código está listo y desplegado; solo faltan estas variables.
+**No escribir código de P1 hasta completar Phase 1.**
 
-**Variables a configurar:**
-```
-CRON_SECRET        = <openssl rand -hex 32>
-PRICE_PROVIDER     = yahoo
-KV_REST_API_URL    = <de Vercel KV / Upstash>
-KV_REST_API_TOKEN  = <de Vercel KV / Upstash>
-TELEGRAM_BOT_TOKEN = <de @BotFather>
-TELEGRAM_CHAT_ID   = <tu chat ID>
-```
-
-**Qué pasa si no se hace:** cron devuelve 503, precios son mock, datos ephemeral, sin alertas Telegram.
-
-**Qué NO tocar:** `ENGINE_API_SECRET` — NO configurar. El botón "Analizar" del dashboard llama POST sin Authorization header; configurar esto rompe el botón. Ver CTO_BACKLOG P0-7.
-
-Ver instrucciones paso a paso en `docs/RUNBOOK.md` → "Acciones manuales obligatorias en Vercel".
-
----
-
-### P1 — Fiabilidad y persistencia completa (código)
+### Fase 2 — Fiabilidad y persistencia completa (código)
 
 1. **`p1-alert-history-kv`** (P1-3): mover `history.ts` (dedupe ring buffer) a KV → alertas no se repiten entre invocaciones de Vercel.
 2. **`p1-discovery-state-kv`** (P1-2): mover watchlist y snapshots a KV con prefijo `discovery:` → trend tracking funciona entre runs.
-3. **Verificación end-to-end** (P1-1): loop completo manual con Vercel configurado → cron → precios reales → KV → Telegram → dashboard.
 
-### P2 — Experiencia de decisión
+### Fase 3 — Radar amplio de oportunidades
 
-4. **`p2-single-asset-live-check`** (ver P2-5 más abajo): botón "Verificar ahora" por oportunidad → precio real actual → recalcular señal → explicación interna del motor.
+Objetivo: detectar empresas fuertes **fuera de la cartera actual** que hayan caído mucho y sean buenas entradas potenciales.
 
-### P3 — Explicación externa / noticias
+Componentes necesarios:
+- External screener provider (EODHD screener, FMP, u otro) — requiere smoke evidence con keys reales antes de PR
+- ExternalCandidate schema (P2-2 del backlog): status machine `candidate → confirmed → watchlisted → graduated | rejected`
+- Filtros de calidad + liquidez + fit de cartera antes de cualquier BUY signal
+- No BUY hasta: pricing validado, data quality aprobada, drawdown clasificado
 
-5. **`p3-single-asset-news-and-thesis-explainer`** (ver P3-5 más abajo): noticias recientes, explicación de caída, riesgos, tesis de entrada — solo después de decidir proveedor y reglas de seguridad.
+**No iniciar sin smoke evidence real** del proveedor elegido.
+
+### Fase 4 — Single-asset live check
+
+Botón "Verificar ahora" por oportunidad/señal. Ver P2-5 en backlog.
+
+### Fase 5 — News/thesis explainer
+
+Noticias recientes, explicación de caída, riesgos, tesis de entrada. Ver P3-5 en backlog. Solo después de decidir proveedor de noticias con smoke evidence y reglas de seguridad.
 
 ---
 

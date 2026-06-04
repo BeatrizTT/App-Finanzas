@@ -4,10 +4,11 @@ Operational procedures. Keep this up to date as infrastructure changes.
 
 ---
 
-## Acciones manuales obligatorias en Vercel antes de producción real
+## Acciones manuales en Vercel — referencia histórica
+
+> **Estado actual (2026-06-04)**: todas las variables críticas ya están configuradas. Esta sección documenta qué se configuró y cómo, para referencia futura o si hay que recrear el entorno desde cero.
 
 Esta sección está escrita para el propietario del proyecto, no para un desarrollador.
-Sigue los pasos en orden. Sin estas variables, la app usa precios falsos y el cron no funciona.
 
 ---
 
@@ -36,8 +37,9 @@ Sigue los pasos en orden. Sin estas variables, la app usa precios falsos y el cr
 
 #### `PRICE_PROVIDER`
 - **Obligatoria.** Sin esto la app usa precios ficticios (mock).
-- Valor: `yahoo`
-- No requiere ninguna API key adicional.
+- Valor en producción actual: `twelvedata` (configurada desde Mayo 2026).
+- **No cambiar a `yahoo`**: Yahoo Finance rate-limita desde IPs de cloud de Vercel. Twelve Data es el provider de producción. Requiere `TWELVE_DATA_API_KEY`.
+- Ver `docs/DECISIONS.md` sección "Twelve Data as production pricing provider".
 
 #### `KV_REST_API_URL`
 - **Obligatoria para persistencia real.** Sin esto, los datos del motor se pierden en cada invocación de Vercel.
@@ -147,7 +149,7 @@ curl -s "$BASE/api/cron/daily" \
 curl -s -X POST "$BASE/api/engine/run" | jq '{success, pricingMethod: .pricingMethod, alertsCount}'
 ```
 - `success` debe ser `true`
-- `pricingMethod` debe ser `"yahoo"`, no `"mock"`
+- `pricingMethod` debe ser `"twelvedata"`, no `"mock"` ni `"yahoo"`
 
 **Verificar persistencia (si KV está configurado):**
 ```bash
@@ -163,15 +165,16 @@ curl -s "$BASE/api/engine/run" | jq '{runAt, pricingMethod: .pricingMethod}'
 
 ### Resumen rápido — qué debe estar hecho antes del primer cron real
 
-| Variable | Estado necesario | Consecuencia si falta |
+| Variable | Estado actual | Nota |
 |---|---|---|
-| `CRON_SECRET` | ✓ Configurada | Cron devuelve 503 y no ejecuta |
-| `PRICE_PROVIDER=yahoo` | ✓ Configurada | App usa precios mock |
-| `KV_REST_API_URL` | ✓ Configurada | Datos del motor se pierden entre runs |
-| `KV_REST_API_TOKEN` | ✓ Configurada | Datos del motor se pierden entre runs |
-| `TELEGRAM_BOT_TOKEN` | Opcional pero recomendada | Alertas van sólo a logs de Vercel |
-| `TELEGRAM_CHAT_ID` | Opcional pero recomendada | Alertas van sólo a logs de Vercel |
-| `ENGINE_API_SECRET` | **NO configurar todavía** | Si se configura, el botón Analizar se rompe |
+| `CRON_SECRET` | ✓ Configurada (Apr 30) | Cron activo |
+| `PRICE_PROVIDER=twelvedata` | ✓ Configurada (May 5) | NO cambiar a `yahoo` |
+| `TWELVE_DATA_API_KEY` | ✓ Configurada (May 5) | Requerida para twelvedata |
+| `KV_REST_API_URL` | ✓ Configurada (May 6) | KV conectado |
+| `KV_REST_API_TOKEN` | ✓ Configurada (May 6) | KV conectado |
+| `TELEGRAM_BOT_TOKEN` | ✓ Configurada (Apr 30) | Bot activo |
+| `TELEGRAM_CHAT_ID` | ✓ Configurada (Apr 30) | Destino activo |
+| `ENGINE_API_SECRET` | **NO configurar** | Si se configura, el botón Analizar se rompe |
 
 ---
 
@@ -231,26 +234,23 @@ Add as **Repository Secrets** (Settings → Secrets and variables → Actions):
 
 ---
 
-## Vercel environment variables — go-live checklist
+## Vercel environment variables — estado actual (reconciliado PR #19)
 
-Go to: **Vercel → Project → Settings → Environment Variables**
+> Las siguientes variables ya están configuradas en Vercel. Esta sección es de referencia, no de acción pendiente.
 
-### Required before go-live (in this order)
+| Variable | Estado | Nota |
+|---|---|---|
+| `CRON_SECRET` | ✓ Configurada (Apr 30) | `cronSecretSet: true` en config/status |
+| `PRICE_PROVIDER` | ✓ `twelvedata` (May 5) | NO cambiar a `yahoo`. Ver DECISIONS.md. |
+| `TWELVE_DATA_API_KEY` | ✓ Configurada (May 5) | Requerida para `PRICE_PROVIDER=twelvedata` |
+| `KV_REST_API_URL` | ✓ Configurada (May 6) | Auto-generada por Vercel KV |
+| `KV_REST_API_TOKEN` | ✓ Configurada (May 6) | Auto-generada por Vercel KV |
+| `TELEGRAM_BOT_TOKEN` | ✓ Configurada (Apr 30) | `telegramConfigured: true` en config/status |
+| `TELEGRAM_CHAT_ID` | ✓ Configurada (Apr 30) | Junto con BOT_TOKEN |
+| `EODHD_ENABLED` | Configurada, **inactiva** | No tiene efecto con `PRICE_PROVIDER=twelvedata` |
+| `ENGINE_API_SECRET` | **NO configurar** | Dashboard llama POST sin auth; configurar esto rompe el botón Analizar |
 
-```
-CRON_SECRET        = <openssl rand -hex 32>
-PRICE_PROVIDER     = yahoo
-KV_REST_API_URL    = <from Vercel KV → Upstash dashboard>
-KV_REST_API_TOKEN  = <from Vercel KV → Upstash dashboard>
-TELEGRAM_BOT_TOKEN = <from @BotFather>
-TELEGRAM_CHAT_ID   = <personal chat ID>
-```
-
-**Why `PRICE_PROVIDER=yahoo`**: simplest path to real prices. No Twelve Data key needed. Can add `chain` later when a second provider is needed.
-
-**Why `CRON_SECRET` first**: the cron route returns 503 if this is missing — it cannot execute. Set this before any scheduled run.
-
-**Note on `ENGINE_API_SECRET`**: the manual trigger endpoint (`POST /api/engine/run`) is fail-open when this is not set. The dashboard calls POST without an Authorization header, so this is intentional for personal use. If you want to close the endpoint, set `ENGINE_API_SECRET` and add the header to the dashboard fetch in `page.tsx`. See CTO_BACKLOG P0-7.
+**Nota sobre `PRICE_PROVIDER`**: los docs anteriores decían que había que configurar `PRICE_PROVIDER=yahoo`. Eso fue un error — Yahoo rate-limita desde IPs de cloud de Vercel. Twelve Data funciona correctamente. No cambiar.
 
 ### Optional
 
@@ -323,16 +323,100 @@ Response includes `success`, `runAt`, `alertsCount`, `errors` array, plus full `
 
 ---
 
+## Verificación end-to-end (Fase 1) — checklist con comandos
+
+Usar después de confirmar que todos los env vars están configurados en Vercel. Sustituir placeholders antes de ejecutar.
+
+```bash
+BASE="https://<tu-url-de-vercel>"
+CRON_SECRET="<tu-CRON_SECRET>"
+```
+
+### 1. Config status
+```bash
+curl -s "$BASE/api/config/status" | jq .
+```
+Esperado:
+```json
+{
+  "priceProvider": "twelvedata",
+  "cronSecretSet": true,
+  "telegramConfigured": true,
+  "isVercel": true
+}
+```
+Si `priceProvider` es `"mock"`: redeploy pendiente o `PRICE_PROVIDER` no configurada.
+
+### 2. Cron auth
+```bash
+# Sin header → debe devolver 401
+curl -s -o /dev/null -w "%{http_code}" "$BASE/api/cron/daily"
+
+# Header incorrecto → 401
+curl -s -o /dev/null -w "%{http_code}" "$BASE/api/cron/daily" \
+  -H "Authorization: Bearer VALOR_INCORRECTO"
+
+# Header correcto → 200 (motor ejecuta)
+curl -s "$BASE/api/cron/daily" \
+  -H "Authorization: Bearer $CRON_SECRET" | jq '{success, runAt}'
+```
+
+### 3. Engine run manual
+```bash
+# ENGINE_API_SECRET no está configurado → no requiere auth
+curl -s -X POST "$BASE/api/engine/run" | jq '{success, pricingMethod, errors}'
+```
+- `success: true` y `pricingMethod` con valor no-mock: precios reales confirmados.
+- Si `success: false` o errores: revisar campo `errors` en la respuesta.
+
+### 4. KV persistence (write → read)
+```bash
+# Leer el output del run anterior (confirma KV read)
+curl -s "$BASE/api/engine/run" | jq '{runAt, pricingMethod}'
+```
+El `runAt` debe coincidir con el run del paso 3. Si devuelve vacío/null: KV write no funcionó.
+
+### 5. Opportunities y Portfolio
+```bash
+curl -s "$BASE/api/opportunities" | jq '{lastRunAt, stockCount: (.stocks | length)}'
+curl -s "$BASE/api/portfolio" | jq '{holdingsCount: (.config.holdings | length), lastRunAt}'
+```
+
+### 6. CSV import
+```bash
+curl -s -X POST "$BASE/api/portfolio/import" \
+  -F "csv=@tu-trades.csv" | jq '{saved, saveSource, holdingsUpdated}'
+```
+Esperado con KV: `{"saved": true, "saveSource": "kv", "holdingsUpdated": N}`
+
+### 7. Telegram
+Después del paso 3, espera hasta 30 segundos. El bot debería enviar un digest con señales del portfolio.
+
+---
+
+## Regla anti-pérdida de contexto — qué hacer si docs y producción no coinciden
+
+Si `/api/config/status` o los env vars de Vercel contradicen lo que dicen los docs:
+
+1. **No tocar Vercel** inmediatamente.
+2. **Verificar producción**: `curl "$BASE/api/config/status"` + revisar Vercel → Settings → Env Vars.
+3. **Abrir PR docs-only** para reconciliar los docs con la realidad.
+4. **Solo después** decidir si hay cambios funcionales que hacer.
+
+Razón: los docs pueden estar desactualizados. Un agente que actúa sobre docs erróneos puede romper un sistema que ya funciona. Por ejemplo: cambiar `PRICE_PROVIDER=twelvedata` a `yahoo` cuando twelvedata ya estaba en producción y yahoo falla desde cloud IPs.
+
+---
+
 ## Verifying production is working
 
-1. Set `PRICE_PROVIDER=yahoo` + `KV_REST_API_URL/TOKEN` in Vercel
-2. Trigger engine: `POST /api/engine/run` (or wait for cron)
-3. Check `GET /api/engine/run` — should return engine output with real prices
-4. Confirm `pricingMethod` in output is `yahoo`, not `mock`
-5. Confirm `currentPrice` is non-null and non-zero for AAPL, MSFT, NVDA
-6. Check Telegram — digest should arrive within 30 seconds of engine run
+1. Env vars ya configuradas (ver tabla arriba)
+2. Trigger engine: `POST /api/engine/run` (o esperar cron)
+3. Check `GET /api/engine/run` — debe devolver engine output con precios reales
+4. Confirmar `pricingMethod` en output es `"twelvedata"`, no `"mock"`
+5. Confirmar `currentPrice` es no-null y no-zero para AAPL, MSFT, NVDA
+6. Check Telegram — digest debe llegar en menos de 30 segundos
 
-**Note**: All three read endpoints (`/api/engine/run` GET, `/api/opportunities`, `/api/portfolio`) are now KV-aware via `loadEngineOutput()`. With KV configured, all three return consistent data after a Vercel cold start.
+**Todos los endpoints de lectura** (`/api/engine/run` GET, `/api/opportunities`, `/api/portfolio`) son KV-aware via `loadEngineOutput()`. Con KV configurado, devuelven datos consistentes tras un cold start de Vercel.
 
 ---
 
@@ -346,15 +430,18 @@ All portfolio config consumers (`GET /api/engine/run`, `POST /api/engine/run`, `
 
 ---
 
-## What to do if Yahoo Finance fails
+## What to do if Twelve Data fails
 
-Symptoms: `currentPrice: null` for multiple tickers, `pricingMethod: mock`.
+Symptoms: `currentPrice: null` for multiple tickers, `pricingMethod` unexpectedly mock, or widespread `errors` in engine run response.
 
 Steps:
-1. Check `yahoo-finance2` npm for known issues
-2. If transient (rate limit, outage): wait for next cron run
-3. If persistent: add `TWELVE_DATA_API_KEY` and set `PRICE_PROVIDER=chain` + `PRICE_PROVIDER_CHAIN=twelvedata,yahoo`
-4. If Twelve Data also unavailable: activate EODHD (`EODHD_ENABLED=true`) for validated symbols only
+1. Check Twelve Data status and free tier quota (800 req/day — could be exhausted if cron ran many times)
+2. If rate limit: wait for next cron run (quota resets daily)
+3. If persistent: options in order of preference:
+   - Upgrade Twelve Data plan
+   - Do NOT fall back to Yahoo as primary — Yahoo is unreliable from Vercel cloud IPs
+   - Evaluate EODHD for validated symbols (requires `EODHD_ENABLED=true` already configured; only for symbols in `eodhd-symbol-validation.json`)
+   - Evaluate a chain provider once `batchGetRecentHighs` is implemented for ChainedPriceProvider
 
 Never set `currentPrice` to a fake value. Leave null; safety gates suppress BUY recommendations.
 

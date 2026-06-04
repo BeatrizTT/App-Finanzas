@@ -1,6 +1,6 @@
 # App Finanzas — Project State
 
-Last updated: 2026-06-04 · Branch: `main` (PR #17 merged — all P0 code complete)
+Last updated: 2026-06-04 · Branch: `main` (PR #19 — production reality reconciled)
 
 > Agentes/IA: leer `AGENTS.md` en la raíz del repo antes de cualquier cambio.
 
@@ -20,7 +20,7 @@ A personal investment decision-support app. It scans a curated universe of stock
 | Language | TypeScript 5.6 |
 | Hosting | Vercel (Hobby plan) |
 | Persistence | Vercel KV (Upstash REST) for engine output; `/tmp` for ephemeral discovery state |
-| Pricing | Yahoo Finance2 (primary) via provider chain; EODHD (optional, gated) |
+| Pricing | **Twelve Data** (production primary, `PRICE_PROVIDER=twelvedata`); Yahoo Finance2 (code present, not recommended for Vercel IPs); EODHD (optional, gated, inactive) |
 | FX | USD→EUR via Yahoo FX pair; GBX→GBP built-in |
 | Alerts | Telegram Bot API via `node-telegram-bot-api` |
 | Cron | Vercel Cron — 07:00 UTC + 16:00 UTC Mon–Fri |
@@ -31,25 +31,54 @@ A personal investment decision-support app. It scans a curated universe of stock
 
 ## Active branch
 
-`main` — PR #17 merged. All P0 code items complete. No active feature branches open.
+`main` — PR #18 merged. All P0 code items complete. Production reality reconciled in PR #19. No active feature branches open.
 
 ---
 
 ## Production status
 
+> **Nota**: este estado se reconcilió en PR #19 contra Vercel real. Los docs anteriores asumían que producción estaba en mock — era incorrecto. El estado real se verificó el 2026-06-04.
+
 | Item | Status | Notes |
 |---|---|---|
 | App deployed on Vercel | ✓ | `main` auto-deploys |
 | Vercel cron wired | ✓ | `vercel.json` — 07:00 + 16:00 UTC Mon-Fri |
-| `CRON_SECRET` cron auth | ✓ code done | **PR #13: fail-closed — 503 if missing, 401 if wrong. Still needs env var in Vercel dashboard.** |
-| `PRICE_PROVIDER` | ⚠ needs `yahoo` in Vercel env | Default is `mock` — **production uses mock prices** |
-| Vercel KV connected | ⚠ needs `KV_REST_API_URL` + `KV_REST_API_TOKEN` | Code exists; without KV, engine output ephemeral in `/tmp` |
-| Telegram configured | ⚠ needs `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` | Graceful degradation: logs to console |
-| EODHD pricing | disabled | Requires `EODHD_ENABLED=true` + `EODHD_API_KEY`; not default |
-| Discovery state (watchlist, snapshots) | ephemeral | file-store → `/tmp` on Vercel; resets per invocation |
-| Alert history / previous states | ephemeral | Same — file-store → `/tmp` |
+| `CRON_SECRET` cron auth | ✓ **configured** (since Apr 30) | Fail-closed: 503 if missing, 401 if wrong. `/api/config/status` → `cronSecretSet: true`. |
+| `PRICE_PROVIDER` | ✓ **`twelvedata`** (since May 5) | `TWELVE_DATA_API_KEY` also configured. Production uses real prices — NOT mock. `/api/config/status` → `priceProvider: "twelvedata"`. |
+| Vercel KV connected | ✓ **configured** (since May 6) | `KV_REST_API_URL`, `KV_REST_API_TOKEN`, `KV_URL`, `REDIS_URL`, `KV_REST_API_READ_ONLY_TOKEN` all present. End-to-end write/read verification pending (Phase 1). |
+| Telegram configured | ✓ **configured** (since Apr 30) | `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` present. `/api/config/status` → `telegramConfigured: true`. Message delivery verification pending (Phase 1). |
+| EODHD pricing | present but **inactive** | `EODHD_ENABLED=true` + `EODHD_API_KEY` configured in Vercel, but `PRICE_PROVIDER=twelvedata` so EODHD is never instantiated. Safe to ignore until a chain PR activates it. |
+| `PRICE_PROVIDER_CHAIN` | present but **inactive** | Configured in Vercel, but `PRICE_PROVIDER=twelvedata` not `chain`. Do not activate chain until `batchGetRecentHighs` is implemented. |
+| Orphaned env vars | **inert** | `PRICE_REFRESH_MODE`, `PRICE_CACHE_MODE`, `REPORTING_CURRENCY` — configured in Vercel, not read by any code. Harmless; do not build code around them without a PR. |
+| Discovery state (watchlist, snapshots) | ephemeral | file-store → `/tmp` on Vercel; resets per invocation. P1 item. |
+| Alert history / previous states | ephemeral | Same — file-store → `/tmp`. P1 item. |
 
-**Summary: All P0 code is complete. The app runs correctly but production requires Vercel env vars to be configured (see table above and RUNBOOK). Without them: mock prices, ephemeral state, no Telegram alerts.**
+**Summary: Production is NOT in mock. All core env vars are configured (Twelve Data, KV, Telegram, CRON_SECRET). What remains is end-to-end verification (Phase 1) and P1 reliability work.**
+
+---
+
+## What the app does today (executive summary)
+
+**Working in production:**
+- Fetches real prices for ~39 symbols via Twelve Data
+- Computes BUY/WATCH/HOLD/REDUCE/SELL signals per holding + discovered opportunities
+- Scores each signal with conviction (HIGH/MEDIUM/LOW), drawdown phase, distance from 52W high/low
+- Sends a Telegram digest at 07:00 + 16:00 UTC Mon-Fri (once end-to-end is verified)
+- Persists engine output and portfolio config to Vercel KV (code complete, KV configured, write path not yet verified live)
+
+**Not yet verified end-to-end:**
+- KV write/read survival across Vercel invocations (code + env ready; live test pending)
+- Telegram message delivery (configured; message receipt not yet confirmed)
+- Cron execution with real `CRON_SECRET` (code + env ready; live cron log not reviewed)
+- CSV import `saved: true` in Vercel (code ready; live test pending)
+
+**Not yet built:**
+- Radar for strong companies outside current portfolio with deep drawdowns (Phase 3 — external screener)
+- Reliable sell/reduce alerts with multi-run trend tracking (needs alert history KV — Phase 2)
+- "Verify now" live check for a single asset (Phase 4)
+- "Why did it fall?" news + thesis explanation (Phase 5 — requires external news provider decision)
+
+---
 
 ---
 
@@ -127,19 +156,23 @@ A personal investment decision-support app. It scans a curated universe of stock
 
 ---
 
-## Acciones manuales en Vercel — resumen
+## Estado de env vars en Vercel — verificado
 
-Ver `docs/RUNBOOK.md` sección **"Acciones manuales obligatorias en Vercel antes de producción real"** para instrucciones paso a paso.
+> Actualizado tras reconciliación PR #19. Estado real verificado el 2026-06-04.
 
-| Variable | Obligatoria | Estado | Nota |
-|---|---|---|---|
-| `CRON_SECRET` | Sí | ⚠ pendiente en Vercel | Sin esto el cron devuelve 503 |
-| `PRICE_PROVIDER=yahoo` | Sí | ⚠ pendiente en Vercel | Sin esto usa precios mock |
-| `KV_REST_API_URL` | Sí (persistencia) | ⚠ pendiente | Sale de Vercel KV / Upstash |
-| `KV_REST_API_TOKEN` | Sí (persistencia) | ⚠ pendiente | Sale de Vercel KV / Upstash |
-| `TELEGRAM_BOT_TOKEN` | Recomendada | ⚠ pendiente | Alertas van sólo a logs si falta |
-| `TELEGRAM_CHAT_ID` | Recomendada | ⚠ pendiente | Va junto con BOT_TOKEN |
-| `ENGINE_API_SECRET` | **No configurar** | — | Dashboard hace POST sin auth; configurar esto rompe el botón Analizar |
+| Variable | Estado real | Nota |
+|---|---|---|
+| `CRON_SECRET` | ✓ Configurada (Apr 30) | `cronSecretSet: true` confirmado |
+| `PRICE_PROVIDER=twelvedata` | ✓ Configurada (May 5) | `priceProvider: "twelvedata"` confirmado. NO cambiar a yahoo. |
+| `TWELVE_DATA_API_KEY` | ✓ Configurada (May 5) | Requerida para `PRICE_PROVIDER=twelvedata` |
+| `KV_REST_API_URL` | ✓ Configurada (May 6) | Auto-generada por Vercel KV / Upstash |
+| `KV_REST_API_TOKEN` | ✓ Configurada (May 6) | Auto-generada por Vercel KV / Upstash |
+| `TELEGRAM_BOT_TOKEN` | ✓ Configurada (Apr 30) | `telegramConfigured: true` confirmado |
+| `TELEGRAM_CHAT_ID` | ✓ Configurada (Apr 30) | Junto con BOT_TOKEN |
+| `EODHD_ENABLED` | Configurada, **inactiva** | Presente pero sin efecto (PRICE_PROVIDER no es eodhd/chain) |
+| `EODHD_API_KEY` | Configurada, **inactiva** | Mismo motivo |
+| `PRICE_PROVIDER_CHAIN` | Configurada, **inactiva** | No activar chain hasta implementar batch |
+| `ENGINE_API_SECRET` | **NO configurar** | Dashboard hace POST sin auth; configurar esto rompe el botón Analizar |
 
 ---
 
@@ -147,13 +180,14 @@ Ver `docs/RUNBOOK.md` sección **"Acciones manuales obligatorias en Vercel antes
 
 | Item | Blocker |
 |---|---|
-| Real prices in production | Set `PRICE_PROVIDER=yahoo` in Vercel |
-| Persistent engine state | Set `KV_REST_API_URL` + `KV_REST_API_TOKEN` in Vercel |
-| Cron protection (env) | Set `CRON_SECRET` in Vercel (code already done in PR #13) |
-| Alert delivery | Set `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` in Vercel |
-| P0 code PRs | All P0 code items done. Next: P1 (alert history KV, watchlist KV) |
-| Alert history persistence | file-store only → needs KV extension (P1) |
-| Multi-source discovery | Smoke only; run GitHub Actions workflow with real keys first |
+| End-to-end KV verification | Run live: `POST /api/engine/run` → verify `GET /api/engine/run` returns same data. CSV import → verify `saved: true`. |
+| Telegram message delivery | Run `POST /api/engine/run` (with real Telegram configured) → confirm message arrives. |
+| Cron live execution | Review Vercel function logs to confirm cron ran and returned 200. |
+| Alert history persistence | file-store only → needs KV extension (P1/Phase 2) |
+| Discovery watchlist/snapshots | Same — file-store, ephemeral (P1/Phase 2) |
+| Radar for strong companies outside portfolio | External screener not integrated yet. Requires smoke evidence + ExternalCandidate schema (Phase 3) |
+| Single-asset live check | Not built yet (Phase 4) |
+| News/thesis explainer | Not built yet, requires news provider decision (Phase 5) |
 
 ---
 
@@ -161,11 +195,11 @@ Ver `docs/RUNBOOK.md` sección **"Acciones manuales obligatorias en Vercel antes
 
 | PR | Title | State |
 |---|---|---|
+| #19 | docs: production reality reconciliation + investment roadmap | In progress |
+| #18 | docs: roadmap post-P0 and single-asset live check backlog | Merged `6e49be4` |
 | #17 | P0: CSV persistence — portfolio config KV-aware | Merged `6af45c0` |
 | #16 | P0: make /api/opportunities and /api/portfolio KV-aware | Merged `6801160` |
 | #15 | docs: living documentation process — AGENTS.md, PR template | Merged `518bcb4` |
-| #14 | docs: correct handover verification — align docs with code reality | Merged `70e1220` |
-| #13 | P0: fail closed cron auth and document production env | Merged `021e89f` |
 
 ---
 

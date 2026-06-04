@@ -88,15 +88,15 @@ Esto cambiará cuando se implemente autenticación del dashboard (pendiente en `
 
 El estado real y actualizado está en `docs/PROJECT_STATE.md`. No asumir el estado a partir de este archivo.
 
-Resumen a fecha de última actualización de este archivo (2026-06-04, PR #17):
-- Cron fail-closed: implementado en código (PR #13). Falta configurar `CRON_SECRET` en Vercel.
-- Precios: producción usa mock. Falta configurar `PRICE_PROVIDER=yahoo` en Vercel.
-- Persistencia KV: código listo. Falta configurar `KV_REST_API_URL` + `KV_REST_API_TOKEN` en Vercel.
-- Telegram: código listo. Falta configurar `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` en Vercel.
-- `/api/engine/run` GET, `/api/opportunities`, `/api/portfolio`: todos KV-aware via `loadEngineOutput()` (PR #16).
-- CSV import: KV-aware (PR #17). `POST /api/portfolio/import` guarda via `savePortfolioConfig()` → `saved: true` en Vercel con KV.
-- Portfolio config: todos los consumidores (`/api/portfolio`, `/api/engine/run`, `runDailyEngine`) leen via `loadPortfolioConfig()` — KV-first, `config/portfolio.json` fallback (PR #17).
-- `/api/config/status`: ya existe (devuelve `priceProvider`, `cronSecretSet`, `telegramConfigured`, `isVercel`).
+Resumen a fecha de última actualización de este archivo (2026-06-04, PR #19 — producción reconciliada):
+- **Precios**: `PRICE_PROVIDER=twelvedata` en Vercel desde Mayo 2026. `priceProvider: "twelvedata"` en `/api/config/status`. **NO** en mock. **NO** cambiar a yahoo (yahoo rate-limita desde Vercel cloud IPs).
+- **Cron**: `CRON_SECRET` configurado desde Abril 2026. `cronSecretSet: true`. Fail-closed activo.
+- **KV**: `KV_REST_API_URL` + `KV_REST_API_TOKEN` configurados desde Mayo 2026. Verificación end-to-end pendiente (Fase 1).
+- **Telegram**: `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` configurados desde Abril 2026. `telegramConfigured: true`. Recepción de mensajes pendiente de verificar (Fase 1).
+- **CSV import**: KV-aware (PR #17). `saved: true` cuando KV responde correctamente.
+- **Portfolio config**: todos los consumidores usan `loadPortfolioConfig()` — KV-first, `config/portfolio.json` fallback (PR #17).
+- **EODHD**: env vars configuradas en Vercel pero **inactivas** — `PRICE_PROVIDER=twelvedata` no las instancia.
+- **`ENGINE_API_SECRET`**: NO configurar. Dashboard llama POST sin Authorization header.
 
 ---
 
@@ -104,19 +104,39 @@ Resumen a fecha de última actualización de este archivo (2026-06-04, PR #17):
 
 Ver `docs/CTO_BACKLOG.md` sección "Roadmap" para detalle completo. Orden actual:
 
-**Inmediato (acción del propietario, sin código)**: configurar env vars de Vercel — `CRON_SECRET`, `PRICE_PROVIDER=yahoo`, `KV_REST_API_URL`, `KV_REST_API_TOKEN`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`. NO configurar `ENGINE_API_SECRET`.
+**Fase 0 (docs, DONE PR #19)**: producción reconciliada. Env vars ya configuradas. NO tocar Vercel.
 
-**P1 (código)**:
+**Fase 1 (verificación, sin código)**: end-to-end live:
+- `/api/config/status` → `priceProvider: "twelvedata"`, `cronSecretSet: true`, `telegramConfigured: true`
+- `POST /api/engine/run` → precios reales
+- `GET /api/engine/run` → confirma KV write/read
+- CSV import → `saved: true`
+- Telegram → confirmar mensaje
+
+**Fase 2 (código, después de Fase 1)**:
 1. `p1-alert-history-kv` — mover `history.ts` (alert history/deduplication) a KV
 2. `p1-discovery-state-kv` — mover watchlist y snapshots a KV (prefijo `discovery:`)
 
-**P2 (código, después de P1 estable)**:
-3. `p2-single-asset-live-check` — botón "Verificar ahora" por oportunidad: precio fresco, recalcular señal, explicación interna
+**Fase 3 (código)**: radar amplio — external screener, ExternalCandidate schema, smoke evidence primero.
 
-**P3 (después de P2 y decisión de proveedor)**:
-4. `p3-single-asset-news-and-thesis-explainer` — noticias recientes, explicación externa, riesgos
+**Fase 4 (código)**: `p2-single-asset-live-check` — precio fresco, recalcular señal, explicación interna.
 
-No iniciar ninguno sin confirmación del propietario.
+**Fase 5 (código + decisión de proveedor)**: `p3-single-asset-news-and-thesis-explainer` — noticias, fundamentals, tesis.
+
+No iniciar ninguna fase sin confirmación del propietario.
+
+---
+
+## Regla anti-pérdida de contexto — cuando producción contradice docs
+
+Si `/api/config/status` o los env vars de Vercel muestran algo distinto a lo que dicen estos docs:
+
+1. **No tocar Vercel** inmediatamente basándose en los docs.
+2. **Verificar producción** primero: `curl "$BASE/api/config/status"` + revisar env vars reales.
+3. **Abrir PR docs-only** para reconciliar.
+4. **Solo después** decidir cambios funcionales.
+
+Ejemplo real: los docs decían "producción usa mock, configurar PRICE_PROVIDER=yahoo". La realidad era `PRICE_PROVIDER=twelvedata` ya configurado y funcionando. Cambiar a yahoo habría roto producción (yahoo rate-limita desde cloud IPs de Vercel).
 
 ---
 
