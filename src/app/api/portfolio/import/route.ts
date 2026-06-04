@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { parseTradeRepublicCsv } from '@/lib/portfolio/csv-importer';
-import { readJsonFile, writeJsonFile } from '@/lib/utils/file-store';
 import type { PortfolioConfig, PortfolioHolding } from '@/lib/types';
+import type { ComputedHolding } from '@/lib/portfolio/csv-importer';
 
 const ISIN_TO_TICKER: Record<string, { ticker: string; name?: string; currency: string; type: 'stock' | 'etf'; tags: string[] }> = {
   'US67066G1040': { ticker: 'NVDA',  currency: 'USD', type: 'stock', tags: ['semis', 'AI', 'growth', 'tech'] },
@@ -23,6 +23,55 @@ const ISIN_TO_TICKER: Record<string, { ticker: string; name?: string; currency: 
   'US34959E1091': { ticker: 'FTNT',  currency: 'USD', type: 'stock', tags: ['cybersecurity'] },
 };
 
+/**
+ * Pure function: merge CSV-computed open positions with existing portfolio config.
+ * Preserves manual fields (convictionScore, dcaMonthlyEur, core, tags, noBuyOverride,
+ * manualThesisRisk) from the existing config. Exported for unit tests.
+ */
+export function buildUpdatedPortfolioConfig(
+  existing: PortfolioConfig,
+  computed: ComputedHolding[],
+  closedPositions: ComputedHolding[]
+): PortfolioConfig {
+  const existingMap = new Map(existing.holdings.map(h => [(h as any).isin as string, h]));
+
+  const updatedHoldings: PortfolioHolding[] = computed.map((c) => {
+    const known = ISIN_TO_TICKER[c.isin];
+    const prev = existingMap.get(c.isin);
+    return {
+      id: prev?.id ?? (known?.ticker?.toLowerCase() ?? c.isin.toLowerCase()),
+      name: known?.name ?? prev?.name ?? c.name,
+      ticker: known?.ticker ?? prev?.ticker,
+      isin: c.isin,
+      type: known?.type ?? prev?.type ?? 'stock',
+      dcaMonthlyEur: prev?.dcaMonthlyEur ?? 0,
+      avgPrice: c.avgCostEur,
+      units: c.shares,
+      core: prev?.core ?? false,
+      convictionScore: prev?.convictionScore ?? 7,
+      tags: known?.tags ?? prev?.tags ?? [],
+      currency: known?.currency ?? prev?.currency ?? 'USD',
+      maxWeightPercent: prev?.maxWeightPercent ?? 10,
+      noBuyOverride: prev?.noBuyOverride ?? false,
+      manualThesisRisk: prev?.manualThesisRisk ?? 'none',
+    } as PortfolioHolding;
+  });
+
+  const totalRealizedPnl = closedPositions.reduce((sum, c) => sum + c.realizedPnl, 0);
+
+  return {
+    ...existing,
+    holdings: updatedHoldings,
+    closedPositions: closedPositions.map(c => ({
+      isin: c.isin,
+      ticker: ISIN_TO_TICKER[c.isin]?.ticker ?? c.isin,
+      name: ISIN_TO_TICKER[c.isin]?.name ?? c.name,
+      realizedPnl: c.realizedPnl,
+    })),
+    totalRealizedPnl: Math.round(totalRealizedPnl * 100) / 100,
+  };
+}
+
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
@@ -41,63 +90,19 @@ export async function POST(req: NextRequest) {
       }, { status: 400 });
     }
 
-    const existing = readJsonFile<PortfolioConfig>('../../config/portfolio.json', {
-      cashAvailableEur: 2000,
-      targetCashReserveEur: 500,
-      holdings: [],
-    });
+    const { loadPortfolioConfig, savePortfolioConfig } = await import('@/lib/utils/portfolio-store');
+    const { config: existing } = await loadPortfolioConfig();
 
-    const existingMap = new Map(existing.holdings.map(h => [(h as any).isin as string, h]));
+    const updated = buildUpdatedPortfolioConfig(existing, computed, closedPositions);
 
-    const updatedHoldings: PortfolioHolding[] = computed.map((c) => {
-      const known = ISIN_TO_TICKER[c.isin];
-      const prev = existingMap.get(c.isin);
-      return {
-        id: prev?.id ?? (known?.ticker?.toLowerCase() ?? c.isin.toLowerCase()),
-        name: known?.name ?? prev?.name ?? c.name,
-        ticker: known?.ticker ?? prev?.ticker,
-        isin: c.isin,
-        type: known?.type ?? prev?.type ?? 'stock',
-        dcaMonthlyEur: prev?.dcaMonthlyEur ?? 0,
-        avgPrice: c.avgCostEur,
-        units: c.shares,
-        core: prev?.core ?? false,
-        convictionScore: prev?.convictionScore ?? 7,
-        tags: known?.tags ?? prev?.tags ?? [],
-        currency: known?.currency ?? prev?.currency ?? 'USD',
-        maxWeightPercent: prev?.maxWeightPercent ?? 10,
-        noBuyOverride: prev?.noBuyOverride ?? false,
-        manualThesisRisk: prev?.manualThesisRisk ?? 'none',
-      } as PortfolioHolding;
-    });
-
-    const totalRealizedPnl = closedPositions.reduce((sum, c) => sum + c.realizedPnl, 0);
-
-    const updated: PortfolioConfig = {
-      ...existing,
-      holdings: updatedHoldings,
-      closedPositions: closedPositions.map(c => ({
-        isin: c.isin,
-        ticker: ISIN_TO_TICKER[c.isin]?.ticker ?? c.isin,
-        name: ISIN_TO_TICKER[c.isin]?.name ?? c.name,
-        realizedPnl: c.realizedPnl,
-      })),
-      totalRealizedPnl: Math.round(totalRealizedPnl * 100) / 100,
-    };
-
-    // Try to persist — may fail on read-only filesystems (e.g. Vercel preview)
-    let saved = false;
-    try {
-      writeJsonFile('../../config/portfolio.json', updated);
-      saved = true;
-    } catch {
-      // Preview/serverless env: data cannot be persisted but parsing still works
-    }
+    const { saved, source: saveSource, warning: saveWarning } = await savePortfolioConfig(updated);
+    if (saveWarning) console.warn('[Import] Portfolio save warning:', saveWarning);
 
     return NextResponse.json({
       success: true,
       saved,
-      holdingsUpdated: updatedHoldings.length,
+      saveSource,
+      holdingsUpdated: updated.holdings.length,
       totalRealizedPnl: updated.totalRealizedPnl,
       holdings: computed.map(c => ({
         isin: c.isin,

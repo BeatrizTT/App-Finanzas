@@ -1,6 +1,6 @@
 # CTO Backlog — App Finanzas
 
-Last updated: 2026-06-03 (docs handover verification — post PR #13)
+Last updated: 2026-06-04 (post PR #17)
 
 Ordered by priority. P0 = production is broken or silent without these. Do not advance to P1 until P0 is solid.
 
@@ -74,21 +74,15 @@ TELEGRAM_CHAT_ID = <your-chat-id>
 
 ---
 
-### P0-6: CSV import persistence on Vercel (`p0-csv-persistence`)
-**Status**: Verified broken. **Next code PR.**
+### P0-6: CSV import persistence on Vercel ✓ DONE (PR #17)
+**Status**: Implemented. New module `src/lib/utils/portfolio-store.ts` provides `loadPortfolioConfig()` (KV-first, `config/portfolio.json` fallback) and `savePortfolioConfig()` (KV write, local file fallback).
 
-**Problem**: `/api/portfolio/import` parses CSV correctly but write to `config/portfolio.json` silently fails on Vercel (`saved: false` in response). Portfolio reads from committed `config/portfolio.json` (stable) but CSV updates don't persist.
+- `POST /api/portfolio/import` now reads existing config via `loadPortfolioConfig()` and saves via `savePortfolioConfig()` → `saved: true` in Vercel when KV configured.
+- `GET /api/portfolio`, `runDailyEngine()`, and both `GET`/`POST /api/engine/run` all read portfolio config via `loadPortfolioConfig()`.
+- Response contract unchanged. Added `saveSource` field to import response.
+- 16 new unit tests (8 portfolio-store + 8 import).
 
-**Workaround**: Import locally (`npm run dev`), commit updated `config/portfolio.json`.
-
-**Fix options**:
-- A: Store portfolio holdings in Vercel KV (prefixed key `portfolio:config`) — cleaner, no git noise
-- B: Store CSV data in KV, merge on read — more complex
-- C: Treat `config/portfolio.json` as the source of truth and update it manually — current workaround
-
-**Recommended**: Option A. Use same KV pattern as `engine-store.ts`. The portfolio import route then does: parse CSV → update config → write to KV → return `saved: true`.
-
-**Not blocked**: engine scoring reads from `config/portfolio.json` (committed) — scoring works. Only UI updates from CSV don't persist.
+**Verification**: 23 suites · 1509 asserts · 0 failed.
 
 ---
 

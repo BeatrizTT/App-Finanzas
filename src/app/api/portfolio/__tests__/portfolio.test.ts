@@ -124,12 +124,17 @@ async function main(): Promise<void> {
       process.env.KV_REST_API_URL = 'https://fake-kv.upstash.io';
       process.env.KV_REST_API_TOKEN = 'fake-token';
 
-      // Upstash REST GET returns { result: "<serialised json>" }
-      global.fetch = async () =>
-        new Response(JSON.stringify({ result: JSON.stringify(kvOutput) }), {
+      // Key-aware mock: engine output from KV, portfolio config → null (falls back to file)
+      // GET handler now calls loadPortfolioConfig (portfolio:config) + loadEngineOutput (engine:latest_output)
+      global.fetch = async (_url, init) => {
+        const cmd = JSON.parse((init?.body as string) ?? '[]') as string[];
+        const key = cmd[1];
+        const value = key === 'engine:latest_output' ? kvOutput : null;
+        return new Response(JSON.stringify({ result: value !== null ? JSON.stringify(value) : null }), {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
         });
+      };
 
       const response = await GET();
       const body = await response.json();
@@ -150,7 +155,7 @@ async function main(): Promise<void> {
         body.lastRunAt === '2024-06-04T07:00:00.000Z',
         `expected KV runAt, got ${body.lastRunAt}`
       );
-      // config always comes from committed portfolio.json regardless of KV state
+      // config comes from committed portfolio.json (portfolio:config returned null)
       assert(body.config !== null && body.config !== undefined, 'config present');
       assert(typeof body.config.cashAvailableEur === 'number', 'config has cashAvailableEur');
     } finally {
@@ -169,6 +174,7 @@ async function main(): Promise<void> {
     const savedDataDir = process.env.DATA_DIR;
 
     try {
+      // Both KV keys return null — engine output falls back to empty, portfolio config falls back to file
       global.fetch = async () =>
         new Response(JSON.stringify({ result: null }), {
           status: 200,
@@ -185,7 +191,7 @@ async function main(): Promise<void> {
       assert(Array.isArray(body.analyses) && body.analyses.length === 0, 'analyses empty');
       assert(body.concentration === null, 'concentration null');
       assert(body.lastRunAt === null, 'lastRunAt null');
-      // config always present from committed portfolio.json
+      // config always present from committed portfolio.json (portfolio:config was null → file fallback)
       assert(body.config !== null, 'config always present');
     } finally {
       global.fetch = originalFetch;
