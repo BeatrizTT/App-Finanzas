@@ -6,22 +6,48 @@ Recorded decisions with reasoning. Update when a decision is revisited.
 
 ## Pricing
 
-### Yahoo Finance2 as primary pricing source
-**Decision**: Use `yahoo-finance2` as the default and primary price provider.
-**Reason**: Zero cost, covers US + EU + ETF tickers, returns adjusted close, dividend yield, 52W high/low. Sufficient for personal use with small universe.
-**Risk**: Unofficial API; rate limits; may break without warning.
-**Mitigation**: Provider chain with fallback. Any Yahoo failure degrades gracefully. If Yahoo fails persistently, EODHD or FMP can be promoted.
-**Revisit if**: Yahoo rate-limits at our cron frequency (2×/day Mon-Fri), or returns stale data repeatedly.
+### Yahoo Finance2 as primary pricing source — REVISITED
+**Original decision**: Use `yahoo-finance2` as the default and primary price provider.
+**Reason at the time**: Zero cost, covers US + EU + ETF tickers, no API key needed.
+**Revisited**: Yahoo Finance2 aggressively rate-limits requests from cloud/datacenter IPs (Vercel serverless functions). The `yahoo-provider.ts` file itself notes this risk: "Uses browser-like headers to avoid aggressive rate limiting on Vercel IPs." In practice, production moved to Twelve Data (`PRICE_PROVIDER=twelvedata`) because it works reliably from Vercel.
+**Current rule**: Yahoo remains in code as a fallback option, but is **not recommended as the primary provider for Vercel-hosted deployments**. Use only if Twelve Data is unavailable and rate-limiting behavior has been re-evaluated.
+**Revisit if**: Yahoo Finance API stabilizes its cloud IP policy, or is replaced by a stable official API.
+
+### Twelve Data as production pricing provider
+**Decision**: `PRICE_PROVIDER=twelvedata` in production. `TWELVE_DATA_API_KEY` configured in Vercel.
+**Reason**: Works reliably from Vercel cloud IPs. Supports batch requests. Free tier: 800 req/day, 8 req/min — adequate for 2 cron runs/day over ~39 symbols.
+**Activated**: May 5, 2026 (configured in Vercel env vars).
+**Limitations**: Requires API key. Rate limit on free tier. Some EU ETF symbols require exchange suffix (mapped in `twelvedata-provider.ts` `SYMBOL_MAP`). For symbols not in the map, it falls through to direct symbol lookup.
+**Revisit if**: Twelve Data free tier is exhausted, returns stale data, or a better provider with batch + cloud IP support becomes available.
 
 ### EODHD as optional secondary, not default
 **Decision**: EODHD requires `EODHD_ENABLED=true` env var. Never activated by default.
 **Reason**: EODHD has per-call costs (screener = 5 call units). Activating without testing risks budget overrun.
 **Rule**: No symbol enters `eodhd-symbol-validation.json` as `validated_usd_needs_fx` without real EODHD smoke evidence.
-**Status**: 10 symbols validated. EODHD pricing gated. Screener not yet integrated.
+**Status**: 10 symbols validated. `EODHD_ENABLED=true` and `EODHD_API_KEY` are configured in Vercel, but are **currently inactive** because `PRICE_PROVIDER=twelvedata` — EODHD is only instantiated when `PRICE_PROVIDER=eodhd` or `PRICE_PROVIDER=chain` with `eodhd` in chain. Screener not yet integrated.
 
-### Provider chain over single-provider fallback
-**Decision**: `PRICE_PROVIDER=chain` with `PRICE_PROVIDER_CHAIN=yahoo` (extensible) instead of hard-coded single provider.
-**Reason**: Allows adding/removing providers without code changes. Degradation is observable.
+### Provider chain: do not activate until batch is implemented
+**Decision**: `PRICE_PROVIDER=chain` exists in code and `PRICE_PROVIDER_CHAIN` is configured in Vercel, but **do not activate chain yet**.
+**Reason**: `ChainedPriceProvider` has no `batchGetRecentHighs` implementation (see comment in `chain-provider.ts`: "chain resolution is inherently sequential per symbol"). Activating chain for a ~39-symbol universe would serialize all price fetches, making each engine run significantly slower. Chain is architecturally correct but operationally unready.
+**Activate when**: `batchGetRecentHighs` is implemented for the chain, or when a second provider is genuinely needed for fallback.
+
+### Orphaned Vercel env vars (inert, do not remove yet)
+The following env vars are configured in Vercel but **not read by any code** as of June 2026:
+- `PRICE_REFRESH_MODE`
+- `PRICE_CACHE_MODE`
+- `REPORTING_CURRENCY`
+They are inert (do not affect any code path). They may represent planned features or legacy config. Do not remove without confirming no code path reads them. Do not build code around them without a PR + decision.
+
+### Pricing provider strategy — current state
+
+| Provider | Production status | Strengths | Limitations | Decision |
+|---|---|---|---|---|
+| **Twelve Data** | ✓ Active (`PRICE_PROVIDER=twelvedata`) | Works from Vercel IPs, batch support, 800 req/day free tier, API key available | Free tier rate limit, needs API key, EU symbol mapping required | Keep as primary. Revisit if quota hit. |
+| **Yahoo Finance** | Code present, not active in production | Free, no API key, covers US+EU+ETF | Aggressive rate limiting from cloud IPs, unofficial API, may break | Fallback option only. Not recommended for Vercel primary. |
+| **EODHD** | Code present, env vars configured, **inactive** | Validated for 10 symbols, data quality good, screener capability | Per-call cost, screener = 5 units, requires smoke evidence per symbol | Optional secondary. Activate only after smoke + explicit PR decision. Never activate screener without evidence. |
+| **FMP** | Not integrated | Large universe, screener, fundamentals | Free tier limitations unknown, requires smoke evidence | Phase 3 candidate for external screener. No PR without smoke artifact. |
+| **Finnhub** | Not integrated | News, fundamentals, earnings | Requires smoke evidence, real-time pricing unproven | Phase 5 candidate for news/thesis explainer only. |
+| **OpenAI / Claude** | Not integrated | Explanation synthesis, narrative generation | NOT a data source — never for pricing, scoring, BUY signals, or financial accuracy | Phase 5 candidate for summarizing news text only. Never as source of prices, P&L, or recommendations. |
 
 ### No raw USD prices displayed as EUR
 **Decision**: If FX rate unavailable, `currentPrice=null`; `suitableForExactPnl=false`; `suitableForBuyRecommendation=false`.
@@ -32,11 +58,11 @@ Recorded decisions with reasoning. Update when a decision is revisited.
 
 ## Persistence
 
-### Vercel KV (Upstash REST) for engine output
-**Decision**: Engine output goes to Vercel KV first, file-store second.
+### Vercel KV (Upstash REST) for engine output and portfolio config
+**Decision**: Engine output goes to Vercel KV first, file-store second. Portfolio config same pattern.
 **Reason**: Vercel is serverless — `/tmp` is ephemeral per invocation. Without KV, `/api/opportunities` always returns empty after the first response.
-**Implementation**: `engine-store.ts` — KV with 5s timeout, file-store fallback. Never crashes.
-**Status**: Code is written; KV env vars not yet set in Vercel dashboard. This is P0.
+**Implementation**: `engine-store.ts` (engine output) and `portfolio-store.ts` (portfolio config) — KV with 5s timeout, file-store fallback. Never crashes.
+**Status**: Code complete (PRs #16 + #17). `KV_REST_API_URL` and `KV_REST_API_TOKEN` configured in Vercel since May 6, 2026. End-to-end KV verification pending (Phase 1).
 
 ### File-store for local dev, ephemeral for discovery state
 **Decision**: Discovery watchlist, snapshots, alert history use file-store. On Vercel this becomes `/tmp/app-finanzas`.
@@ -123,3 +149,12 @@ Recorded decisions with reasoning. Update when a decision is revisited.
 ### No advancing features without updating docs
 **Decision**: `PROJECT_STATE.md` and `CTO_BACKLOG.md` must be updated before closing any PR.
 **Reason**: This codebase is developed across multiple agent sessions. Without live docs, the next agent starts cold and repeats the same research. Docs are the handoff.
+
+### Production reality check before any Vercel change
+**Decision**: When production state contradicts docs, do not act on the docs — verify production first.
+**Protocol**:
+1. Check `/api/config/status` in production.
+2. Check Vercel → Settings → Environment Variables.
+3. Open a docs-only PR to reconcile.
+4. Only then decide on functional changes.
+**Reason**: Docs can lag production. An agent acting on stale docs may recommend changes that break a working system (e.g., changing `PRICE_PROVIDER=twelvedata` to `yahoo` when twelvedata was already working and yahoo was not reliable from Vercel IPs).
