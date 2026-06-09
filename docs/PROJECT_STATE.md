@@ -1,6 +1,6 @@
 # App Finanzas — Project State
 
-Last updated: 2026-06-04 · Branch: `main` (PR #19 — production reality reconciled)
+Last updated: 2026-06-09 · Branch: `main` (PR #20 — Fase 1 KV caching fix)
 
 > Agentes/IA: leer `AGENTS.md` en la raíz del repo antes de cualquier cambio.
 
@@ -45,7 +45,7 @@ A personal investment decision-support app. It scans a curated universe of stock
 | Vercel cron wired | ✓ | `vercel.json` — 07:00 + 16:00 UTC Mon-Fri |
 | `CRON_SECRET` cron auth | ✓ **configured** (since Apr 30) | Fail-closed: 503 if missing, 401 if wrong. `/api/config/status` → `cronSecretSet: true`. |
 | `PRICE_PROVIDER` | ✓ **`twelvedata`** (since May 5) | `TWELVE_DATA_API_KEY` also configured. Production uses real prices — NOT mock. `/api/config/status` → `priceProvider: "twelvedata"`. |
-| Vercel KV connected | ✓ **configured** (since May 6) | `KV_REST_API_URL`, `KV_REST_API_TOKEN`, `KV_URL`, `REDIS_URL`, `KV_REST_API_READ_ONLY_TOKEN` all present. End-to-end write/read verification pending (Phase 1). |
+| Vercel KV connected | ✓ **configured** (since May 6) | `KV_REST_API_URL`, `KV_REST_API_TOKEN`, `KV_URL`, `REDIS_URL`, `KV_REST_API_READ_ONLY_TOKEN` all present. KV write confirmed live (Phase 1). Stale-cache bug on `/api/opportunities` + `/api/portfolio` found and fixed (PR #20 — `force-dynamic`). Re-test pending post-deploy. |
 | Telegram configured | ✓ **configured** (since Apr 30) | `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` present. `/api/config/status` → `telegramConfigured: true`. Message delivery verification pending (Phase 1). |
 | EODHD pricing | present but **inactive** | `EODHD_ENABLED=true` + `EODHD_API_KEY` configured in Vercel, but `PRICE_PROVIDER=twelvedata` so EODHD is never instantiated. Safe to ignore until a chain PR activates it. |
 | `PRICE_PROVIDER_CHAIN` | present but **inactive** | Configured in Vercel, but `PRICE_PROVIDER=twelvedata` not `chain`. Do not activate chain until `batchGetRecentHighs` is implemented. |
@@ -66,8 +66,17 @@ A personal investment decision-support app. It scans a curated universe of stock
 - Sends a Telegram digest at 07:00 + 16:00 UTC Mon-Fri (once end-to-end is verified)
 - Persists engine output and portfolio config to Vercel KV (code complete, KV configured, write path not yet verified live)
 
+**Verified live (Phase 1, 2026-06-09):**
+- KV write confirmed: POST `/api/engine/run` logs `[EngineStore] Output saved to Vercel KV` ✅
+- Twelve Data pricing confirmed: 8/8 symbols fetched, EUR/USD rate 1.15 ✅
+- Portfolio config loads correctly: 13 holdings, €16,995 cash ✅
+- Stale-cache bug discovered and fixed on `/api/opportunities` + `/api/portfolio` (PR #20) ✅
+
+**Pending re-test after PR #20 deploy:**
+- KV read confirmed across Lambda instances: `/api/opportunities` `lastRunAt` non-null
+- `/api/portfolio` `analysesCount` non-zero
+
 **Not yet verified end-to-end:**
-- KV write/read survival across Vercel invocations (code + env ready; live test pending)
 - Telegram message delivery (configured; message receipt not yet confirmed)
 - Cron execution with real `CRON_SECRET` (code + env ready; live cron log not reviewed)
 - CSV import `saved: true` in Vercel (code ready; live test pending)
@@ -114,6 +123,8 @@ A personal investment decision-support app. It scans a curated universe of stock
 | Discovery snapshots | file-store → `/tmp/app-finanzas` | **No — resets each invocation** |
 
 **All engine output read endpoints are KV-aware** (PR #16): `/api/engine/run` GET, `/api/opportunities`, `/api/portfolio` all use `loadEngineOutput()`.
+
+**Caching bug fixed** (PR #20, Fase 1): `/api/opportunities` and `/api/portfolio` only exported GET handlers. Next.js/Vercel was serving a stale cached response ("No engine output yet") from the first deployment request, bypassing the function entirely. Fixed with `export const dynamic = 'force-dynamic'` and static imports for `engine-store` + `portfolio-store`.
 
 **Portfolio config is now KV-aware** (PR #17): CSV import saves to KV via `savePortfolioConfig()`. All consumers (`/api/portfolio`, `/api/engine/run`, `runDailyEngine`) load via `loadPortfolioConfig()` — KV first, `config/portfolio.json` fallback. `POST /api/portfolio/import` returns `saved: true` in Vercel when KV is configured.
 
