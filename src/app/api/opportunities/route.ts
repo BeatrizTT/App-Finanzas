@@ -1,8 +1,11 @@
 // API route: GET /api/opportunities
 // Returns current stock, ETF, and discovered opportunities from last engine run
 
+export const dynamic = 'force-dynamic';
+
 import { NextResponse } from 'next/server';
 import type { DailyEngineOutput } from '@/lib/types';
+import { loadEngineOutput } from '@/lib/utils/engine-store';
 
 /** Pure response builder — exported for unit tests. */
 export function buildOpportunitiesResponse(output: DailyEngineOutput | null) {
@@ -25,7 +28,6 @@ export function buildOpportunitiesResponse(output: DailyEngineOutput | null) {
 
 export async function GET() {
   try {
-    const { loadEngineOutput } = await import('@/lib/utils/engine-store');
     const { output, source } = await loadEngineOutput();
     console.log(`[API /opportunities] Loaded from ${source}`);
     return NextResponse.json(buildOpportunitiesResponse(output));
