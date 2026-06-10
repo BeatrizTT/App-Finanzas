@@ -336,18 +336,22 @@ Response includes `success`, `runAt`, `alertsCount`, `errors` array, plus full `
 
 ## Verificación end-to-end (Fase 1) — checklist con comandos
 
-Usar después de confirmar que todos los env vars están configurados en Vercel. Sustituir placeholders antes de ejecutar.
+> **Estado**: Fase 1 parcialmente completada (2026-06-09/10).
+> ✅ Pasos 1, 3, 4, 5 verificados en producción.
+> ⏳ Pasos 2, 6, 7 pendientes (cron auth, CSV import, Telegram).
+
+Sustituir placeholders antes de ejecutar. No pegar `CRON_SECRET` en chats ni docs.
 
 ```bash
 BASE="https://<tu-url-de-vercel>"
-CRON_SECRET="<tu-CRON_SECRET>"
+CRON_SECRET="<tu-CRON_SECRET — solo localmente, nunca en chat>"
 ```
 
-### 1. Config status
+### 1. Config status ✅ VERIFICADO (2026-06-10)
 ```bash
 curl -s "$BASE/api/config/status" | jq .
 ```
-Esperado:
+Esperado y confirmado en producción:
 ```json
 {
   "priceProvider": "twelvedata",
@@ -360,7 +364,7 @@ Esperado:
 Si `priceProvider` es `"mock"`: redeploy pendiente o `PRICE_PROVIDER` no configurada.
 Si `kvConfigured` es `false`: las env vars de KV no llegan al runtime — la persistencia entre invocaciones no funcionará (ver sección "Lección Fase 1" más abajo).
 
-### 2. Cron auth
+### 2. Cron auth ⏳ PENDIENTE
 ```bash
 # Sin header → debe devolver 401
 curl -s -o /dev/null -w "%{http_code}" "$BASE/api/cron/daily"
@@ -374,7 +378,7 @@ curl -s "$BASE/api/cron/daily" \
   -H "Authorization: Bearer $CRON_SECRET" | jq '{success, runAt}'
 ```
 
-### 3. Engine run manual
+### 3. Engine run manual ✅ VERIFICADO (2026-06-10)
 ```bash
 # ENGINE_API_SECRET no está configurado → no requiere auth.
 # sendDigest/sendAlertMessages en false para no disparar Telegram durante pruebas.
@@ -387,28 +391,32 @@ curl -s -X POST "$BASE/api/engine/run" \
 - `samplePrice` debe ser un número (no-null). Nota: `pricingMethod` no existe a nivel raíz — vive dentro de cada opportunity.
 - Si `success: false` o errores: revisar campo `errors` en la respuesta.
 
-### 4. KV persistence (write → read)
+### 4. KV persistence (write → read) ✅ VERIFICADO (2026-06-10)
 ```bash
 # Leer el output del run anterior (confirma KV read)
 curl -s "$BASE/api/engine/run" | jq '{runAt, noData}'
 ```
 El `runAt` debe coincidir con el run del paso 3 y `noData` debe estar ausente/null. Si `noData: true`: KV write no funcionó.
+Confirmado en producción: `runAt: "2026-06-10T10:32:51.271Z"`, `noData` ausente.
 
-### 5. Opportunities y Portfolio
+### 5. Opportunities y Portfolio ✅ VERIFICADO (2026-06-10)
 ```bash
 curl -s "$BASE/api/opportunities" | jq '{lastRunAt, stockCount: (.stocks | length)}'
 curl -s "$BASE/api/portfolio" | jq '{holdingsCount: (.config.holdings | length), lastRunAt}'
 ```
+Confirmado en producción: ambos con `lastRunAt: "2026-06-10T10:32:51.271Z"` idéntico al POST; `stockCount: 4`, `analysesCount: 13`. KV read cross-instance verificado.
 
-### 6. CSV import
+### 6. CSV import ⏳ PENDIENTE (requiere fichero Trade Republic)
 ```bash
 curl -s -X POST "$BASE/api/portfolio/import" \
   -F "csv=@tu-trades.csv" | jq '{saved, saveSource, holdingsUpdated}'
 ```
 Esperado con KV: `{"saved": true, "saveSource": "kv", "holdingsUpdated": N}`
 
-### 7. Telegram
-Después del paso 3, espera hasta 30 segundos. El bot debería enviar un digest con señales del portfolio.
+### 7. Telegram ⏳ PENDIENTE
+Ejecutar POST `/api/engine/run` con `sendDigest: true, sendAlertMessages: false` (para enviar el digest sin alertas individuales).
+Esperar hasta 30 segundos — el bot debería enviar un mensaje con las señales del portfolio.
+No pegar `TELEGRAM_BOT_TOKEN` ni `TELEGRAM_CHAT_ID` en chats ni docs.
 
 ---
 

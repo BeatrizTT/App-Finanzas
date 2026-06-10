@@ -1,6 +1,6 @@
 # App Finanzas — Project State
 
-Last updated: 2026-06-10 · Branch: `main` (PR #21 — Fase 1 KV env inlining fix)
+Last updated: 2026-06-10 · Branch: `main` (PR #21 merged — Fase 1 KV read verified)
 
 > Agentes/IA: leer `AGENTS.md` en la raíz del repo antes de cualquier cambio.
 
@@ -45,7 +45,7 @@ A personal investment decision-support app. It scans a curated universe of stock
 | Vercel cron wired | ✓ | `vercel.json` — 07:00 + 16:00 UTC Mon-Fri |
 | `CRON_SECRET` cron auth | ✓ **configured** (since Apr 30) | Fail-closed: 503 if missing, 401 if wrong. `/api/config/status` → `cronSecretSet: true`. |
 | `PRICE_PROVIDER` | ✓ **`twelvedata`** (since May 5) | `TWELVE_DATA_API_KEY` also configured. Production uses real prices — NOT mock. `/api/config/status` → `priceProvider: "twelvedata"`. |
-| Vercel KV connected | ✓ **configured** (since May 6) | `KV_REST_API_URL`, `KV_REST_API_TOKEN`, `KV_URL`, `REDIS_URL`, `KV_REST_API_READ_ONLY_TOKEN` all present. KV write confirmed live (Phase 1). Two read-path bugs found and fixed: stale GET caching (PR #20 — `force-dynamic`) and Turbopack env inlining (PR #21 — bracket notation). Re-test pending post-deploy of PR #21. |
+| Vercel KV connected | ✓ **verified end-to-end** (2026-06-10) | Write + read confirmed live. POST `/api/engine/run` → `[EngineStore] Output saved to Vercel KV`. `/api/opportunities` + `/api/portfolio` read the same `runAt` across Lambda instances. Two bugs found and fixed during Phase 1: stale GET caching (PR #20 — `force-dynamic`) and Turbopack env inlining (PR #21 — bracket notation). |
 | Telegram configured | ✓ **configured** (since Apr 30) | `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` present. `/api/config/status` → `telegramConfigured: true`. Message delivery verification pending (Phase 1). |
 | EODHD pricing | present but **inactive** | `EODHD_ENABLED=true` + `EODHD_API_KEY` configured in Vercel, but `PRICE_PROVIDER=twelvedata` so EODHD is never instantiated. Safe to ignore until a chain PR activates it. |
 | `PRICE_PROVIDER_CHAIN` | present but **inactive** | Configured in Vercel, but `PRICE_PROVIDER=twelvedata` not `chain`. Do not activate chain until `batchGetRecentHighs` is implemented. |
@@ -64,19 +64,25 @@ A personal investment decision-support app. It scans a curated universe of stock
 - Computes BUY/WATCH/HOLD/REDUCE/SELL signals per holding + discovered opportunities
 - Scores each signal with conviction (HIGH/MEDIUM/LOW), drawdown phase, distance from 52W high/low
 - Sends a Telegram digest at 07:00 + 16:00 UTC Mon-Fri (once end-to-end is verified)
-- Persists engine output to Vercel KV; write path verified live. Read path re-test pending after PR #21 deploy.
+- Persists engine output to Vercel KV; write + read verified live (2026-06-10). KV survives cross-Lambda-instance reads.
 
 **Verified live (Phase 1, 2026-06-09/10):**
-- KV write confirmed: POST `/api/engine/run` logs `[EngineStore] Output saved to Vercel KV` ✅
-- Twelve Data pricing confirmed: 8/8 symbols fetched, EUR/USD rate 1.15 ✅
-- Portfolio config loads correctly: 13 holdings, €16,995 cash ✅
-- Stale-cache bug discovered and fixed on `/api/opportunities` + `/api/portfolio` (PR #20) ✅
-- Env inlining bug discovered (PR #20 deployed but GET routes still saw no KV) and fixed with bracket notation (PR #21) ✅
+- Twelve Data pricing: 8/8 symbols fetched, EUR/USD rate 1.15 ✅
+- Portfolio config: 13 holdings, €16,995 cash ✅
+- KV write: `[EngineStore] Output saved to Vercel KV`, Upstash call visible in Vercel External APIs ✅
+- `kvConfigured: true` from `/api/config/status` ✅
+- KV read cross-instance (run `2026-06-10T10:32:51.271Z`):
+  - `/api/opportunities` → `lastRunAt: "2026-06-10T10:32:51.271Z"`, `stockCount: 4` ✅
+  - `/api/portfolio` → `lastRunAt: "2026-06-10T10:32:51.271Z"`, `analysesCount: 13` ✅
+- Two bugs found and fixed during Phase 1 verification — both closed:
+  - Stale GET caching on GET-only routes (PR #20 — `force-dynamic` + static imports)
+  - Turbopack env inlining (PR #21 — bracket notation in all server-side stores)
 
-**Pending re-test after PR #21 deploy:**
-- `/api/config/status` → `kvConfigured: true`
-- KV read confirmed across Lambda instances: `/api/opportunities` `lastRunAt` non-null, `stockCount >= 1`
-- `/api/portfolio` `analysesCount: 13`
+**Phase 1 — pending steps:**
+- Step 6: cron auth (401/401/200) — `CRON_SECRET` needed locally; do not paste in chat
+- Step 7: CSV import → `saved: true, source: "kv"` — requires Trade Republic CSV
+- Step 8: Telegram controlled test (`sendDigest: true, sendAlertMessages: false`)
+- Step 9: final Phase 1 results table → then docs-only PR `docs/phase-1-verified`
 
 **Not yet verified end-to-end:**
 - Telegram message delivery (configured; message receipt not yet confirmed)
