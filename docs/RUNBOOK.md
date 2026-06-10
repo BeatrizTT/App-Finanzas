@@ -376,18 +376,23 @@ curl -s "$BASE/api/cron/daily" \
 
 ### 3. Engine run manual
 ```bash
-# ENGINE_API_SECRET no está configurado → no requiere auth
-curl -s -X POST "$BASE/api/engine/run" | jq '{success, pricingMethod, errors}'
+# ENGINE_API_SECRET no está configurado → no requiere auth.
+# sendDigest/sendAlertMessages en false para no disparar Telegram durante pruebas.
+curl -s -X POST "$BASE/api/engine/run" \
+  -H "Content-Type: application/json" \
+  -d '{"sendDigest": false, "sendAlertMessages": false}' \
+  | jq '{success, alertsCount, errors, eurUsdRate, samplePrice: .portfolioAnalyses[1].currentPrice}'
 ```
-- `success: true` y `pricingMethod` con valor no-mock: precios reales confirmados.
+- `success: true`, `errors: []` y `eurUsdRate` numérico: precios reales confirmados.
+- `samplePrice` debe ser un número (no-null). Nota: `pricingMethod` no existe a nivel raíz — vive dentro de cada opportunity.
 - Si `success: false` o errores: revisar campo `errors` en la respuesta.
 
 ### 4. KV persistence (write → read)
 ```bash
 # Leer el output del run anterior (confirma KV read)
-curl -s "$BASE/api/engine/run" | jq '{runAt, pricingMethod}'
+curl -s "$BASE/api/engine/run" | jq '{runAt, noData}'
 ```
-El `runAt` debe coincidir con el run del paso 3. Si devuelve vacío/null: KV write no funcionó.
+El `runAt` debe coincidir con el run del paso 3 y `noData` debe estar ausente/null. Si `noData: true`: KV write no funcionó.
 
 ### 5. Opportunities y Portfolio
 ```bash

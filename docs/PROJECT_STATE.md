@@ -64,7 +64,7 @@ A personal investment decision-support app. It scans a curated universe of stock
 - Computes BUY/WATCH/HOLD/REDUCE/SELL signals per holding + discovered opportunities
 - Scores each signal with conviction (HIGH/MEDIUM/LOW), drawdown phase, distance from 52W high/low
 - Sends a Telegram digest at 07:00 + 16:00 UTC Mon-Fri (once end-to-end is verified)
-- Persists engine output and portfolio config to Vercel KV (code complete, KV configured, write path not yet verified live)
+- Persists engine output to Vercel KV; write path verified live. Read path re-test pending after PR #21 deploy.
 
 **Verified live (Phase 1, 2026-06-09/10):**
 - KV write confirmed: POST `/api/engine/run` logs `[EngineStore] Output saved to Vercel KV` ✅

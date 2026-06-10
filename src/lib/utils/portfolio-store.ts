@@ -71,13 +71,13 @@ async function kvGet<T>(url: string, token: string, key: string): Promise<T | nu
 // Apply CASH_AVAILABLE_EUR / TARGET_CASH_RESERVE_EUR env overrides.
 // Used when loading from KV (getEffectivePortfolioConfig already does this for the file path).
 function applyEnvOverrides(config: PortfolioConfig): PortfolioConfig {
+  const cashOverride = process.env['CASH_AVAILABLE_EUR'];
+  const reserveOverride = process.env['TARGET_CASH_RESERVE_EUR'];
   return {
     ...config,
-    cashAvailableEur: process.env.CASH_AVAILABLE_EUR
-      ? parseFloat(process.env.CASH_AVAILABLE_EUR)
-      : config.cashAvailableEur,
-    targetCashReserveEur: process.env.TARGET_CASH_RESERVE_EUR
-      ? parseFloat(process.env.TARGET_CASH_RESERVE_EUR)
+    cashAvailableEur: cashOverride ? parseFloat(cashOverride) : config.cashAvailableEur,
+    targetCashReserveEur: reserveOverride
+      ? parseFloat(reserveOverride)
       : config.targetCashReserveEur,
   };
 }
