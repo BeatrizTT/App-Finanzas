@@ -73,13 +73,14 @@ export function getOverridesConfig(): OverridesConfig {
 /** Merge portfolio config with env var overrides */
 export function getEffectivePortfolioConfig(): PortfolioConfig {
   const base = getPortfolioConfig();
+  // Bracket notation prevents Turbopack from inlining these at build time
+  const cashOverride = process.env['CASH_AVAILABLE_EUR'];
+  const reserveOverride = process.env['TARGET_CASH_RESERVE_EUR'];
   return {
     ...base,
-    cashAvailableEur: process.env.CASH_AVAILABLE_EUR
-      ? parseFloat(process.env.CASH_AVAILABLE_EUR)
-      : base.cashAvailableEur,
-    targetCashReserveEur: process.env.TARGET_CASH_RESERVE_EUR
-      ? parseFloat(process.env.TARGET_CASH_RESERVE_EUR)
+    cashAvailableEur: cashOverride ? parseFloat(cashOverride) : base.cashAvailableEur,
+    targetCashReserveEur: reserveOverride
+      ? parseFloat(reserveOverride)
       : base.targetCashReserveEur,
   };
 }

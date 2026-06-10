@@ -17,16 +17,17 @@ const KV_TIMEOUT_MS = 5000;
 // ---------------------------------------------------------------------------
 
 function getKvConfig(): { url: string; token: string } | null {
-  const url = process.env.KV_REST_API_URL;
-  const token = process.env.KV_REST_API_TOKEN;
+  // Bracket notation prevents Turbopack from inlining these at build time
+  const url = process.env['KV_REST_API_URL'];
+  const token = process.env['KV_REST_API_TOKEN'];
   if (url && token) return { url, token };
   return null;
 }
 
 function sanitizeKvError(msg: string): string {
-  const token = process.env.KV_REST_API_TOKEN;
+  const token = process.env['KV_REST_API_TOKEN'];
   if (token && token.length > 8) msg = msg.replaceAll(token, '[REDACTED]');
-  const url = process.env.KV_REST_API_URL;
+  const url = process.env['KV_REST_API_URL'];
   if (url) msg = msg.replace(url, '[KV_URL]');
   return msg;
 }
@@ -70,13 +71,13 @@ async function kvGet<T>(url: string, token: string, key: string): Promise<T | nu
 // Apply CASH_AVAILABLE_EUR / TARGET_CASH_RESERVE_EUR env overrides.
 // Used when loading from KV (getEffectivePortfolioConfig already does this for the file path).
 function applyEnvOverrides(config: PortfolioConfig): PortfolioConfig {
+  const cashOverride = process.env['CASH_AVAILABLE_EUR'];
+  const reserveOverride = process.env['TARGET_CASH_RESERVE_EUR'];
   return {
     ...config,
-    cashAvailableEur: process.env.CASH_AVAILABLE_EUR
-      ? parseFloat(process.env.CASH_AVAILABLE_EUR)
-      : config.cashAvailableEur,
-    targetCashReserveEur: process.env.TARGET_CASH_RESERVE_EUR
-      ? parseFloat(process.env.TARGET_CASH_RESERVE_EUR)
+    cashAvailableEur: cashOverride ? parseFloat(cashOverride) : config.cashAvailableEur,
+    targetCashReserveEur: reserveOverride
+      ? parseFloat(reserveOverride)
       : config.targetCashReserveEur,
   };
 }
