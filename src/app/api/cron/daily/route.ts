@@ -23,7 +23,7 @@ export function checkCronAuth(
 }
 
 export async function GET(req: Request) {
-  const cronSecret = process.env.CRON_SECRET;
+  const cronSecret = process.env['CRON_SECRET'];
   const authHeader = req.headers ? (req as any).headers?.get?.('authorization') : null;
 
   const auth = checkCronAuth(cronSecret, authHeader);
