@@ -7,7 +7,7 @@ export const maxDuration = 60; // seconds, Vercel hobby limit is 60s
 export async function GET(req: Request) {
   // Vercel sets this header for cron requests; protect against random calls
   const authHeader = req.headers ? (req as any).headers?.get?.('authorization') : null;
-  const cronSecret = process.env.CRON_SECRET;
+  const cronSecret = process.env['CRON_SECRET'];
   if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
