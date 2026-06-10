@@ -119,15 +119,17 @@ curl -s "$BASE/api/config/status" | jq .
 Respuesta esperada tras configurar todo:
 ```json
 {
-  "priceProvider": "yahoo",
+  "priceProvider": "twelvedata",
   "cronSecretSet": true,
   "telegramConfigured": true,
-  "isVercel": true
+  "isVercel": true,
+  "kvConfigured": true
 }
 ```
-- `priceProvider` debe ser `"yahoo"`, no `"mock"`
+- `priceProvider` debe ser `"twelvedata"`, no `"mock"` ni `"yahoo"`
 - `cronSecretSet` debe ser `true`
 - `telegramConfigured` será `true` sólo si has añadido ambas variables de Telegram
+- `kvConfigured` debe ser `true` — si es `false`, las env vars de KV no son visibles en runtime y la persistencia entre invocaciones no funcionará
 
 **Verificar protección del cron:**
 ```bash
@@ -145,18 +147,27 @@ curl -s "$BASE/api/cron/daily" \
 
 **Verificar que el motor produce datos reales:**
 ```bash
-# Ejecutar el motor manualmente (POST sin auth, porque ENGINE_API_SECRET no está configurado)
-curl -s -X POST "$BASE/api/engine/run" | jq '{success, pricingMethod: .pricingMethod, alertsCount}'
+# Ejecutar el motor manualmente (POST sin auth, porque ENGINE_API_SECRET no está configurado).
+# sendDigest/sendAlertMessages en false para no disparar Telegram durante pruebas.
+curl -s -X POST "$BASE/api/engine/run" \
+  -H "Content-Type: application/json" \
+  -d '{"sendDigest": false, "sendAlertMessages": false}' \
+  | jq '{success, alertsCount, errors, eurUsdRate, samplePrice: .portfolioAnalyses[1].currentPrice}'
 ```
-- `success` debe ser `true`
-- `pricingMethod` debe ser `"twelvedata"`, no `"mock"` ni `"yahoo"`
+- `success` debe ser `true`, `errors` debe ser `[]`
+- `eurUsdRate` debe ser un número (~1.0–1.3), no `null`
+- Nota: no hay `pricingMethod` a nivel raíz — vive dentro de cada opportunity. `proxy_drawdown_only` en ETFs europeos (CNDX, IWVL) es esperado, no un fallo.
 
 **Verificar persistencia (si KV está configurado):**
 ```bash
 # Después de ejecutar el motor, recuperar el último resultado guardado
-curl -s "$BASE/api/engine/run" | jq '{runAt, pricingMethod: .pricingMethod}'
+curl -s "$BASE/api/engine/run" | jq '{runAt, noData}'
+# Y verificar que las rutas de lectura ven el mismo run:
+curl -s "$BASE/api/opportunities" | jq '{lastRunAt, stocks: (.stocks|length)}'
+curl -s "$BASE/api/portfolio" | jq '{lastRunAt, analyses: (.analyses|length)}'
 ```
-- `runAt` debe mostrar una fecha reciente (la del último run)
+- `runAt`/`lastRunAt` deben mostrar la fecha del último run en las TRES rutas
+- Si `/api/engine/run` GET tiene datos pero `/api/opportunities` devuelve `lastRunAt: null`, revisar la sección "Lección Fase 1" (caching/env inlining)
 
 **Verificar Telegram:**
 - Después de ejecutar el motor con `POST /api/engine/run`, deberías recibir un mensaje en Telegram en menos de 30 segundos.
@@ -342,10 +353,12 @@ Esperado:
   "priceProvider": "twelvedata",
   "cronSecretSet": true,
   "telegramConfigured": true,
-  "isVercel": true
+  "isVercel": true,
+  "kvConfigured": true
 }
 ```
 Si `priceProvider` es `"mock"`: redeploy pendiente o `PRICE_PROVIDER` no configurada.
+Si `kvConfigured` es `false`: las env vars de KV no llegan al runtime — la persistencia entre invocaciones no funcionará (ver sección "Lección Fase 1" más abajo).
 
 ### 2. Cron auth
 ```bash
@@ -409,14 +422,34 @@ Razón: los docs pueden estar desactualizados. Un agente que actúa sobre docs e
 
 ## Verifying production is working
 
-1. Env vars ya configuradas (ver tabla arriba)
+1. Env vars ya configuradas (ver tabla arriba) — `kvConfigured: true` en `/api/config/status`
 2. Trigger engine: `POST /api/engine/run` (o esperar cron)
 3. Check `GET /api/engine/run` — debe devolver engine output con precios reales
-4. Confirmar `pricingMethod` en output es `"twelvedata"`, no `"mock"`
-5. Confirmar `currentPrice` es no-null y no-zero para AAPL, MSFT, NVDA
+4. Check `GET /api/opportunities` y `GET /api/portfolio` — `lastRunAt` debe coincidir con el run
+5. Confirmar `currentPrice` es no-null y no-zero para AAPL, MSFT, NVDA (los ETFs proxy como CNDX tienen `currentPrice: null` por diseño — `proxy_drawdown_only`)
 6. Check Telegram — digest debe llegar en menos de 30 segundos
 
 **Todos los endpoints de lectura** (`/api/engine/run` GET, `/api/opportunities`, `/api/portfolio`) son KV-aware via `loadEngineOutput()`. Con KV configurado, devuelven datos consistentes tras un cold start de Vercel.
+
+---
+
+## Lección Fase 1 — rutas GET-only y env vars de KV (PRs #20, #21)
+
+Lo aprendido durante la verificación end-to-end de Fase 1 (2026-06-09/10). Registrado aquí para que ningún agente futuro tenga que redescubrirlo.
+
+**Síntoma observado:**
+- `POST /api/engine/run` escribía a KV correctamente — logs mostraban `[EngineStore] Output saved to Vercel KV` y la llamada a `upstash.io` aparecía en External APIs de Vercel.
+- `GET /api/engine/run` leía el output correctamente.
+- Pero `GET /api/opportunities` y `GET /api/portfolio` devolvían siempre `"No engine output yet"` con `lastRunAt: null`, incluso segundos después de un run exitoso. En Vercel: "No outgoing requests" y sin logs de función.
+
+**Diagnóstico en dos capas:**
+1. **Caching de rutas GET-only (PR #20)**: las rutas que solo exportan `GET` son elegibles para caching estático en Next.js/Vercel — la primera respuesta del deployment (cuando aún no había output) se servía cacheada. `/api/engine/run` no sufría esto porque exporta `GET` y `POST` en el mismo archivo, lo que fuerza modo dinámico. Fix: `export const dynamic = 'force-dynamic'` en ambas rutas + imports estáticos de los stores.
+2. **Inlining de env vars en build (PR #21)**: tras PR #20 el handler ya corría fresco pero seguía sin ver KV. Hipótesis confirmada por el patrón: Turbopack puede inlinear `process.env.VAR` (notación de punto) como `undefined` en build time para bundles pequeños e independientes. El bundle del POST (con todo `daily-engine.ts`) no resultaba afectado; los bundles GET pequeños sí. Fix: notación de corchete `process.env['KV_REST_API_URL']` en `engine-store.ts` y `portfolio-store.ts`, que fuerza evaluación en runtime.
+
+**Reglas resultantes:**
+- Toda ruta API GET-only que lea estado mutable (KV, file-store) debe llevar `export const dynamic = 'force-dynamic'`.
+- Los stores server-side (`engine-store.ts`, `portfolio-store.ts`) deben acceder a las env vars de KV con notación de corchete. No volver a notación de punto.
+- `GET /api/config/status` expone `kvConfigured` — primer check de diagnóstico si la persistencia falla.
 
 ---
 

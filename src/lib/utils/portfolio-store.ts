@@ -17,16 +17,17 @@ const KV_TIMEOUT_MS = 5000;
 // ---------------------------------------------------------------------------
 
 function getKvConfig(): { url: string; token: string } | null {
-  const url = process.env.KV_REST_API_URL;
-  const token = process.env.KV_REST_API_TOKEN;
+  // Bracket notation prevents Turbopack from inlining these at build time
+  const url = process.env['KV_REST_API_URL'];
+  const token = process.env['KV_REST_API_TOKEN'];
   if (url && token) return { url, token };
   return null;
 }
 
 function sanitizeKvError(msg: string): string {
-  const token = process.env.KV_REST_API_TOKEN;
+  const token = process.env['KV_REST_API_TOKEN'];
   if (token && token.length > 8) msg = msg.replaceAll(token, '[REDACTED]');
-  const url = process.env.KV_REST_API_URL;
+  const url = process.env['KV_REST_API_URL'];
   if (url) msg = msg.replace(url, '[KV_URL]');
   return msg;
 }
