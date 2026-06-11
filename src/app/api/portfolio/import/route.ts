@@ -111,15 +111,27 @@ export async function POST(req: NextRequest) {
     const { loadPortfolioConfig, savePortfolioConfig } = await import('@/lib/utils/portfolio-store');
     const { config: existing } = await loadPortfolioConfig();
 
-    const updated = buildUpdatedPortfolioConfig(existing, computed, closedPositions);
-
-    // ISINs without ticker mapping: the engine cannot price these holdings.
-    // Do not block the import (positions and P&L are still valid) but warn loudly.
+    // ISINs without a ticker mapping: the engine cannot price these holdings.
+    // Fail closed — do NOT persist a portfolio the engine cannot fully analyze.
+    // Otherwise a holding without a ticker silently reaches KV and the next
+    // engine run reports "No data for <ISIN>". The owner must add the mapping
+    // in ISIN_TO_TICKER and re-import. The CSV itself is fine; nothing is saved.
     const unknownIsins = findUnknownIsins(existing, computed);
-    const warnings = unknownIsins.map(
-      u => `ISIN sin ticker conocido: ${u.isin} (${u.name}). El motor no podrá obtener precio para esta posición hasta que se añada el mapping en ISIN_TO_TICKER y se re-importe el CSV.`
-    );
-    for (const w of warnings) console.warn('[Import]', w);
+    if (unknownIsins.length > 0) {
+      const warnings = unknownIsins.map(
+        u => `ISIN sin ticker conocido: ${u.isin} (${u.name}). Añade el mapping ISIN → ticker en ISIN_TO_TICKER antes de importar.`
+      );
+      for (const w of warnings) console.warn('[Import]', w);
+      return NextResponse.json({
+        success: false,
+        saved: false,
+        error: 'Hay activos que la app no reconoce. Añade el mapping ISIN → ticker antes de importar. La cartera NO se ha actualizado.',
+        unknownIsins,
+        warnings,
+      }, { status: 422 });
+    }
+
+    const updated = buildUpdatedPortfolioConfig(existing, computed, closedPositions);
 
     const { saved, source: saveSource, warning: saveWarning } = await savePortfolioConfig(updated);
     if (saveWarning) console.warn('[Import] Portfolio save warning:', saveWarning);
@@ -129,7 +141,7 @@ export async function POST(req: NextRequest) {
       saved,
       saveSource,
       unknownIsins,
-      warnings,
+      warnings: [],
       holdingsUpdated: updated.holdings.length,
       totalRealizedPnl: updated.totalRealizedPnl,
       holdings: computed.map(c => ({
