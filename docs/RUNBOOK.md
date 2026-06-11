@@ -361,7 +361,13 @@ Si `priceProvider` es `"mock"`: redeploy pendiente o `PRICE_PROVIDER` no configu
 Si `kvConfigured` es `false`: las env vars de KV no llegan al runtime — la persistencia entre invocaciones no funcionará (ver sección "Lección Fase 1" más abajo).
 
 ### 2. Cron auth
+
+> **URL importante**: usar siempre la URL canónica de producción (`https://www.beaihub.com`), **no** el alias de rama (`app-finanzas-git-main-...vercel.app`).
+> Los aliases de rama tienen Vercel Deployment Protection activada y devuelven 401 a nivel de proxy antes de llegar al código — no es un fallo de auth de la app.
+
 ```bash
+BASE="https://www.beaihub.com"
+
 # Sin header → debe devolver 401
 curl -s -o /dev/null -w "%{http_code}" "$BASE/api/cron/daily"
 
@@ -373,6 +379,8 @@ curl -s -o /dev/null -w "%{http_code}" "$BASE/api/cron/daily" \
 curl -s "$BASE/api/cron/daily" \
   -H "Authorization: Bearer $CRON_SECRET" | jq '{success, runAt}'
 ```
+
+Verificado 2026-06-11: sin header → 401, header incorrecto → 401, header correcto → 200 ✅
 
 ### 3. Engine run manual
 ```bash
