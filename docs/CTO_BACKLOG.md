@@ -1,6 +1,6 @@
 # CTO Backlog — App Finanzas
 
-Last updated: 2026-06-04 (post PR #19 — production reality reconciled)
+Last updated: 2026-06-11 (Fase 1 verificación end-to-end completa)
 
 Ordered by priority. P0 = production is broken or silent without these. Do not advance to P1 until P0 is solid.
 
@@ -81,17 +81,8 @@ Live cron execution log review pending (Phase 1).
 
 ## P1 — Automation and reliability
 
-### P1-1: Verify end-to-end cron → alert → Telegram
-Run through the full loop manually (requires Vercel env vars configured first — see RUNBOOK):
-1. Trigger `POST /api/engine/run` (or `GET /api/cron/daily` with `Authorization: Bearer $CRON_SECRET`)
-2. Confirm engine runs, prices load, scoring completes (`pricingMethod: "yahoo"`, no `currentPrice: null`)
-3. Confirm alerts generated and pushed to Telegram
-4. Confirm engine output saved to KV
-5. Confirm `GET /api/engine/run` returns fresh data (KV-aware, implemented PR #16)
-6. Confirm `/api/opportunities` returns fresh data (KV-aware, implemented PR #16)
-7. Confirm `/api/portfolio` reflects latest portfolio config from KV (implemented PR #17)
-
-Document any gaps found.
+### P1-1: Verify end-to-end cron → alert → Telegram ✓ DONE (2026-06-11)
+Verificación completa — ver Fase 1 en el roadmap de arriba y `docs/RUNBOOK.md` § "Lección Fase 1".
 
 ---
 
@@ -131,24 +122,26 @@ El código P0 está completo (PRs #13–#17). Las env vars de producción están
 - Env vars de Vercel: CRON_SECRET, KV, Telegram, PRICE_PROVIDER=twelvedata — todos configurados.
 - DECISIONS.md actualizado. AGENTS.md actualizado.
 
-### Fase 1 — Verificación end-to-end real
+### Fase 1 — Verificación end-to-end real ✓ DONE (2026-06-11)
 
-Antes de construir más código, confirmar que lo que tenemos funciona de extremo a extremo en producción:
+Verificación completa en `https://www.beaihub.com`:
 
-1. `/api/config/status` → `priceProvider: "twelvedata"`, `cronSecretSet: true`, `telegramConfigured: true`, `isVercel: true`
-2. `POST /api/engine/run` (sin header, porque `ENGINE_API_SECRET` no está configurado) → `success: true`, `pricingMethod` con precios reales, no mock
-3. `GET /api/engine/run` → mismo output del run anterior (confirma KV write → read)
-4. `GET /api/opportunities` → datos reales, no vacío
-5. `GET /api/portfolio` → config real de cartera
-6. `POST /api/portfolio/import` con CSV real → `saved: true`, `saveSource: "kv"`
-7. Telegram → confirmar que llega mensaje después del engine run
-8. Cron → revisar logs de Vercel y confirmar que el cron ejecutó sin error
+| Paso | Resultado |
+|---|---|
+| `/api/config/status` → `kvConfigured: true`, `priceProvider: "twelvedata"`, `cronSecretSet: true`, `telegramConfigured: true` | ✅ |
+| `POST /api/engine/run` → `success: true`, precios reales, `eurUsdRate` numérico | ✅ |
+| `GET /api/engine/run` → `runAt` coincide con run anterior (KV write → read confirmado) | ✅ |
+| `GET /api/opportunities` → `stockCount: 4`, `lastRunAt` no-null (KV cross-instance) | ✅ |
+| `GET /api/portfolio` → `analysesCount: 13`, `lastRunAt` no-null (KV cross-instance) | ✅ |
+| Cron auth: sin header → 401, header incorrecto → 401, header correcto → 200 | ✅ |
+| CSV import: `saved: true`, `saveSource: "kv"`, `holdingsUpdated: 16` | ✅ |
+| Telegram: `success: true`, bot envió digest | ✅ |
 
-Ver `docs/RUNBOOK.md` para comandos exactos.
+**Lecciones registradas en `docs/RUNBOOK.md` § "Lección Fase 1" y § "Lecciones adicionales Fase 1".**
 
-**No escribir código de P1 hasta completar Phase 1.**
+### Fase 2 — Fiabilidad y persistencia completa (código) — pendiente confirmación de Beatriz
 
-### Fase 2 — Fiabilidad y persistencia completa (código)
+**No iniciar hasta que Beatriz confirme.**
 
 1. **`p1-alert-history-kv`** (P1-3): mover `history.ts` (dedupe ring buffer) a KV → alertas no se repiten entre invocaciones de Vercel.
 2. **`p1-discovery-state-kv`** (P1-2): mover watchlist y snapshots a KV con prefijo `discovery:` → trend tracking funciona entre runs.

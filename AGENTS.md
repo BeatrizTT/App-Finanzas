@@ -31,6 +31,7 @@ Estas restricciones no se negocian y no cambian salvo instrucción explícita de
 - **No usar precio USD como EUR. No hardcodear FX. No poner `currentPrice: 0`. No introducir `Infinity`.**
 - **No emitir recomendación BUY si `dataQualityScore` es bajo.**
 - **No emitir BUY si pricing o FX no es apto** (`suitableForExactPnl: false` / `suitableForBuyRecommendation: false`).
+- **Nunca loguear secretos ni fragmentos de secretos** (longitud, prefijo, sufijo, hash incluidos) de `CRON_SECRET`, `KV_REST_API_TOKEN`, `TELEGRAM_BOT_TOKEN`, `TWELVE_DATA_API_KEY`, `ENGINE_API_SECRET` ni ningún token. Para depurar auth, loguear solo el resultado de la comparación, nunca el material de entrada. Si un secreto aparece en un log o chat, rotarlo. Ver `docs/RUNBOOK.md` § "L6". (Origen: PR #23 logueó fragmentos de `CRON_SECRET`; revertido en PR #24.)
 - **No tocar todavía**: fundamentals, valuation, earnings, market cap, volumen, dynamic sizing, nuevos símbolos del universo, CNDX, IWVL, EMIM, GBP/GBX, scoring weights, BUY thresholds globales, EODHD como provider por defecto.
 
 ### Documentación
@@ -88,15 +89,16 @@ Esto cambiará cuando se implemente autenticación del dashboard (pendiente en `
 
 El estado real y actualizado está en `docs/PROJECT_STATE.md`. No asumir el estado a partir de este archivo.
 
-Resumen a fecha de última actualización de este archivo (2026-06-04, PR #19 — producción reconciliada):
+Resumen a fecha de última actualización de este archivo (2026-06-11, Fase 1 completa):
 - **Precios**: `PRICE_PROVIDER=twelvedata` en Vercel desde Mayo 2026. `priceProvider: "twelvedata"` en `/api/config/status`. **NO** en mock. **NO** cambiar a yahoo (yahoo rate-limita desde Vercel cloud IPs).
-- **Cron**: `CRON_SECRET` configurado desde Abril 2026. `cronSecretSet: true`. Fail-closed activo.
-- **KV**: `KV_REST_API_URL` + `KV_REST_API_TOKEN` configurados desde Mayo 2026. Verificación end-to-end pendiente (Fase 1).
-- **Telegram**: `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` configurados desde Abril 2026. `telegramConfigured: true`. Recepción de mensajes pendiente de verificar (Fase 1).
-- **CSV import**: KV-aware (PR #17). `saved: true` cuando KV responde correctamente.
+- **Cron**: `CRON_SECRET` configurado. `cronSecretSet: true`. Fail-closed activo. Cron auth verificado 2026-06-11: sin header → 401, header incorrecto → 401, header correcto → 200 ✅.
+- **KV**: end-to-end verificado 2026-06-11. `kvConfigured: true`. Write + read cross-instance confirmados. `/api/opportunities` `stockCount: 4`, `/api/portfolio` `analysesCount: 13` ✅.
+- **Telegram**: bot envió digest el 2026-06-11. `success: true` ✅.
+- **CSV import**: verificado 2026-06-11. `saved: true`, `saveSource: "kv"`, `holdingsUpdated: 16` ✅. Campo del formulario: `csv` (no `file`).
 - **Portfolio config**: todos los consumidores usan `loadPortfolioConfig()` — KV-first, `config/portfolio.json` fallback (PR #17).
 - **EODHD**: env vars configuradas en Vercel pero **inactivas** — `PRICE_PROVIDER=twelvedata` no las instancia.
 - **`ENGINE_API_SECRET`**: NO configurar. Dashboard llama POST sin Authorization header.
+- **URL canónica para tests**: usar `https://www.beaihub.com`. Los aliases de rama de Vercel tienen Deployment Protection y devuelven 401 a nivel de proxy.
 
 ---
 
@@ -106,14 +108,13 @@ Ver `docs/CTO_BACKLOG.md` sección "Roadmap" para detalle completo. Orden actual
 
 **Fase 0 (docs, DONE PR #19)**: producción reconciliada. Env vars ya configuradas. NO tocar Vercel.
 
-**Fase 1 (verificación, sin código)**: end-to-end live:
-- `/api/config/status` → `priceProvider: "twelvedata"`, `cronSecretSet: true`, `telegramConfigured: true`
-- `POST /api/engine/run` → precios reales
-- `GET /api/engine/run` → confirma KV write/read
-- CSV import → `saved: true`
-- Telegram → confirmar mensaje
+**Fase 1 (verificación, DONE 2026-06-11)**: end-to-end completo ✅
+- `kvConfigured: true` ✅ — `POST` engine + `GET` engine/opportunities/portfolio todos KV-aware
+- Cron auth: 401/401/200 ✅ — usar `https://www.beaihub.com`, no alias de rama
+- CSV import: `saved: true`, `saveSource: "kv"` ✅ — campo `csv` no `file`
+- Telegram: `success: true`, mensaje recibido ✅
 
-**Fase 2 (código, después de Fase 1)**:
+**Fase 2 (código — NO iniciar sin confirmación de Beatriz)**:
 1. `p1-alert-history-kv` — mover `history.ts` (alert history/deduplication) a KV
 2. `p1-discovery-state-kv` — mover watchlist y snapshots a KV (prefijo `discovery:`)
 
