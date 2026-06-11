@@ -2,71 +2,13 @@
 // Production (Vercel + KV): reads/writes Vercel KV (Upstash REST).
 // Local dev without KV: falls back to config/portfolio.json via file-store.
 //
-// Mirrors the pattern of engine-store.ts — same non-fatal error handling,
-// same KV client, same sanitization. Key: 'portfolio:config'.
+// Key: 'portfolio:config'. KV client shared via kv-client.ts (PR-0).
 
 import { getEffectivePortfolioConfig } from './config-loader';
+import { getKvConfig, sanitizeKvError, kvSet, kvGet } from './kv-client';
 import type { PortfolioConfig } from '../types';
 
 const PORTFOLIO_KEY = 'portfolio:config';
-const KV_TIMEOUT_MS = 5000;
-
-// ---------------------------------------------------------------------------
-// Internal KV helpers (mirrors engine-store.ts — kept local to avoid
-// premature abstraction; extract to kv-client.ts if a third store is added)
-// ---------------------------------------------------------------------------
-
-function getKvConfig(): { url: string; token: string } | null {
-  // Bracket notation prevents Turbopack from inlining these at build time
-  const url = process.env['KV_REST_API_URL'];
-  const token = process.env['KV_REST_API_TOKEN'];
-  if (url && token) return { url, token };
-  return null;
-}
-
-function sanitizeKvError(msg: string): string {
-  const token = process.env['KV_REST_API_TOKEN'];
-  if (token && token.length > 8) msg = msg.replaceAll(token, '[REDACTED]');
-  const url = process.env['KV_REST_API_URL'];
-  if (url) msg = msg.replace(url, '[KV_URL]');
-  return msg;
-}
-
-async function upstashCommand(
-  url: string,
-  token: string,
-  command: string[]
-): Promise<unknown> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), KV_TIMEOUT_MS);
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(command),
-      signal: controller.signal,
-    });
-    if (!res.ok) throw new Error(`Upstash HTTP ${res.status}`);
-    const data = await res.json() as { result: unknown; error?: string };
-    if (data.error) throw new Error(data.error);
-    return data.result;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-async function kvSet(url: string, token: string, key: string, value: unknown): Promise<void> {
-  await upstashCommand(url, token, ['SET', key, JSON.stringify(value)]);
-}
-
-async function kvGet<T>(url: string, token: string, key: string): Promise<T | null> {
-  const result = await upstashCommand(url, token, ['GET', key]);
-  if (result === null || result === undefined) return null;
-  return JSON.parse(result as string) as T;
-}
 
 // Apply CASH_AVAILABLE_EUR / TARGET_CASH_RESERVE_EUR env overrides.
 // Used when loading from KV (getEffectivePortfolioConfig already does this for the file path).
