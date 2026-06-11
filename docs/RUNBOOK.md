@@ -414,11 +414,20 @@ curl -s "$BASE/api/portfolio" | jq '{holdingsCount: (.config.holdings | length),
 
 ```bash
 curl -s -X POST "$BASE/api/portfolio/import" \
-  -F "csv=@tu-trades.csv" | jq '{saved, saveSource, holdingsUpdated}'
+  -F "csv=@tu-trades.csv" | jq '{saved, saveSource, holdingsUpdated, unknownIsins, warnings}'
 ```
-Esperado con KV: `{"saved": true, "saveSource": "kv", "holdingsUpdated": N}`
+Esperado con KV: `{"saved": true, "saveSource": "kv", "holdingsUpdated": N, "unknownIsins": [], "warnings": []}`
 
 Verificado 2026-06-11: `saved: true`, `saveSource: "kv"`, `holdingsUpdated: 16` ✅
+
+> **ISINs sin ticker conocido**: si el CSV contiene un ISIN que no está en `ISIN_TO_TICKER`
+> (`src/app/api/portfolio/import/route.ts`), la posición se importa igualmente (P&L válido)
+> pero **sin ticker** — el motor no podrá obtener precio y el engine run mostrará
+> `No data for <ISIN>`. Desde el fix de `US46120E6023` (ISRG), el endpoint devuelve
+> `unknownIsins` y `warnings` en la respuesta para detectarlo en el momento del import.
+> **Solución**: añadir el mapping ISIN → ticker en `ISIN_TO_TICKER` (con test) y
+> **re-importar el CSV** para que el holding guardado en KV reciba su ticker.
+> Caso real: `US46120E6023` = Intuitive Surgical (ISRG) — mapeado el 2026-06-11.
 
 ### 7. Telegram
 Después del paso 3, espera hasta 30 segundos. El bot debería enviar un digest con señales del portfolio.
@@ -613,7 +622,7 @@ curl -s "$BASE/api/portfolio" | jq '{holdingsCount: (.config.holdings | length),
 
 ```bash
 npm ci                  # Clean install from lock file
-npm test                # 24 suites, 1521 asserts
+npm test                # 24 suites, 1526 asserts
 npm run build           # Production build
 npx tsc --noEmit        # Type-check
 npm run dev             # Local dev server :3000

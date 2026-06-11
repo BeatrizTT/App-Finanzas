@@ -104,6 +104,20 @@ Fix: extend KV or accept alert repetition (worse UX).
 
 ---
 
+### P1-3b: Hotfix `No data for US46120E6023` ✓ DONE (2026-06-11)
+**Diagnóstico**: el CSV import guardó en KV un holding con ISIN `US46120E6023` sin mapping en `ISIN_TO_TICKER` → `ticker: undefined` → el engine usó `h.ticker ?? h.id.toUpperCase()` y pidió precio para el ISIN.
+**Identidad confirmada** (onvista, ad-hoc-news): `US46120E6023` = Intuitive Surgical, Inc. (ISRG, Nasdaq, USD).
+**Fix**: mapping `US46120E6023 → ISRG` añadido + `findUnknownIsins()` — el import ahora devuelve `unknownIsins` y `warnings` para cualquier ISIN sin ticker. 5 tests nuevos.
+**ACCIÓN MANUAL pendiente**: re-importar el CSV tras el deploy para que el holding en KV reciba `ticker: ISRG`.
+
+---
+
+### P1-5: UI — explicar mejor la etiqueta REVISAR
+La etiqueta `REVISAR` (badge `REVIEW`) no significa "vender ya": significa "no comprar más automáticamente; revisar tesis/riesgo antes de actuar". En SMCI aparece correctamente porque tiene `manualThesisRisk: "medium"` y `convictionScore: 6` en config.
+**Mejora pendiente**: tooltip/texto contextual en el dashboard, p. ej. "Revisar tesis: riesgo medio, no añadir más hasta confirmar que la oportunidad sigue siendo válida" — idealmente incluyendo el motivo concreto (`manualThesisRisk`, conviction) en lugar del texto genérico actual de `badge.tsx`.
+
+---
+
 ### P1-4: Daily digest quality
 Review digest format (`digest.ts`). Ensure:
 - Every BUY/REDUCE signal includes: ticker, current price, distance from 52W high/low, conviction, reason, suggested amount, data age, source

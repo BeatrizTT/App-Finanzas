@@ -21,7 +21,25 @@ const ISIN_TO_TICKER: Record<string, { ticker: string; name?: string; currency: 
   'US02079K3059': { ticker: 'GOOGL', currency: 'USD', type: 'stock', tags: ['tech', 'AI', 'cloud'] },
   'US5765811026': { ticker: 'MRVL',  currency: 'USD', type: 'stock', tags: ['semis', 'AI'] },
   'US34959E1091': { ticker: 'FTNT',  currency: 'USD', type: 'stock', tags: ['cybersecurity'] },
+  'US46120E6023': { ticker: 'ISRG',  currency: 'USD', type: 'stock', tags: ['healthcare', 'robotics', 'growth'] },
 };
+
+/**
+ * Pure function: ISINs in the CSV that have no ticker mapping (neither in
+ * ISIN_TO_TICKER nor in the existing config). These holdings would otherwise
+ * enter the portfolio with ticker undefined, and the engine would try to
+ * price them by ISIN ("No data for US…") — surface them as warnings instead.
+ * Exported for unit tests.
+ */
+export function findUnknownIsins(
+  existing: PortfolioConfig,
+  computed: ComputedHolding[]
+): { isin: string; name: string }[] {
+  const existingMap = new Map(existing.holdings.map(h => [(h as any).isin as string, h]));
+  return computed
+    .filter(c => !ISIN_TO_TICKER[c.isin] && !existingMap.get(c.isin)?.ticker)
+    .map(c => ({ isin: c.isin, name: c.name }));
+}
 
 /**
  * Pure function: merge CSV-computed open positions with existing portfolio config.
@@ -95,6 +113,14 @@ export async function POST(req: NextRequest) {
 
     const updated = buildUpdatedPortfolioConfig(existing, computed, closedPositions);
 
+    // ISINs without ticker mapping: the engine cannot price these holdings.
+    // Do not block the import (positions and P&L are still valid) but warn loudly.
+    const unknownIsins = findUnknownIsins(existing, computed);
+    const warnings = unknownIsins.map(
+      u => `ISIN sin ticker conocido: ${u.isin} (${u.name}). El motor no podrá obtener precio para esta posición hasta que se añada el mapping en ISIN_TO_TICKER y se re-importe el CSV.`
+    );
+    for (const w of warnings) console.warn('[Import]', w);
+
     const { saved, source: saveSource, warning: saveWarning } = await savePortfolioConfig(updated);
     if (saveWarning) console.warn('[Import] Portfolio save warning:', saveWarning);
 
@@ -102,6 +128,8 @@ export async function POST(req: NextRequest) {
       success: true,
       saved,
       saveSource,
+      unknownIsins,
+      warnings,
       holdingsUpdated: updated.holdings.length,
       totalRealizedPnl: updated.totalRealizedPnl,
       holdings: computed.map(c => ({
