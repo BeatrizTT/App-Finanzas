@@ -23,6 +23,7 @@ No asumas que el estado del código refleja la última conversación. Verifica e
 ### Alcance
 - No tocar código fuera del scope del PR. Si ves algo que mejorar fuera del scope, anótalo en `docs/CTO_BACKLOG.md` o menciona al propietario — no lo implementes.
 - No mezclar fases: P0 es P0, P1 es P1. No adelantar P1 mientras P0 esté sin cerrar.
+- **Todo store nuevo que use KV debe importar de `src/lib/utils/kv-client.ts`**. No copiar los helpers (`getKvConfig`, `sanitizeKvError`, `upstashCommand`, `kvSet`, `kvGet`) en ningún otro archivo.
 
 ### Seguridad — restricciones permanentes
 Estas restricciones no se negocian y no cambian salvo instrucción explícita del propietario:
@@ -89,7 +90,7 @@ Esto cambiará cuando se implemente autenticación del dashboard (pendiente en `
 
 El estado real y actualizado está en `docs/PROJECT_STATE.md`. No asumir el estado a partir de este archivo.
 
-Resumen a fecha de última actualización de este archivo (2026-06-11, Fase 1 completa):
+Resumen a fecha de última actualización de este archivo (2026-06-11, Fase 2 iniciada — PR-0 abierto):
 - **Precios**: `PRICE_PROVIDER=twelvedata` en Vercel desde Mayo 2026. `priceProvider: "twelvedata"` en `/api/config/status`. **NO** en mock. **NO** cambiar a yahoo (yahoo rate-limita desde Vercel cloud IPs).
 - **Cron**: `CRON_SECRET` configurado. `cronSecretSet: true`. Fail-closed activo. Cron auth verificado 2026-06-11: sin header → 401, header incorrecto → 401, header correcto → 200 ✅.
 - **KV**: end-to-end verificado 2026-06-11. `kvConfigured: true`. Write + read cross-instance confirmados. `/api/opportunities` `stockCount: 4`, `/api/portfolio` `analysesCount: 13` ✅.
@@ -114,9 +115,10 @@ Ver `docs/CTO_BACKLOG.md` sección "Roadmap" para detalle completo. Orden actual
 - CSV import: `saved: true`, `saveSource: "kv"` ✅ — campo `csv` no `file`
 - Telegram: `success: true`, mensaje recibido ✅
 
-**Fase 2 (código — NO iniciar sin confirmación de Beatriz)**:
-1. `p1-alert-history-kv` — mover `history.ts` (alert history/deduplication) a KV
-2. `p1-discovery-state-kv` — mover watchlist y snapshots a KV (prefijo `discovery:`)
+**Fase 2 (código — EN CURSO)**:
+0. `refactor-shared-kv-client` (PR-0) — **ABIERTO, pendiente de revisión de Beatriz**. `kv-client.ts` creado, `engine-store.ts` + `portfolio-store.ts` migrados, 12 tests nuevos. NO iniciar PR-1 ni PR-2 hasta que PR-0 sea revisado.
+1. `p1-alert-history-kv` (PR-1) — mover `history.ts` (alert history/deduplication) a KV. **Bloqueado hasta review de PR-0.**
+2. `p1-discovery-state-kv` (PR-2) — mover watchlist y snapshots a KV (prefijo `discovery:`). **Bloqueado hasta review de PR-0.**
 
 **Fase 3 (código)**: radar amplio — external screener, ExternalCandidate schema, smoke evidence primero.
 

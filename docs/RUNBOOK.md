@@ -613,7 +613,7 @@ curl -s "$BASE/api/portfolio" | jq '{holdingsCount: (.config.holdings | length),
 
 ```bash
 npm ci                  # Clean install from lock file
-npm test                # 23 suites, 1509 asserts
+npm test                # 24 suites, 1521 asserts
 npm run build           # Production build
 npx tsc --noEmit        # Type-check
 npm run dev             # Local dev server :3000

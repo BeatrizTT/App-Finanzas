@@ -64,6 +64,12 @@ They are inert (do not affect any code path). They may represent planned feature
 **Implementation**: `engine-store.ts` (engine output) and `portfolio-store.ts` (portfolio config) — KV with 5s timeout, file-store fallback. Never crashes.
 **Status**: Code complete (PRs #16 + #17). `KV_REST_API_URL` and `KV_REST_API_TOKEN` configured in Vercel since May 6, 2026. End-to-end KV verification pending (Phase 1).
 
+### Shared KV client (`kv-client.ts`) for all stores — no duplication
+**Decision** (PR-0, Phase 2): Extract the 5 shared KV helpers (`getKvConfig`, `sanitizeKvError`, `upstashCommand`, `kvSet`, `kvGet`) into `src/lib/utils/kv-client.ts`. Both `engine-store.ts` and `portfolio-store.ts` import from it.
+**Reason**: Both stores contained identical copies of the 5 helpers. A copy-paste in a third store would silently diverge sanitization behavior and make security bugs undetectable.
+**Rule**: All new KV stores must import from `kv-client.ts`. No copy-paste of the KV helpers. Bracket notation for env vars is enforced in `kv-client.ts` — don't bypass it.
+**Contract unchanged**: public API of both stores is identical before and after. No behavior change.
+
 ### File-store for local dev, ephemeral for discovery state
 **Decision**: Discovery watchlist, snapshots, alert history use file-store. On Vercel this becomes `/tmp/app-finanzas`.
 **Reason**: Discovery state is advisory, not financial. Losing it between runs is annoying but not dangerous — the next run rebuilds it from live prices.
