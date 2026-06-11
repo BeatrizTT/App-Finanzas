@@ -1,6 +1,6 @@
 # App Finanzas — Project State
 
-Last updated: 2026-06-11 · Branch: `main` (PR docs/phase-1-verification-complete — Fase 1 verificación completa)
+Last updated: 2026-06-11 · Branch: `main` (PR #25 — Fase 1 verificación completa)
 
 > Agentes/IA: leer `AGENTS.md` en la raíz del repo antes de cualquier cambio.
 
@@ -63,8 +63,8 @@ A personal investment decision-support app. It scans a curated universe of stock
 - Fetches real prices for ~39 symbols via Twelve Data
 - Computes BUY/WATCH/HOLD/REDUCE/SELL signals per holding + discovered opportunities
 - Scores each signal with conviction (HIGH/MEDIUM/LOW), drawdown phase, distance from 52W high/low
-- Sends a Telegram digest at 07:00 + 16:00 UTC Mon-Fri (once end-to-end is verified)
-- Persists engine output to Vercel KV; write path verified live. Read path re-test pending after PR #21 deploy.
+- Sends a Telegram digest at 07:00 + 16:00 UTC Mon-Fri — bot delivery verified 2026-06-11 ✅
+- Persists engine output to Vercel KV; write + read cross-instance verified 2026-06-11 ✅
 
 **Verificado end-to-end (Fase 1 completa, 2026-06-11):**
 - KV write y read cross-instance: POST engine → GET engine → `runAt` coincide ✅
@@ -206,7 +206,7 @@ A personal investment decision-support app. It scans a curated universe of stock
 
 | PR | Title | State |
 |---|---|---|
-| docs/phase-1-verification-complete | docs: Fase 1 verificación completa — resultados, lecciones, próximos pasos | En curso |
+| #25 | docs: Fase 1 verificación end-to-end completa (2026-06-11) | Merged |
 | #21 | fix: bracket notation para KV env vars (env inlining Turbopack) | Merged |
 | #20 | fix: force-dynamic en rutas GET-only + static imports | Merged |
 | #19 | docs: production reality reconciliation + investment roadmap | Merged |

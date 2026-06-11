@@ -28,19 +28,19 @@ All KV-aware code is deployed (PRs #16 + #17):
 - `portfolio-store.ts`: portfolio config — KV-first, `config/portfolio.json` fallback
 - All three read endpoints use `loadEngineOutput()`, import uses `savePortfolioConfig()`
 
-**Pending**: End-to-end live verification (Phase 1) — confirm KV writes actually survive a Vercel invocation boundary.
+**Verificado 2026-06-11**: KV write + read cross-instance confirmados. `kvConfigured: true`, `/api/opportunities` `stockCount: 4`, `/api/portfolio` `analysesCount: 13` ✅
 
 ---
 
 ### P0-3: Set CRON_SECRET (env var) ✓ DONE
 **Status**: Configured since April 30, 2026. `/api/config/status` → `cronSecretSet: true`.
-Live cron execution log review pending (Phase 1).
+**Verificado 2026-06-11**: cron auth confirmado en `https://www.beaihub.com` — sin header → 401, header incorrecto → 401, header correcto → 200 ✅
 
 ---
 
 ### P0-4: Connect Telegram ✓ DONE (env configured)
 **Status**: `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` configured since April 30, 2026. `/api/config/status` → `telegramConfigured: true`.
-**Pending**: Confirm actual message delivery after a live engine run (Phase 1).
+**Verificado 2026-06-11**: bot envió digest tras engine run con `sendDigest: true`. `success: true` ✅
 
 ---
 
