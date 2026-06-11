@@ -115,19 +115,21 @@ Fix: extend KV or accept alert repetition (worse UX).
 
 ---
 
-### P1-5: UI — explicar la etiqueta REVISAR en lenguaje sencillo
+### P1-5: UI — explicar la etiqueta REVISAR en lenguaje para dummies
 
-**Qué significa REVISAR** (badge `REVIEW`), explicado para cualquiera:
+**Copy aprobado por Beatriz (usar literalmente cuando se implemente)**.
+
+**Qué significa REVISAR** (badge `REVIEW`):
 - **"No compres más todavía."**
-- **NO** significa vender automáticamente.
-- Significa: *"Esta acción puede parecer barata, pero tiene una alerta de riesgo. Antes de poner más dinero, confirma que el motivo para tenerla sigue teniendo sentido."*
+- **No significa vender.**
+- Significa: *"Puede parecer barata, pero hay una señal de riesgo. Antes de meter más dinero, comprueba si todavía confías en esta empresa."*
+
+**Texto específico para SMCI**:
+> "SMCI tiene riesgo medio marcado y convicción 6/10. La app no dice vender; dice pausa antes de añadir más."
 
 **Por qué aparece en SMCI**: tiene `manualThesisRisk: "medium"` y `convictionScore: 6` en config. La etiqueta es correcta — es exactamente el caso para el que existe.
 
-**Copy UI objetivo** (reemplazar el texto genérico actual de `badge.tsx`):
-> "Pausa antes de comprar más. Puede parecer barata, pero tiene riesgo marcado. Revisa si la empresa sigue siendo una buena apuesta antes de añadir dinero."
-
-**Mejora pendiente**: tooltip/texto contextual en el dashboard con ese copy, idealmente incluyendo el motivo concreto (`manualThesisRisk: medium`, `convictionScore: 6`) en vez del texto genérico. El texto actual en `src/components/ui/badge.tsx` (`REVIEW`) dice solo "Algo ha cambiado en esta posición. Revisa la tesis de inversión antes de tomar decisiones." — correcto pero abstracto para alguien no técnico.
+**Mejora pendiente**: tooltip/texto contextual en el dashboard con el copy de arriba, generando la línea por activo a partir del motivo concreto (`manualThesisRisk` + `convictionScore`) en vez del texto genérico. El texto actual en `src/components/ui/badge.tsx` (`REVIEW`) dice solo "Algo ha cambiado en esta posición. Revisa la tesis de inversión antes de tomar decisiones." — correcto pero demasiado abstracto para alguien no técnico.
 
 ---
 
