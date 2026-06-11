@@ -256,8 +256,11 @@ export async function runDailyEngine(options?: {
   const universeConfig = getUniverseConfig();
   const overrides = getOverridesConfig();
 
-  // Collect all tickers to fetch
+  // Collect all tickers to fetch. private_fund holdings (ELTIFs) are illiquid and
+  // have no public exchange quote — excluding them avoids a guaranteed
+  // "No data for <ISIN>" error on every run.
   const portfolioTickers = portfolioConfig.holdings
+    .filter((h) => h.type !== 'private_fund')
     .map((h) => h.ticker ?? h.id.toUpperCase())
     .filter(Boolean);
 
@@ -304,7 +307,7 @@ export async function runDailyEngine(options?: {
   //   - legacy provider without validation: apply eurUsdRate for USD holdings as before
   const usdTickers = new Set(
     portfolioConfig.holdings
-      .filter(h => (h.currency ?? 'USD') !== 'EUR')
+      .filter(h => h.type !== 'private_fund' && (h.currency ?? 'USD') !== 'EUR')
       .map(h => h.ticker ?? h.id.toUpperCase())
   );
 

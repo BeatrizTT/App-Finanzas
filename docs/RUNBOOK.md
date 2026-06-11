@@ -437,6 +437,28 @@ Verificado 2026-06-11: `saved: true`, `saveSource: "kv"`, `holdingsUpdated: 16` 
 >
 > Caso real: `US46120E6023` = Intuitive Surgical (ISRG) — mapeado el 2026-06-11.
 
+> **Fondos privados (ELTIF) — se importan pero NO se les pide precio diario**:
+> Un **ELTIF** (European Long-Term Investment Fund) es un fondo de inversión a largo
+> plazo. En la práctica, en Trade Republic son **fondos de private equity** (capital
+> riesgo): metes dinero en empresas que no cotizan en bolsa. Por eso **no tienen un
+> precio que cambie cada día** como una acción o un ETF normal — no hay cotización
+> pública que consultar.
+>
+> Estos activos se marcan con `type: 'private_fund'` en `ISIN_TO_TICKER`. El motor
+> diario (`daily-engine.ts`) los **excluye** de la lista de símbolos a los que pide
+> precio (Twelve Data). Si no lo hiciéramos, cada engine run mostraría
+> `No data for <ISIN>` para siempre, porque ese precio no existe en el proveedor.
+>
+> Consecuencia esperada: estos fondos **aparecen en la cartera** (units y coste medio
+> en EUR del CSV) pero **no tienen P&L diario ni señales de compra/venta automáticas**.
+> Es correcto: su valor lo publica el gestor del fondo, no el mercado.
+>
+> Casos reales (mapeados el 2026-06-11):
+> - `LU3176111881` = EQT Nexus Fund ELTIF (ticker interno `ENXF`)
+> - `LU3170240538` = Apollo Global Private Markets ELTIF (ticker interno `APGM`)
+>
+> En la UI se muestran con la etiqueta **ELTIF** (badge ámbar).
+
 ### 7. Telegram
 Después del paso 3, espera hasta 30 segundos. El bot debería enviar un digest con señales del portfolio.
 

@@ -62,6 +62,17 @@ export function StateBadge({ state, showTooltip = false }: { state: AnyState; sh
 }
 
 export function TypeBadge({ type }: { type: AssetType }) {
+  if (type === 'private_fund') {
+    // ELTIF / fondo privado: illiquid, no daily exchange price.
+    return (
+      <span
+        title="Fondo privado (ELTIF) — sin precio diario automático"
+        className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-amber-900/60 text-amber-300"
+      >
+        ELTIF
+      </span>
+    );
+  }
   const isEtf = type === 'etf';
   return (
     <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs ${

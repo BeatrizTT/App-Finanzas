@@ -3,7 +3,7 @@ import { parseTradeRepublicCsv } from '@/lib/portfolio/csv-importer';
 import type { PortfolioConfig, PortfolioHolding } from '@/lib/types';
 import type { ComputedHolding } from '@/lib/portfolio/csv-importer';
 
-const ISIN_TO_TICKER: Record<string, { ticker: string; name?: string; currency: string; type: 'stock' | 'etf'; tags: string[] }> = {
+const ISIN_TO_TICKER: Record<string, { ticker: string; name?: string; currency: string; type: 'stock' | 'etf' | 'private_fund'; tags: string[] }> = {
   'US67066G1040': { ticker: 'NVDA',  currency: 'USD', type: 'stock', tags: ['semis', 'AI', 'growth', 'tech'] },
   'NL0010273215': { ticker: 'ASML',  currency: 'EUR', type: 'stock', tags: ['semis', 'infrastructure', 'europe'] },
   'US5949181045': { ticker: 'MSFT',  currency: 'USD', type: 'stock', tags: ['software', 'AI', 'cloud', 'tech'] },
@@ -22,6 +22,12 @@ const ISIN_TO_TICKER: Record<string, { ticker: string; name?: string; currency: 
   'US5765811026': { ticker: 'MRVL',  currency: 'USD', type: 'stock', tags: ['semis', 'AI'] },
   'US34959E1091': { ticker: 'FTNT',  currency: 'USD', type: 'stock', tags: ['cybersecurity'] },
   'US46120E6023': { ticker: 'ISRG',  currency: 'USD', type: 'stock', tags: ['healthcare', 'robotics', 'growth'] },
+  // ELTIFs (European Long-Term Investment Funds): illiquid private-equity funds
+  // sold via Trade Republic. They have no public exchange quote, so the daily
+  // engine must NOT request a price for them (see daily-engine.ts private_fund
+  // filter). type 'private_fund' marks them so they are imported but never priced.
+  'LU3176111881': { ticker: 'ENXF',  name: 'EQT Nexus Fund ELTIF',                currency: 'EUR', type: 'private_fund', tags: ['private-equity', 'eltif'] },
+  'LU3170240538': { ticker: 'APGM',  name: 'Apollo Global Private Markets ELTIF', currency: 'EUR', type: 'private_fund', tags: ['private-equity', 'eltif'] },
 };
 
 /**

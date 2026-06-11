@@ -156,6 +156,59 @@ async function main(): Promise<void> {
     assert((isrg as any).type === 'stock', 'type should be stock');
   });
 
+  // ── ISIN mapping: LU ELTIFs (private-equity funds, no exchange price) ──────
+
+  await test('LU3176111881 maps to ENXF as private_fund (EQT Nexus ELTIF)', () => {
+    const computedEqt: ComputedHolding = {
+      isin: 'LU3176111881',
+      name: 'EQT Nexus Fund',
+      assetClass: 'PRIVATE_FUND',
+      shares: 100,
+      totalCostEur: 1000,
+      avgCostEur: 10,
+      realizedPnl: 0,
+    };
+    const result = buildUpdatedPortfolioConfig(baseConfig, [computedEqt], []);
+    const eqt = result.holdings.find(h => h.isin === 'LU3176111881');
+    assert(eqt !== undefined, 'EQT ELTIF holding should exist');
+    assert(eqt?.ticker === 'ENXF', `ticker should be ENXF, got ${eqt?.ticker}`);
+    assert(eqt?.id === 'enxf', `id should be enxf, got ${eqt?.id}`);
+    assert((eqt as any).type === 'private_fund', `type should be private_fund, got ${(eqt as any).type}`);
+    assert((eqt as any).currency === 'EUR', 'currency should be EUR');
+  });
+
+  await test('LU3170240538 maps to APGM as private_fund (Apollo ELTIF)', () => {
+    const computedApollo: ComputedHolding = {
+      isin: 'LU3170240538',
+      name: 'Apollo Global Private Markets',
+      assetClass: 'PRIVATE_FUND',
+      shares: 50,
+      totalCostEur: 500,
+      avgCostEur: 10,
+      realizedPnl: 0,
+    };
+    const result = buildUpdatedPortfolioConfig(baseConfig, [computedApollo], []);
+    const apollo = result.holdings.find(h => h.isin === 'LU3170240538');
+    assert(apollo !== undefined, 'Apollo ELTIF holding should exist');
+    assert(apollo?.ticker === 'APGM', `ticker should be APGM, got ${apollo?.ticker}`);
+    assert(apollo?.id === 'apgm', `id should be apgm, got ${apollo?.id}`);
+    assert((apollo as any).type === 'private_fund', `type should be private_fund, got ${(apollo as any).type}`);
+    assert((apollo as any).currency === 'EUR', 'currency should be EUR');
+  });
+
+  await test('findUnknownIsins does not flag the mapped ELTIF ISINs', () => {
+    const computedEqt: ComputedHolding = {
+      isin: 'LU3176111881', name: 'EQT Nexus Fund', assetClass: 'PRIVATE_FUND',
+      shares: 100, totalCostEur: 1000, avgCostEur: 10, realizedPnl: 0,
+    };
+    const computedApollo: ComputedHolding = {
+      isin: 'LU3170240538', name: 'Apollo Global Private Markets', assetClass: 'PRIVATE_FUND',
+      shares: 50, totalCostEur: 500, avgCostEur: 10, realizedPnl: 0,
+    };
+    const result = findUnknownIsins(baseConfig, [computedNvda, computedEqt, computedApollo]);
+    assert(result.length === 0, `expected 0 unknown ISINs, got ${result.length}: ${JSON.stringify(result)}`);
+  });
+
   // ── Unknown ISIN detection (findUnknownIsins) ────────────────────────────
 
   await test('findUnknownIsins flags ISINs with no ticker mapping', () => {

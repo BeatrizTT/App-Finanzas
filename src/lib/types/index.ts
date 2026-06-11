@@ -5,7 +5,7 @@
 
 // --- Asset Types ---
 
-export type AssetType = 'stock' | 'etf';
+export type AssetType = 'stock' | 'etf' | 'private_fund';
 
 export type ConvictionScore = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
 
