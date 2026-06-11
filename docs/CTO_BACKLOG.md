@@ -1,6 +1,6 @@
 # CTO Backlog — App Finanzas
 
-Last updated: 2026-06-11 (Fase 2 iniciada — PR-0 abierto)
+Last updated: 2026-06-11 (Fase 2 iniciada — PR-0 #27)
 
 Ordered by priority. P0 = production is broken or silent without these. Do not advance to P1 until P0 is solid.
 
@@ -141,12 +141,11 @@ Verificación completa en `https://www.beaihub.com`:
 
 ### Fase 2 — Fiabilidad y persistencia completa (código) — EN CURSO
 
-0. **`refactor-shared-kv-client`** (PR-0) — **ABIERTO, pendiente de revisión de Beatriz**
-   Objetivo: `src/lib/utils/kv-client.ts` como cliente KV compartido. `engine-store.ts` y `portfolio-store.ts` migrados. 12 tests nuevos (24 suites · 1521 asserts). Sin cambio de comportamiento.
-   **NO iniciar PR-1 ni PR-2 hasta que PR-0 sea revisado.**
+0. **PR-0 (#27): shared KV client refactor — Merged.**
+   `src/lib/utils/kv-client.ts` como cliente KV compartido. `engine-store.ts` y `portfolio-store.ts` migrados. 12 tests nuevos (24 suites · 1521 asserts). Sin cambio de comportamiento.
 
-1. **`p1-alert-history-kv`** (PR-1, P1-3): mover `history.ts` (dedupe ring buffer) a KV → alertas no se repiten entre invocaciones de Vercel. **Bloqueado hasta review de PR-0.**
-2. **`p1-discovery-state-kv`** (PR-2, P1-2): mover watchlist y snapshots a KV con prefijo `discovery:` → trend tracking funciona entre runs. **Bloqueado hasta review de PR-0.**
+1. **`p1-alert-history-kv`** (PR-1, P1-3): mover `history.ts` (dedupe ring buffer) a KV → alertas no se repiten entre invocaciones de Vercel. **Bloqueado hasta que PR-0 esté merged.**
+2. **`p1-discovery-state-kv`** (PR-2, P1-2): mover watchlist y snapshots a KV con prefijo `discovery:` → trend tracking funciona entre runs. **Bloqueado hasta que PR-0 esté merged.**
 
 ### Fase 3 — Radar amplio de oportunidades
 

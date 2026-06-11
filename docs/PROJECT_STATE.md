@@ -78,10 +78,10 @@ A personal investment decision-support app. It scans a curated universe of stock
 - Telegram: `success: true`, bot envió digest ✅
 - Stale-cache bug (PR #20) y env inlining bug (PR #21) corregidos y verificados ✅
 
-**Fase 2 — en curso (PR-0 abierto, PR-1 y PR-2 bloqueados hasta que PR-0 sea revisado):**
-- `refactor-shared-kv-client` (PR-0): `kv-client.ts` creado, `engine-store.ts` y `portfolio-store.ts` migrados, 12 nuevos tests. Abierto, pendiente de revisión.
-- `p1-alert-history-kv` (PR-1): mover history.ts (dedupe ring buffer) a KV — NO iniciar hasta que PR-0 sea revisado
-- `p1-discovery-state-kv` (PR-2): mover watchlist y snapshots a KV (prefijo `discovery:`) — NO iniciar hasta que PR-0 sea revisado
+**Fase 2 — en curso:**
+- PR-0 (#27): shared KV client refactor — `kv-client.ts` creado, `engine-store.ts` y `portfolio-store.ts` migrados, 12 nuevos tests. Merged.
+- `p1-alert-history-kv` (PR-1): mover history.ts (dedupe ring buffer) a KV — bloqueado hasta que PR-0 esté merged
+- `p1-discovery-state-kv` (PR-2): mover watchlist y snapshots a KV (prefijo `discovery:`) — bloqueado hasta que PR-0 esté merged
 
 **Not yet built:**
 - Radar for strong companies outside current portfolio with deep drawdowns (Phase 3 — external screener)
@@ -196,8 +196,8 @@ A personal investment decision-support app. It scans a curated universe of stock
 
 | Item | Blocker |
 |---|---|
-| Alert history persistence | file-store only → needs KV extension (PR-1 — blocked on PR-0 review) |
-| Discovery watchlist/snapshots | file-store, ephemeral → KV (PR-2 — blocked on PR-0 review) |
+| Alert history persistence | file-store only → needs KV extension (PR-1 — blocked until PR-0 #27 is merged) |
+| Discovery watchlist/snapshots | file-store, ephemeral → KV (PR-2 — blocked until PR-0 #27 is merged) |
 | Radar for strong companies outside portfolio | External screener not integrated yet. Requires smoke evidence + ExternalCandidate schema (Phase 3) |
 | Single-asset live check | Not built yet (Phase 4) |
 | News/thesis explainer | Not built yet, requires news provider decision (Phase 5) |
@@ -208,7 +208,7 @@ A personal investment decision-support app. It scans a curated universe of stock
 
 | PR | Title | State |
 |---|---|---|
-| PR-0 | refactor: shared KV client (`kv-client.ts`) — PR-0 Phase 2 | Open |
+| #27 | refactor: shared KV client (`kv-client.ts`) — PR-0 Fase 2 | Merged |
 | #25 | docs: Fase 1 verificación end-to-end completa (2026-06-11) | Merged |
 | #21 | fix: bracket notation para KV env vars (env inlining Turbopack) | Merged |
 | #20 | fix: force-dynamic en rutas GET-only + static imports | Merged |
