@@ -1,6 +1,6 @@
 # CTO Backlog — App Finanzas
 
-Last updated: 2026-06-11 (Fase 2 iniciada — PR-0 #27)
+Last updated: 2026-06-11 (hotfix ELTIF P1-3c — verificación en producción pendiente)
 
 Ordered by priority. P0 = production is broken or silent without these. Do not advance to P1 until P0 is solid.
 
@@ -115,6 +115,38 @@ Fix: extend KV or accept alert repetition (worse UX).
 
 ---
 
+### P1-3c: Hotfix `No data for LU3176111881` / `No data for LU3170240538` — ELTIF (private funds)
+**Estado**: fix en rama `fix/private-fund-eltif-import` (abierta desde `main`). **Verificación en producción PENDIENTE.**
+
+**Qué se observó (verificado, no hipótesis)**: tras re-importar el CSV (paso del P1-3b) y correr el engine, la respuesta mostró:
+```
+"errors": ["No data for US46120E6023", "No data for LU3176111881", "No data for LU3170240538"]
+```
+Los dos ISINs `LU...` no estaban en `ISIN_TO_TICKER` ni en ninguna parte del repo.
+
+**Identidad confirmada** (extraetf, eltif.info, parqet):
+- `LU3176111881` = **EQT Nexus Fund ELTIF** (private equity).
+- `LU3170240538` = **Apollo Global Private Markets ELTIF** (private equity).
+
+Ambos son **ELTIF** (European Long-Term Investment Fund): fondos de private equity vendidos por Trade Republic. **No cotizan en bolsa**, así que Twelve Data nunca tendrá precio para ellos. Pedirles precio produce `No data` de forma permanente, no transitoria.
+
+**Fix (mínimo)**:
+- `AssetType` añade `'private_fund'`.
+- Mapping `LU3176111881 → ENXF` y `LU3170240538 → APGM`, ambos `type: 'private_fund'`, `currency: EUR`.
+- `daily-engine.ts` excluye `private_fund` de `portfolioTickers` y `usdTickers` → no se les pide precio.
+- `TypeBadge` muestra `ELTIF` (badge ámbar) con tooltip "sin precio diario automático".
+- 3 tests nuevos del importador (mapping de ambos ISINs + `findUnknownIsins` no los marca). 24 suites · 1530 asserts · 0 failed.
+
+**Sobre `US46120E6023` (ISRG)**: NO está confirmado que su error fuera solo una carrera "stale KV". Hipótesis abierta — pudo ser (a) que el engine leyó KV antes de que el re-import propagara, o (b) que ese ISIN siga llegando sin ticker correcto. **No se da por cerrado.** Verificación pendiente: tras desplegar este fix, comprobar en KV que el holding tiene `ticker: ISRG` (`/api/portfolio | jq '[.config.holdings[] | select(.isin=="US46120E6023") | {id, ticker}]'`) y re-correr el engine.
+
+**ACCIÓN MANUAL pendiente (verificación en producción)**:
+1. Mergear el PR y desplegar.
+2. Re-importar el CSV (el import ahora reconoce los LU ISINs → no falla con 422).
+3. Re-correr el engine: `errors` debe quedar `[]` (o sin ninguna línea `No data for LU...`).
+4. Confirmar que los ELTIF aparecen en la cartera sin P&L diario y con badge ELTIF.
+
+---
+
 ### P1-5: UI — explicar la etiqueta REVISAR en lenguaje para dummies
 
 **Copy aprobado por Beatriz (usar literalmente cuando se implemente)**.
@@ -138,6 +170,20 @@ Review digest format (`digest.ts`). Ensure:
 - Every BUY/REDUCE signal includes: ticker, current price, distance from 52W high/low, conviction, reason, suggested amount, data age, source
 - Digest shows portfolio summary: NAV, daily change, biggest moves
 - No "current price = null" or "0" visible to user
+
+---
+
+### P1-6: UI específica para fondos privados / ELTIF (mejora futura, NO en el hotfix)
+
+**Contexto**: el hotfix P1-3c sólo evita que los ELTIF rompan el engine (no se les pide precio) y los marca con badge `ELTIF`. **No** resuelve la valoración ni la experiencia de usuario para activos privados. Eso es un bloque aparte, no parte de este hotfix.
+
+**Pendiente (cuando se priorice)**:
+- Vista/sección separada para `private_fund` en el dashboard, distinta de acciones/ETF.
+- Copy claro para usuarios no financieros: explicar que un ELTIF es un fondo privado, que su valor lo publica el gestor (NAV periódico), no el mercado, y que por eso no hay P&L diario ni señal de compra/venta automática.
+- Mostrar coste invertido (del CSV) y, si en el futuro hay una fuente fiable de NAV, valor estimado — **nunca** inventar precio ni usar 0.
+- Decidir cómo (o si) se incluyen en concentración/allocation, dado que no tienen precio de mercado diario.
+
+**Qué NO hacer**: no forzar estos activos al pipeline de scoring/pricing normal. No hardcodear NAV. No tratar `private_fund` como `stock`/`etf`.
 
 ---
 

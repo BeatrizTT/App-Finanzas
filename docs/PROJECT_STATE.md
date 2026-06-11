@@ -166,6 +166,7 @@ A personal investment decision-support app. It scans a curated universe of stock
 - Telegram sender: graceful degradation
 - Digest builder: daily summary format
 - CSV portfolio importer: parsing + KV persistence — `saved: true` in Vercel with KV (PR #17). **Fail-closed ante ISINs desconocidos**: si un ISIN no está en `ISIN_TO_TICKER`, el endpoint responde **HTTP 422** con `unknownIsins`/`warnings` y **no escribe en KV** — la cartera no se actualiza hasta añadir el mapping y re-importar. Evita holdings sin ticker que producen `No data for <ISIN>`. Caso real: `US46120E6023` → ISRG mapeado 2026-06-11.
+- **Fondos privados (ELTIF) — importados sin pricing diario (hotfix de importación, NO valoración completa)**: `type: 'private_fund'` en `ISIN_TO_TICKER`. Los ELTIF (private equity de Trade Republic) no cotizan en bolsa, así que el motor diario (`daily-engine.ts`) los excluye de `portfolioTickers` y `usdTickers` — no se les pide precio a Twelve Data. Aparecen en la cartera (units + coste medio del CSV) pero **sin P&L diario ni señales automáticas**. Mapeados 2026-06-11: `LU3176111881` (EQT Nexus, `ENXF`) y `LU3170240538` (Apollo Global Private Markets, `APGM`). UI: badge `ELTIF`. La valoración real de private assets y su UI dedicada quedan pendientes (backlog P1-6) — esto sólo evita errores falsos `No data for...` y persiste los datos.
 - Cron route: **fail-closed if CRON_SECRET missing (503)** — fixed in PR #13
 - `/api/config/status`: health info — returns `priceProvider`, `telegramConfigured`, `cronSecretSet`, `isVercel`
 - 4 docs: PROJECT_STATE, CTO_BACKLOG, DECISIONS, RUNBOOK
@@ -208,6 +209,8 @@ A personal investment decision-support app. It scans a curated universe of stock
 
 | PR | Title | State |
 |---|---|---|
+| (this) | fix: private_fund (ELTIF) — importar sin pricing diario, mapear LU3176111881/LU3170240538 | Abierto desde `main` |
+| #28 | fix: ISRG mapping + fail-closed para ISINs desconocidos en CSV import | Merged `cac37f8` |
 | #27 | refactor: shared KV client (`kv-client.ts`) — PR-0 Fase 2 | Merged |
 | #25 | docs: Fase 1 verificación end-to-end completa (2026-06-11) | Merged |
 | #21 | fix: bracket notation para KV env vars (env inlining Turbopack) | Merged |
@@ -221,5 +224,5 @@ A personal investment decision-support app. It scans a curated universe of stock
 ## Test suite
 
 ```
-npx tsx scripts/run-tests.ts   →  24 suites · 1527 asserts · 0 failed
+npx tsx scripts/run-tests.ts   →  24 suites · 1530 asserts · 0 failed
 ```
