@@ -4,10 +4,11 @@ Operational procedures. Keep this up to date as infrastructure changes.
 
 ---
 
-## Acciones manuales obligatorias en Vercel antes de producción real
+## Acciones manuales en Vercel — referencia histórica
+
+> **Estado actual (2026-06-04)**: todas las variables críticas ya están configuradas. Esta sección documenta qué se configuró y cómo, para referencia futura o si hay que recrear el entorno desde cero.
 
 Esta sección está escrita para el propietario del proyecto, no para un desarrollador.
-Sigue los pasos en orden. Sin estas variables, la app usa precios falsos y el cron no funciona.
 
 ---
 
@@ -36,8 +37,9 @@ Sigue los pasos en orden. Sin estas variables, la app usa precios falsos y el cr
 
 #### `PRICE_PROVIDER`
 - **Obligatoria.** Sin esto la app usa precios ficticios (mock).
-- Valor: `yahoo`
-- No requiere ninguna API key adicional.
+- Valor en producción actual: `twelvedata` (configurada desde Mayo 2026).
+- **No cambiar a `yahoo`**: Yahoo Finance rate-limita desde IPs de cloud de Vercel. Twelve Data es el provider de producción. Requiere `TWELVE_DATA_API_KEY`.
+- Ver `docs/DECISIONS.md` sección "Twelve Data as production pricing provider".
 
 #### `KV_REST_API_URL`
 - **Obligatoria para persistencia real.** Sin esto, los datos del motor se pierden en cada invocación de Vercel.
@@ -117,15 +119,17 @@ curl -s "$BASE/api/config/status" | jq .
 Respuesta esperada tras configurar todo:
 ```json
 {
-  "priceProvider": "yahoo",
+  "priceProvider": "twelvedata",
   "cronSecretSet": true,
   "telegramConfigured": true,
-  "isVercel": true
+  "isVercel": true,
+  "kvConfigured": true
 }
 ```
-- `priceProvider` debe ser `"yahoo"`, no `"mock"`
+- `priceProvider` debe ser `"twelvedata"`, no `"mock"` ni `"yahoo"`
 - `cronSecretSet` debe ser `true`
 - `telegramConfigured` será `true` sólo si has añadido ambas variables de Telegram
+- `kvConfigured` debe ser `true` — si es `false`, las env vars de KV no son visibles en runtime y la persistencia entre invocaciones no funcionará
 
 **Verificar protección del cron:**
 ```bash
@@ -143,18 +147,27 @@ curl -s "$BASE/api/cron/daily" \
 
 **Verificar que el motor produce datos reales:**
 ```bash
-# Ejecutar el motor manualmente (POST sin auth, porque ENGINE_API_SECRET no está configurado)
-curl -s -X POST "$BASE/api/engine/run" | jq '{success, pricingMethod: .pricingMethod, alertsCount}'
+# Ejecutar el motor manualmente (POST sin auth, porque ENGINE_API_SECRET no está configurado).
+# sendDigest/sendAlertMessages en false para no disparar Telegram durante pruebas.
+curl -s -X POST "$BASE/api/engine/run" \
+  -H "Content-Type: application/json" \
+  -d '{"sendDigest": false, "sendAlertMessages": false}' \
+  | jq '{success, alertsCount, errors, eurUsdRate, samplePrice: .portfolioAnalyses[1].currentPrice}'
 ```
-- `success` debe ser `true`
-- `pricingMethod` debe ser `"yahoo"`, no `"mock"`
+- `success` debe ser `true`, `errors` debe ser `[]`
+- `eurUsdRate` debe ser un número (~1.0–1.3), no `null`
+- Nota: no hay `pricingMethod` a nivel raíz — vive dentro de cada opportunity. `proxy_drawdown_only` en ETFs europeos (CNDX, IWVL) es esperado, no un fallo.
 
 **Verificar persistencia (si KV está configurado):**
 ```bash
 # Después de ejecutar el motor, recuperar el último resultado guardado
-curl -s "$BASE/api/engine/run" | jq '{runAt, pricingMethod: .pricingMethod}'
+curl -s "$BASE/api/engine/run" | jq '{runAt, noData}'
+# Y verificar que las rutas de lectura ven el mismo run:
+curl -s "$BASE/api/opportunities" | jq '{lastRunAt, stocks: (.stocks|length)}'
+curl -s "$BASE/api/portfolio" | jq '{lastRunAt, analyses: (.analyses|length)}'
 ```
-- `runAt` debe mostrar una fecha reciente (la del último run)
+- `runAt`/`lastRunAt` deben mostrar la fecha del último run en las TRES rutas
+- Si `/api/engine/run` GET tiene datos pero `/api/opportunities` devuelve `lastRunAt: null`, revisar la sección "Lección Fase 1" (caching/env inlining)
 
 **Verificar Telegram:**
 - Después de ejecutar el motor con `POST /api/engine/run`, deberías recibir un mensaje en Telegram en menos de 30 segundos.
@@ -163,15 +176,16 @@ curl -s "$BASE/api/engine/run" | jq '{runAt, pricingMethod: .pricingMethod}'
 
 ### Resumen rápido — qué debe estar hecho antes del primer cron real
 
-| Variable | Estado necesario | Consecuencia si falta |
+| Variable | Estado actual | Nota |
 |---|---|---|
-| `CRON_SECRET` | ✓ Configurada | Cron devuelve 503 y no ejecuta |
-| `PRICE_PROVIDER=yahoo` | ✓ Configurada | App usa precios mock |
-| `KV_REST_API_URL` | ✓ Configurada | Datos del motor se pierden entre runs |
-| `KV_REST_API_TOKEN` | ✓ Configurada | Datos del motor se pierden entre runs |
-| `TELEGRAM_BOT_TOKEN` | Opcional pero recomendada | Alertas van sólo a logs de Vercel |
-| `TELEGRAM_CHAT_ID` | Opcional pero recomendada | Alertas van sólo a logs de Vercel |
-| `ENGINE_API_SECRET` | **NO configurar todavía** | Si se configura, el botón Analizar se rompe |
+| `CRON_SECRET` | ✓ Configurada (Apr 30) | Cron activo |
+| `PRICE_PROVIDER=twelvedata` | ✓ Configurada (May 5) | NO cambiar a `yahoo` |
+| `TWELVE_DATA_API_KEY` | ✓ Configurada (May 5) | Requerida para twelvedata |
+| `KV_REST_API_URL` | ✓ Configurada (May 6) | KV conectado |
+| `KV_REST_API_TOKEN` | ✓ Configurada (May 6) | KV conectado |
+| `TELEGRAM_BOT_TOKEN` | ✓ Configurada (Apr 30) | Bot activo |
+| `TELEGRAM_CHAT_ID` | ✓ Configurada (Apr 30) | Destino activo |
+| `ENGINE_API_SECRET` | **NO configurar** | Si se configura, el botón Analizar se rompe |
 
 ---
 
@@ -231,26 +245,23 @@ Add as **Repository Secrets** (Settings → Secrets and variables → Actions):
 
 ---
 
-## Vercel environment variables — go-live checklist
+## Vercel environment variables — estado actual (reconciliado PR #19)
 
-Go to: **Vercel → Project → Settings → Environment Variables**
+> Las siguientes variables ya están configuradas en Vercel. Esta sección es de referencia, no de acción pendiente.
 
-### Required before go-live (in this order)
+| Variable | Estado | Nota |
+|---|---|---|
+| `CRON_SECRET` | ✓ Configurada (Apr 30) | `cronSecretSet: true` en config/status |
+| `PRICE_PROVIDER` | ✓ `twelvedata` (May 5) | NO cambiar a `yahoo`. Ver DECISIONS.md. |
+| `TWELVE_DATA_API_KEY` | ✓ Configurada (May 5) | Requerida para `PRICE_PROVIDER=twelvedata` |
+| `KV_REST_API_URL` | ✓ Configurada (May 6) | Auto-generada por Vercel KV |
+| `KV_REST_API_TOKEN` | ✓ Configurada (May 6) | Auto-generada por Vercel KV |
+| `TELEGRAM_BOT_TOKEN` | ✓ Configurada (Apr 30) | `telegramConfigured: true` en config/status |
+| `TELEGRAM_CHAT_ID` | ✓ Configurada (Apr 30) | Junto con BOT_TOKEN |
+| `EODHD_ENABLED` | Configurada, **inactiva** | No tiene efecto con `PRICE_PROVIDER=twelvedata` |
+| `ENGINE_API_SECRET` | **NO configurar** | Dashboard llama POST sin auth; configurar esto rompe el botón Analizar |
 
-```
-CRON_SECRET        = <openssl rand -hex 32>
-PRICE_PROVIDER     = yahoo
-KV_REST_API_URL    = <from Vercel KV → Upstash dashboard>
-KV_REST_API_TOKEN  = <from Vercel KV → Upstash dashboard>
-TELEGRAM_BOT_TOKEN = <from @BotFather>
-TELEGRAM_CHAT_ID   = <personal chat ID>
-```
-
-**Why `PRICE_PROVIDER=yahoo`**: simplest path to real prices. No Twelve Data key needed. Can add `chain` later when a second provider is needed.
-
-**Why `CRON_SECRET` first**: the cron route returns 503 if this is missing — it cannot execute. Set this before any scheduled run.
-
-**Note on `ENGINE_API_SECRET`**: the manual trigger endpoint (`POST /api/engine/run`) is fail-open when this is not set. The dashboard calls POST without an Authorization header, so this is intentional for personal use. If you want to close the endpoint, set `ENGINE_API_SECRET` and add the header to the dashboard fetch in `page.tsx`. See CTO_BACKLOG P0-7.
+**Nota sobre `PRICE_PROVIDER`**: los docs anteriores decían que había que configurar `PRICE_PROVIDER=yahoo`. Eso fue un error — Yahoo rate-limita desde IPs de cloud de Vercel. Twelve Data funciona correctamente. No cambiar.
 
 ### Optional
 
@@ -269,14 +280,11 @@ MOCK_MODE                       = false            # set true to force mock prov
 
 ## Verifying cron protection — manual test
 
-> **URL importante**: usar siempre `https://www.beaihub.com` para tests manuales del cron, **no** el alias de rama (`app-finanzas-git-main-...vercel.app`).
-> Los aliases de rama tienen Vercel Deployment Protection activada y devuelven 401 a nivel de proxy antes de llegar al código Next.js — no es un fallo de la app.
-
 Once `CRON_SECRET` is set in Vercel (and after deploying), verify:
 
 ```bash
-BASE="https://www.beaihub.com"
-CRON_SECRET="<tu-CRON_SECRET>"
+BASE="https://<your-vercel-url>"
+SECRET="<your-CRON_SECRET>"
 
 # Case 1: missing CRON_SECRET in env → 503 (cannot test without undeploying, but code verified by unit tests)
 
@@ -291,13 +299,11 @@ curl -s -o /dev/null -w "%{http_code}" "$BASE/api/cron/daily" \
 
 # Case 4: correct Authorization → 200 (engine runs)
 curl -s "$BASE/api/cron/daily" \
-  -H "Authorization: Bearer $CRON_SECRET"
+  -H "Authorization: Bearer $SECRET"
 # Expected: {"success":true,"runAt":"...","alerts":...}
 ```
 
 The auth logic is covered by 7 unit tests in `src/app/api/cron/__tests__/cron-auth.test.ts`.
-
-Verificado 2026-06-11: sin header → 401, header incorrecto → 401, header correcto → 200 ✅
 
 ---
 
@@ -314,46 +320,207 @@ Push to `main` — Vercel auto-deploys. No manual steps.
 ```bash
 # POST — triggers a full engine run (stores output to KV + file-store)
 # If ENGINE_API_SECRET is not set in Vercel, this endpoint is open (no auth required):
-curl -s -X POST "https://www.beaihub.com/api/engine/run"
+curl -s -X POST "https://<your-vercel-url>/api/engine/run"
 
 # If ENGINE_API_SECRET is set:
-curl -s -X POST "https://www.beaihub.com/api/engine/run" \
+curl -s -X POST "https://<your-vercel-url>/api/engine/run" \
   -H "Authorization: Bearer $ENGINE_API_SECRET"
 
 # GET — returns the latest persisted output (KV-aware, no auth required)
-curl -s "https://www.beaihub.com/api/engine/run"
+curl -s "https://<your-vercel-url>/api/engine/run"
 ```
 
 Response includes `success`, `runAt`, `alertsCount`, `errors` array, plus full `portfolioAnalyses`, `stockOpportunities`, `etfOpportunities`.
 
 ---
 
-## Verifying production is working
+## Verificación end-to-end (Fase 1) — checklist con comandos
 
-1. Set `PRICE_PROVIDER=yahoo` + `KV_REST_API_URL/TOKEN` in Vercel
-2. Trigger engine: `POST /api/engine/run` (or wait for cron)
-3. Check `GET /api/engine/run` — should return engine output with real prices
-4. Confirm `pricingMethod` in output is `yahoo`, not `mock`
-5. Confirm `currentPrice` is non-null and non-zero for AAPL, MSFT, NVDA
-6. Check Telegram — digest should arrive within 30 seconds of engine run
+Usar después de confirmar que todos los env vars están configurados en Vercel. Sustituir placeholders antes de ejecutar.
 
-**Note**: All three read endpoints (`/api/engine/run` GET, `/api/opportunities`, `/api/portfolio`) are now KV-aware via `loadEngineOutput()`. With KV configured, all three return consistent data after a Vercel cold start.
+```bash
+BASE="https://<tu-url-de-vercel>"
+CRON_SECRET="<tu-CRON_SECRET>"
+```
+
+### 1. Config status
+```bash
+curl -s "$BASE/api/config/status" | jq .
+```
+Esperado:
+```json
+{
+  "priceProvider": "twelvedata",
+  "cronSecretSet": true,
+  "telegramConfigured": true,
+  "isVercel": true,
+  "kvConfigured": true
+}
+```
+Si `priceProvider` es `"mock"`: redeploy pendiente o `PRICE_PROVIDER` no configurada.
+Si `kvConfigured` es `false`: las env vars de KV no llegan al runtime — la persistencia entre invocaciones no funcionará (ver sección "Lección Fase 1" más abajo).
+
+### 2. Cron auth
+
+> **URL importante**: usar siempre la URL canónica de producción (`https://www.beaihub.com`), **no** el alias de rama (`app-finanzas-git-main-...vercel.app`).
+> Los aliases de rama tienen Vercel Deployment Protection activada y devuelven 401 a nivel de proxy antes de llegar al código — no es un fallo de auth de la app.
+
+```bash
+BASE="https://www.beaihub.com"
+
+# Sin header → debe devolver 401
+curl -s -o /dev/null -w "%{http_code}" "$BASE/api/cron/daily"
+
+# Header incorrecto → 401
+curl -s -o /dev/null -w "%{http_code}" "$BASE/api/cron/daily" \
+  -H "Authorization: Bearer VALOR_INCORRECTO"
+
+# Header correcto → 200 (motor ejecuta)
+curl -s "$BASE/api/cron/daily" \
+  -H "Authorization: Bearer $CRON_SECRET" | jq '{success, runAt}'
+```
+
+Verificado 2026-06-11 en `https://www.beaihub.com`: sin header → 401, header incorrecto → 401, header correcto → 200 ✅
+
+### 3. Engine run manual
+```bash
+# ENGINE_API_SECRET no está configurado → no requiere auth.
+# sendDigest/sendAlertMessages en false para no disparar Telegram durante pruebas.
+curl -s -X POST "$BASE/api/engine/run" \
+  -H "Content-Type: application/json" \
+  -d '{"sendDigest": false, "sendAlertMessages": false}' \
+  | jq '{success, alertsCount, errors, eurUsdRate, samplePrice: .portfolioAnalyses[1].currentPrice}'
+```
+- `success: true`, `errors: []` y `eurUsdRate` numérico: precios reales confirmados.
+- `samplePrice` debe ser un número (no-null). Nota: `pricingMethod` no existe a nivel raíz — vive dentro de cada opportunity.
+- Si `success: false` o errores: revisar campo `errors` en la respuesta.
+
+### 4. KV persistence (write → read)
+```bash
+# Leer el output del run anterior (confirma KV read)
+curl -s "$BASE/api/engine/run" | jq '{runAt, noData}'
+```
+El `runAt` debe coincidir con el run del paso 3 y `noData` debe estar ausente/null. Si `noData: true`: KV write no funcionó.
+
+### 5. Opportunities y Portfolio
+```bash
+curl -s "$BASE/api/opportunities" | jq '{lastRunAt, stockCount: (.stocks | length)}'
+curl -s "$BASE/api/portfolio" | jq '{holdingsCount: (.config.holdings | length), lastRunAt}'
+```
+
+### 6. CSV import
+
+> **Campo correcto**: el formulario multipart debe llamarse `csv`, **no** `file`. `-F "file=@..."` devuelve `{"error": "No CSV file provided"}`.
+
+```bash
+curl -s -X POST "$BASE/api/portfolio/import" \
+  -F "csv=@tu-trades.csv" | jq '{saved, saveSource, holdingsUpdated, unknownIsins, warnings}'
+```
+Esperado con KV: `{"saved": true, "saveSource": "kv", "holdingsUpdated": N, "unknownIsins": [], "warnings": []}`
+
+Verificado 2026-06-11: `saved: true`, `saveSource: "kv"`, `holdingsUpdated: 16` ✅
+
+> **ISINs sin ticker conocido — el import FALLA y NO actualiza la cartera (intencionado)**:
+> si el CSV contiene un ISIN que no está en `ISIN_TO_TICKER`
+> (`src/app/api/portfolio/import/route.ts`), el endpoint responde **HTTP 422** con
+> `{"success": false, "saved": false, "unknownIsins": [...], "warnings": [...], "error": "..."}`
+> y **no escribe nada en KV**. La cartera guardada se queda como estaba.
+>
+> Esto es deliberado: un holding sin ticker llegaría a KV, el motor pediría precio por
+> el ISIN y cada engine run mostraría `No data for <ISIN>`. Preferimos no actualizar la
+> cartera antes que dejarla en un estado que el motor no puede analizar por completo.
+>
+> **Qué hacer si ves `unknownIsins` en la respuesta**:
+> 1. La cartera **no** se ha actualizado — no hay que revertir nada.
+> 2. Añadir el mapping ISIN → ticker en `ISIN_TO_TICKER` (con test) y desplegar.
+> 3. **Repetir el import** del mismo CSV. Esta vez `unknownIsins: []` y `saved: true`.
+>
+> Caso real: `US46120E6023` = Intuitive Surgical (ISRG) — mapeado el 2026-06-11.
+
+### 7. Telegram
+Después del paso 3, espera hasta 30 segundos. El bot debería enviar un digest con señales del portfolio.
 
 ---
 
-## Fase 1 — Resultados verificación producción (2026-06-11)
+## Regla anti-pérdida de contexto — qué hacer si docs y producción no coinciden
 
-Verificación manual completa en `https://www.beaihub.com`.
+Si `/api/config/status` o los env vars de Vercel contradicen lo que dicen los docs:
 
-| Paso | Descripción | Resultado | Fecha |
-|---|---|---|---|
-| 6 — Cron auth | Sin header → 401, header incorrecto → 401, header correcto → 200 | ✅ | 2026-06-11 |
-| 7 — CSV import | `saved: true`, `saveSource: "kv"`, `holdingsUpdated: 16`, `totalRealizedPnl: 252.56` | ✅ | 2026-06-11 |
-| 8 — Telegram digest | `success: true`, bot envió mensaje en Telegram | ✅ | 2026-06-11 |
+1. **No tocar Vercel** inmediatamente.
+2. **Verificar producción**: `curl "$BASE/api/config/status"` + revisar Vercel → Settings → Env Vars.
+3. **Abrir PR docs-only** para reconciliar los docs con la realidad.
+4. **Solo después** decidir si hay cambios funcionales que hacer.
 
-**Nota técnica — Vercel Deployment Protection**: Los aliases de rama (`app-finanzas-git-main-...vercel.app`) tienen Deployment Protection activada y devuelven 401 a nivel de proxy antes de que el código Next.js se ejecute. Todo test manual de producción debe hacerse contra `https://www.beaihub.com`.
+Razón: los docs pueden estar desactualizados. Un agente que actúa sobre docs erróneos puede romper un sistema que ya funciona. Por ejemplo: cambiar `PRICE_PROVIDER=twelvedata` a `yahoo` cuando twelvedata ya estaba en producción y yahoo falla desde cloud IPs.
 
-**Nota técnica — CRON_SECRET bracket notation**: `process.env['CRON_SECRET']` (bracket notation) fuerza evaluación en runtime. `process.env.CRON_SECRET` (dot notation) puede ser inlinado por Turbopack en build time con valor `undefined`. Siempre usar bracket notation para secretos en rutas de cron.
+---
+
+## Verifying production is working
+
+1. Env vars ya configuradas (ver tabla arriba) — `kvConfigured: true` en `/api/config/status`
+2. Trigger engine: `POST /api/engine/run` (o esperar cron)
+3. Check `GET /api/engine/run` — debe devolver engine output con precios reales
+4. Check `GET /api/opportunities` y `GET /api/portfolio` — `lastRunAt` debe coincidir con el run
+5. Confirmar `currentPrice` es no-null y no-zero para AAPL, MSFT, NVDA (los ETFs proxy como CNDX tienen `currentPrice: null` por diseño — `proxy_drawdown_only`)
+6. Check Telegram — digest debe llegar en menos de 30 segundos
+
+**Todos los endpoints de lectura** (`/api/engine/run` GET, `/api/opportunities`, `/api/portfolio`) son KV-aware via `loadEngineOutput()`. Con KV configurado, devuelven datos consistentes tras un cold start de Vercel.
+
+---
+
+## Lección Fase 1 — rutas GET-only y env vars de KV (PRs #20, #21)
+
+Lo aprendido durante la verificación end-to-end de Fase 1 (2026-06-09/10). Registrado aquí para que ningún agente futuro tenga que redescubrirlo.
+
+**Síntoma observado:**
+- `POST /api/engine/run` escribía a KV correctamente — logs mostraban `[EngineStore] Output saved to Vercel KV` y la llamada a `upstash.io` aparecía en External APIs de Vercel.
+- `GET /api/engine/run` leía el output correctamente.
+- Pero `GET /api/opportunities` y `GET /api/portfolio` devolvían siempre `"No engine output yet"` con `lastRunAt: null`, incluso segundos después de un run exitoso. En Vercel: "No outgoing requests" y sin logs de función.
+
+**Diagnóstico en dos capas:**
+1. **Caching de rutas GET-only (PR #20)**: las rutas que solo exportan `GET` son elegibles para caching estático en Next.js/Vercel — la primera respuesta del deployment (cuando aún no había output) se servía cacheada. `/api/engine/run` no sufría esto porque exporta `GET` y `POST` en el mismo archivo, lo que fuerza modo dinámico. Fix: `export const dynamic = 'force-dynamic'` en ambas rutas + imports estáticos de los stores.
+2. **Inlining de env vars en build (PR #21)**: tras PR #20 el handler ya corría fresco pero seguía sin ver KV. Hipótesis confirmada por el patrón: Turbopack puede inlinear `process.env.VAR` (notación de punto) como `undefined` en build time para bundles pequeños e independientes. El bundle del POST (con todo `daily-engine.ts`) no resultaba afectado; los bundles GET pequeños sí. Fix: notación de corchete `process.env['KV_REST_API_URL']` en `engine-store.ts` y `portfolio-store.ts`, que fuerza evaluación en runtime.
+
+**Reglas resultantes:**
+- Toda ruta API GET-only que lea estado mutable (KV, file-store) debe llevar `export const dynamic = 'force-dynamic'`.
+- Los stores server-side (`engine-store.ts`, `portfolio-store.ts`) deben acceder a las env vars de KV con notación de corchete. No volver a notación de punto.
+- `GET /api/config/status` expone `kvConfigured` — primer check de diagnóstico si la persistencia falla.
+
+---
+
+## Lecciones adicionales Fase 1 (2026-06-11)
+
+Tres lecciones adicionales descubiertas al completar la verificación el 2026-06-11, complementarias a las de PRs #20/#21.
+
+### L3: Vercel Deployment Protection bloquea aliases de rama
+
+Los aliases con formato `app-finanzas-git-main-...vercel.app` tienen Vercel Deployment Protection activada por defecto. Cualquier request a esas URLs devuelve 401 a nivel de proxy — el código Next.js nunca se ejecuta, y el log de la función no aparece en Vercel Logs.
+
+**Regla**: para cualquier test manual de la API en producción, usar siempre `https://www.beaihub.com` (dominio canónico de producción), nunca el alias de rama.
+
+**Diagnóstico**: si un test manual devuelve 401 y no aparece ninguna entrada en Vercel Logs ni en "Invocations" de la ruta, el 401 viene del proxy — no del código.
+
+### L4: Campo del formulario CSV es `csv`, no `file`
+
+`POST /api/portfolio/import` lee `formData.get('csv')`. Si el campo se envía como `file` (e.g., `-F "file=@trades.csv"`), el endpoint devuelve `{"error": "No CSV file provided"}`.
+
+**Regla**: siempre usar `-F "csv=@ruta/al/archivo.csv"` en tests de importación.
+
+### L5: CRON_SECRET — bracket notation en la ruta del cron
+
+`process.env.CRON_SECRET` (dot notation) puede ser inlinado por Turbopack como `undefined` en build time para bundles pequeños. La ruta `/api/cron/daily` usa `process.env['CRON_SECRET']` (bracket notation) — esta es la forma correcta y debe mantenerse así.
+
+**Regla**: cualquier env var leída en rutas de cron o stores server-side debe usar bracket notation `process.env['VAR']`.
+
+### L6: Nunca loguear secretos ni fragmentos de secretos
+
+Durante el debug del 401 del cron (PR #23) se añadió temporalmente un `console.log` que imprimía la longitud y los primeros caracteres de `CRON_SECRET` y del header `Authorization`. Eso quedó en los logs de Vercel. Se revirtió en PR #24.
+
+**Regla permanente** (no negociable):
+- **Nunca** loguear el valor de un secreto, ni siquiera parcialmente: nada de `.substring(0, N)`, `.length`, prefijos, sufijos ni hashes de `CRON_SECRET`, `KV_REST_API_TOKEN`, `TELEGRAM_BOT_TOKEN`, `TWELVE_DATA_API_KEY`, `ENGINE_API_SECRET` ni ningún token.
+- Para depurar auth, loguear únicamente el **resultado** de la comparación (`ok: true/false`, código de estado), nunca el material de entrada.
+- Los fragmentos de secretos en logs son tan sensibles como el secreto completo: reducen el espacio de búsqueda y quedan persistidos en el proveedor de logs.
+- Si un secreto (o fragmento) llega a aparecer en un log o en un chat, **rotarlo** inmediatamente.
 
 ---
 
@@ -367,15 +534,18 @@ All portfolio config consumers (`GET /api/engine/run`, `POST /api/engine/run`, `
 
 ---
 
-## What to do if Yahoo Finance fails
+## What to do if Twelve Data fails
 
-Symptoms: `currentPrice: null` for multiple tickers, `pricingMethod: mock`.
+Symptoms: `currentPrice: null` for multiple tickers, `pricingMethod` unexpectedly mock, or widespread `errors` in engine run response.
 
 Steps:
-1. Check `yahoo-finance2` npm for known issues
-2. If transient (rate limit, outage): wait for next cron run
-3. If persistent: add `TWELVE_DATA_API_KEY` and set `PRICE_PROVIDER=chain` + `PRICE_PROVIDER_CHAIN=twelvedata,yahoo`
-4. If Twelve Data also unavailable: activate EODHD (`EODHD_ENABLED=true`) for validated symbols only
+1. Check Twelve Data status and free tier quota (800 req/day — could be exhausted if cron ran many times)
+2. If rate limit: wait for next cron run (quota resets daily)
+3. If persistent: options in order of preference:
+   - Upgrade Twelve Data plan
+   - Do NOT fall back to Yahoo as primary — Yahoo is unreliable from Vercel cloud IPs
+   - Evaluate EODHD for validated symbols (requires `EODHD_ENABLED=true` already configured; only for symbols in `eodhd-symbol-validation.json`)
+   - Evaluate a chain provider once `batchGetRecentHighs` is implemented for ChainedPriceProvider
 
 Never set `currentPrice` to a fake value. Leave null; safety gates suppress BUY recommendations.
 
@@ -439,9 +609,9 @@ CSV parsing works end-to-end. With KV configured in Vercel, import now persists 
 
 **Verifying import persistence after deploy**:
 ```bash
-BASE="https://www.beaihub.com"
+BASE="https://<your-vercel-url>"
 
-# 1. Upload a CSV — field name must be "csv" (not "file")
+# 1. Upload a CSV — expect saved:true with KV configured
 curl -s -X POST "$BASE/api/portfolio/import" \
   -F "csv=@your-trades.csv" | jq '{saved, saveSource, holdingsUpdated}'
 # Expected: {"saved": true, "saveSource": "kv", "holdingsUpdated": N}
@@ -449,8 +619,6 @@ curl -s -X POST "$BASE/api/portfolio/import" \
 # 2. Verify the loaded config reflects the import
 curl -s "$BASE/api/portfolio" | jq '{holdingsCount: (.config.holdings | length), lastRunAt}'
 ```
-
-Verificado 2026-06-11: `saved: true`, `saveSource: "kv"`, `holdingsUpdated: 16`, `totalRealizedPnl: 252.56` ✅
 
 **Local dev (without KV)**: import still works — falls back to writing `config/portfolio.json`. Returns `saved: true, saveSource: "file"` if the write succeeds, or `saved: false, saveSource: "none"` if restricted.
 
@@ -462,7 +630,7 @@ Verificado 2026-06-11: `saved: true`, `saveSource: "kv"`, `holdingsUpdated: 16`,
 
 ```bash
 npm ci                  # Clean install from lock file
-npm test                # 23 suites, 1509 asserts
+npm test                # 24 suites, 1527 asserts
 npm run build           # Production build
 npx tsc --noEmit        # Type-check
 npm run dev             # Local dev server :3000

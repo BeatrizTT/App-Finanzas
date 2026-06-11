@@ -1,29 +1,36 @@
 // API route: GET /api/opportunities
 // Returns current stock, ETF, and discovered opportunities from last engine run
 
+export const dynamic = 'force-dynamic';
+
 import { NextResponse } from 'next/server';
+import type { DailyEngineOutput } from '@/lib/types';
+import { loadEngineOutput } from '@/lib/utils/engine-store';
+
+/** Pure response builder — exported for unit tests. */
+export function buildOpportunitiesResponse(output: DailyEngineOutput | null) {
+  if (!output || !output.runAt) {
+    return {
+      stocks: [],
+      etfs: [],
+      discovered: [],
+      lastRunAt: null,
+      message: 'No engine output yet. Run the engine first.',
+    };
+  }
+  return {
+    stocks: output.stockOpportunities ?? [],
+    etfs: output.etfOpportunities ?? [],
+    discovered: output.discoveredOpportunities ?? [],
+    lastRunAt: output.runAt,
+  };
+}
 
 export async function GET() {
   try {
-    const { readJsonFile } = await import('@/lib/utils/file-store');
-    const engineOutput = readJsonFile('engine-output.json', null) as any;
-
-    if (!engineOutput || !engineOutput.runAt) {
-      return NextResponse.json({
-        stocks: [],
-        etfs: [],
-        discovered: [],
-        lastRunAt: null,
-        message: 'No engine output yet. Run the engine first.',
-      });
-    }
-
-    return NextResponse.json({
-      stocks: engineOutput.stockOpportunities ?? [],
-      etfs: engineOutput.etfOpportunities ?? [],
-      discovered: engineOutput.discoveredOpportunities ?? [],
-      lastRunAt: engineOutput.runAt,
-    });
+    const { output, source } = await loadEngineOutput();
+    console.log(`[API /opportunities] Loaded from ${source}`);
+    return NextResponse.json(buildOpportunitiesResponse(output));
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: msg }, { status: 500 });

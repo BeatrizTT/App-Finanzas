@@ -146,6 +146,23 @@ test('legacy provider: null currentPrice stays null', () => {
   assert('null stays null (no FX on null)', result.NVDA.currentPrice === null);
 });
 
+test('legacy provider: eurUsdRate=0 → currentPrice=null (not Infinity)', () => {
+  const allHighs = {
+    NVDA: makeHighs('NVDA', { currentPrice: 110.0 }),
+  };
+  const result = buildPortfolioHighs(allHighs, USD_TICKERS, 0);
+  assert('eurUsdRate=0: currentPrice=null', result.NVDA.currentPrice === null);
+  assert('eurUsdRate=0: no Infinity produced', result.NVDA.currentPrice !== Infinity);
+});
+
+test('legacy provider: eurUsdRate<0 → currentPrice=null', () => {
+  const allHighs = {
+    NVDA: makeHighs('NVDA', { currentPrice: 110.0 }),
+  };
+  const result = buildPortfolioHighs(allHighs, USD_TICKERS, -1.1);
+  assert('eurUsdRate<0: currentPrice=null', result.NVDA.currentPrice === null);
+});
+
 // ---------------------------------------------------------------------------
 // Runner
 // ---------------------------------------------------------------------------

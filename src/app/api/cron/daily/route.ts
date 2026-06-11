@@ -4,12 +4,32 @@ import { runDailyEngine } from '@/lib/engine/daily-engine';
 export const runtime = 'nodejs';
 export const maxDuration = 60; // seconds, Vercel hobby limit is 60s
 
+/** Pure auth decision — exported for testing without HTTP infrastructure. */
+export type CronAuthResult =
+  | { ok: true }
+  | { ok: false; status: 401 | 503; code: string; error: string };
+
+export function checkCronAuth(
+  cronSecret: string | undefined,
+  authorizationHeader: string | null
+): CronAuthResult {
+  if (!cronSecret) {
+    return { ok: false, status: 503, code: 'CRON_SECRET_MISSING', error: 'Service misconfigured: CRON_SECRET not set' };
+  }
+  if (authorizationHeader !== `Bearer ${cronSecret}`) {
+    return { ok: false, status: 401, code: 'UNAUTHORIZED', error: 'Unauthorized' };
+  }
+  return { ok: true };
+}
+
 export async function GET(req: Request) {
-  // Vercel sets this header for cron requests; protect against random calls
-  const authHeader = req.headers ? (req as any).headers?.get?.('authorization') : null;
   const cronSecret = process.env['CRON_SECRET'];
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const authHeader = req.headers ? (req as any).headers?.get?.('authorization') : null;
+
+  const auth = checkCronAuth(cronSecret, authHeader);
+  if (!auth.ok) {
+    if (auth.status === 503) console.error('[Cron] CRON_SECRET is not configured — refusing to execute');
+    return NextResponse.json({ error: auth.error, code: auth.code }, { status: auth.status });
   }
 
   try {

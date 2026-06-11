@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import type { OpportunityScore } from '@/lib/types';
 import { Card, CardHeader, CardTitle, CardBody, DrawdownDisplay, SectionEmpty } from '@/components/ui/card';
-import { StateBadge, TypeBadge, ConfidenceBadge, ScoreBar } from '@/components/ui/badge';
+import { StateBadge, TypeBadge, ConfidenceBadge, ScoreBar, PricingMethodBadge } from '@/components/ui/badge';
+import { getTopDiscoveries } from '@/lib/ranking/ranker';
 import type { Opportunity } from '@/lib/types';
 
 function IsinCopy({ isin }: { isin?: string }) {
@@ -26,33 +27,47 @@ function IsinCopy({ isin }: { isin?: string }) {
   );
 }
 
-function ScoreBreakdown({ score }: { score: OpportunityScore }) {
-  const items = [
+export function ScoreBreakdown({ score, pricingDataAvailable }: { score: OpportunityScore; pricingDataAvailable?: boolean }) {
+  // riskReward depends on a real EUR price. When pricing data is missing (usd_no_fx, proxy,
+  // unconfirmed, unavailable → pricingDataAvailable === false), scoreRiskReward() falls back to a
+  // neutral 5 that is NOT a real signal. Render it as "N/A" with a grey bar so the user does not
+  // read 5/10 as a genuine risk-reward assessment. Explicit false only — undefined (legacy) shows normally.
+  const riskRewardNa = pricingDataAvailable === false;
+  const items: { label: string; value: number; na?: boolean }[] = [
     { label: 'Calidad del activo', value: score.breakdown.assetQuality },
     { label: 'Caída desde máximo', value: score.breakdown.drawdownOpportunity },
     { label: 'Tendencia', value: score.breakdown.trendQuality },
     { label: 'Fuerza relativa', value: score.breakdown.relativeStrength },
     { label: 'Encaje en cartera', value: score.breakdown.diversificationFit },
     { label: 'Sector', value: score.breakdown.sectorFit },
-    { label: 'Riesgo/beneficio', value: score.breakdown.riskReward },
+    { label: 'Riesgo/beneficio', value: score.breakdown.riskReward, na: riskRewardNa },
     { label: 'Ajuste mercado', value: score.breakdown.marketRegimeFit },
   ];
   return (
     <div className="px-4 pb-3 pt-1 bg-[#1a2233]/60 border-t border-[#2a3445]/30">
       <div className="text-xs text-slate-500 mb-2">Por qué puntúa {score.total.toFixed(1)}/10:</div>
       <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-        {items.map(({ label, value }) => (
+        {items.map(({ label, value, na }) => (
           <div key={label} className="flex items-center justify-between gap-2">
             <span className="text-xs text-slate-500 truncate">{label}</span>
-            <div className="flex items-center gap-1 shrink-0">
-              <div className="w-12 h-1 rounded-full bg-slate-700">
-                <div
-                  className={`h-full rounded-full ${value >= 7 ? 'bg-green-500' : value >= 5 ? 'bg-yellow-500' : 'bg-red-500'}`}
-                  style={{ width: `${Math.min(100, value * 10)}%` }}
-                />
+            {na ? (
+              <span
+                className="text-xs text-slate-500 shrink-0 italic"
+                title="No evaluable sin un precio en EUR. Falta tipo de cambio o precio fiable."
+              >
+                N/A (sin EUR)
+              </span>
+            ) : (
+              <div className="flex items-center gap-1 shrink-0">
+                <div className="w-12 h-1 rounded-full bg-slate-700">
+                  <div
+                    className={`h-full rounded-full ${value >= 7 ? 'bg-green-500' : value >= 5 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                    style={{ width: `${Math.min(100, value * 10)}%` }}
+                  />
+                </div>
+                <span className="text-xs text-slate-400 w-5 text-right">{value.toFixed(0)}</span>
               </div>
-              <span className="text-xs text-slate-400 w-5 text-right">{value.toFixed(0)}</span>
-            </div>
+            )}
           </div>
         ))}
       </div>
@@ -105,13 +120,14 @@ function OpportunityRow({ opp, showDiscoveryBadge = false }: { opp: Opportunity;
                 €{opp.suggestedAmountEur.min}–{opp.suggestedAmountEur.max}
               </div>
             ) : null}
-            <div className="mt-1">
+            <div className="mt-1 flex flex-col items-end gap-1">
+              <PricingMethodBadge method={opp.pricingMethod} />
               <ConfidenceBadge confidence={opp.confidence} />
             </div>
           </div>
         </div>
       </div>
-      {expanded && <ScoreBreakdown score={opp.score} />}
+      {expanded && <ScoreBreakdown score={opp.score} pricingDataAvailable={opp.pricingDataAvailable} />}
     </div>
   );
 }
@@ -163,6 +179,13 @@ export function EtfOpportunities({ opportunities }: EtfPanelProps) {
 }
 
 export function DiscoveryMonitor({ opportunities }: DiscoveryPanelProps) {
+  // Enforce the display contract: BUY/READY_TO_BUY first, then WATCH (each carries its own
+  // "why not BUY" reason), capped at 5. WATCH is shown so the panel is never falsely empty just
+  // because pricing/FX degraded everything — but it must never look like a buy recommendation.
+  const ranked = getTopDiscoveries(opportunities);
+  const firstWatchIdx = ranked.findIndex((o) => o.state === 'WATCH');
+  const hasActionable = ranked.some((o) => o.state !== 'WATCH');
+
   return (
     <Card>
       <CardHeader>
@@ -170,26 +193,39 @@ export function DiscoveryMonitor({ opportunities }: DiscoveryPanelProps) {
         <span className="text-xs text-slate-500">Activos fuera de tu cartera</span>
       </CardHeader>
       <CardBody className="p-0">
-        {opportunities.length === 0 ? (
-          <SectionEmpty message="Sin descubrimientos hoy — todos los activos del universo extendido analizados" />
+        {ranked.length === 0 ? (
+          <SectionEmpty message="Sin candidatos en el universo extendido con los filtros actuales" />
         ) : (
-          <div className="divide-y divide-[#2a3445]/50">
-            {opportunities.map((o) => (
-              <div key={o.ticker}>
-                <OpportunityRow opp={o} showDiscoveryBadge />
-                <div className="px-4 pb-2 flex flex-wrap gap-1">
-                  {Object.entries(o.qualityGates).map(([gate, passed]) => (
-                    <span
-                      key={gate}
-                      className={`text-xs px-1.5 py-0.5 rounded ${passed ? 'bg-green-900/40 text-green-400' : 'bg-red-900/40 text-red-400'}`}
-                    >
-                      {gate} {passed ? '✓' : '✗'}
-                    </span>
-                  ))}
+          <>
+            <div className="divide-y divide-[#2a3445]/50">
+              {ranked.map((o, idx) => (
+                <div key={o.ticker}>
+                  {/* Separator before the first WATCH item so vigilancia is not mixed with compra */}
+                  {idx === firstWatchIdx && hasActionable && (
+                    <div className="px-4 py-1.5 bg-[#161d2b] text-xs text-slate-500 border-y border-[#2a3445]/40">
+                      En vigilancia — todavía no es recomendación de compra
+                    </div>
+                  )}
+                  <OpportunityRow opp={o} showDiscoveryBadge />
+                  <div className="px-4 pb-2 flex flex-wrap gap-1">
+                    {Object.entries(o.qualityGates).map(([gate, passed]) => (
+                      <span
+                        key={gate}
+                        className={`text-xs px-1.5 py-0.5 rounded ${passed ? 'bg-green-900/40 text-green-400' : 'bg-red-900/40 text-red-400'}`}
+                      >
+                        {gate} {passed ? '✓' : '✗'}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+            {/* Data-limitations note — honest about what the score does and does not include. */}
+            <div className="px-4 py-2 text-xs text-slate-600 border-t border-[#2a3445]/40">
+              Score basado en precio, caída desde máximos y metadata editorial. Fundamentales
+              (P/E, ingresos, beneficios) todavía no incluidos.
+            </div>
+          </>
         )}
       </CardBody>
     </Card>

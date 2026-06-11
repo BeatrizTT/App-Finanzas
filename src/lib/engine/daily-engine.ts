@@ -12,13 +12,21 @@ import { getPriceProvider, resetPriceProvider } from '../pricing/factory';
 import { resetEodhdBudget } from '../pricing/eodhd-provider';
 import { loadPriceCache, savePriceCache, getCached, setCached, countStale, getEurUsdRate, setEurUsdRate } from '../pricing/price-cache';
 import {
-  getEffectivePortfolioConfig,
   getUniverseConfig,
   getOverridesConfig,
   clearConfigCache,
   applyOverridesToPortfolio,
 } from '../utils/config-loader';
+import { loadPortfolioConfig } from '../utils/portfolio-store';
 import { saveEngineOutput } from '../utils/engine-store';
+import { persistDiscoverySnapshots } from '../discovery/snapshots';
+import { persistWatchlist } from '../discovery/watchlist';
+import { persistDiscoveryAlerts } from '../discovery/alerts';
+import {
+  readScanCursor,
+  selectExtendedBatch,
+  advanceScanCursor,
+} from '../discovery/scan-cursor';
 import { buildPortfolioHighs } from './portfolio-highs';
 import type {
   DailyEngineOutput,
@@ -242,23 +250,41 @@ export async function runDailyEngine(options?: {
     if (evicted) savePriceCache(cache);
   }
 
-  const portfolioConfig = applyOverridesToPortfolio(getEffectivePortfolioConfig());
+  const { config: basePortfolioConfig, source: configSource } = await loadPortfolioConfig();
+  console.log(`[Engine] Portfolio config loaded from ${configSource}`);
+  const portfolioConfig = applyOverridesToPortfolio(basePortfolioConfig);
   const universeConfig = getUniverseConfig();
   const overrides = getOverridesConfig();
 
-  // Collect all tickers to fetch
+  // Collect all tickers to fetch (private_fund holdings are illiquid — no exchange price)
   const portfolioTickers = portfolioConfig.holdings
+    .filter(h => h.type !== 'private_fund')
     .map((h) => h.ticker ?? h.id.toUpperCase())
     .filter(Boolean);
 
   const isVercel = !!process.env.VERCEL;
+  // DISCOVERY_INCLUDE_EXTENDED_ON_VERCEL=false opts out; default is true (rotating batches)
+  const includeExtendedOnVercel = process.env.DISCOVERY_INCLUDE_EXTENDED_ON_VERCEL !== 'false';
 
-  // On Vercel Hobby (60s limit) skip extended universe — seed + portfolio is enough
+  // Extended assets are rotated in small batches on Vercel to respect the 60s limit.
+  // Local / non-Vercel runs include the full extended universe.
+  const allExtended = [...universeConfig.extendedStocks, ...universeConfig.extendedEtfs];
+  const scanCursor = readScanCursor();
+  const { extendedBatch, mode: scanMode, nextPointer } = selectExtendedBatch(
+    allExtended,
+    isVercel,
+    includeExtendedOnVercel,
+    scanCursor
+  );
+  // Persist cursor advance; failure is logged but never crashes the run
+  if (isVercel && includeExtendedOnVercel) {
+    advanceScanCursor(scanCursor, extendedBatch, nextPointer, scanMode);
+  }
+
   const allUniverseAssets: UniverseAsset[] = [
     ...universeConfig.seedStocks,
     ...universeConfig.seedEtfs,
-    ...(isVercel ? [] : universeConfig.extendedStocks),
-    ...(isVercel ? [] : universeConfig.extendedEtfs),
+    ...extendedBatch,
   ];
   const universeTickers = allUniverseAssets.map((a) => a.ticker);
 
@@ -279,7 +305,7 @@ export async function runDailyEngine(options?: {
   //   - legacy provider without validation: apply eurUsdRate for USD holdings as before
   const usdTickers = new Set(
     portfolioConfig.holdings
-      .filter(h => (h.currency ?? 'USD') !== 'EUR')
+      .filter(h => h.type !== 'private_fund' && (h.currency ?? 'USD') !== 'EUR')
       .map(h => h.ticker ?? h.id.toUpperCase())
   );
 
@@ -414,6 +440,31 @@ export async function runDailyEngine(options?: {
   // Persist output — KV in production, file-store in dev; non-fatal either way
   const { warnings: storeWarnings } = await saveEngineOutput(output);
   for (const w of storeWarnings) errors.push(w);
+
+  // Persist discovery snapshots — rolling 30-day store; failure must not affect output
+  try {
+    persistDiscoverySnapshots(discoveredOpportunities, runAt);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn('[Engine] Discovery snapshot persistence failed:', msg);
+  }
+
+  // Update discovery watchlist — lifecycle tracking; failure must not affect output
+  let watchlistTransitions: ReturnType<typeof persistWatchlist> = [];
+  try {
+    watchlistTransitions = persistWatchlist(discoveredOpportunities, runAt);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn('[Engine] Discovery watchlist persistence failed:', msg);
+  }
+
+  // Generate discovery alerts from transitions + current state; failure must not affect output
+  try {
+    persistDiscoveryAlerts(discoveredOpportunities, watchlistTransitions, runAt);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn('[Engine] Discovery alert persistence failed:', msg);
+  }
 
   console.log(`[Engine] Run complete. Alerts: ${sentAlerts.length}, Errors: ${errors.length}`);
   return output;

@@ -5,7 +5,7 @@
 
 // --- Asset Types ---
 
-export type AssetType = 'stock' | 'etf';
+export type AssetType = 'stock' | 'etf' | 'private_fund';
 
 export type ConvictionScore = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
 
@@ -369,6 +369,15 @@ export interface Opportunity {
   /** null when price currency is unconfirmed or unavailable */
   currentPrice: number | null;
   currency: string;
+  /** Pricing method used to derive currentPrice; absent = legacy provider without validation metadata */
+  pricingMethod?: PriceMethod;
+  /**
+   * true when currentPrice is present AND EUR-usable for P&L/buy sizing (direct_eur_quote,
+   * usd_converted, or legacy provider with a price). false when currentPrice is null or the
+   * method is usd_no_fx / proxy_drawdown_only / currency_unconfirmed / unavailable / stale-non-EUR cache.
+   * Derived once in scoreAsset() so UI/ranking need not re-infer from pricingMethod.
+   */
+  pricingDataAvailable?: boolean;
   drawdown: DrawdownData;
   reasons: string[];
   suggestedAmountEur: { min: number; max: number };
@@ -471,4 +480,229 @@ export interface PreviousStates {
 export interface AlertHistoryStore {
   alerts: Alert[];
   lastDigestAt?: string;
+}
+
+// --- Discovery Snapshot Store ---
+
+/**
+ * Immutable snapshot of a single discovered opportunity captured at a specific engine run.
+ * Rolling window — persisted to discovery-snapshots.json (runtime, not committed).
+ */
+export interface DiscoverySnapshot {
+  /** ISO timestamp of the engine run that produced this snapshot. Also used as the time-series key. */
+  runId: string;
+  ticker: string;
+  name: string;
+  type: AssetType;
+  score: OpportunityScore;
+  state: OpportunityState;
+  /** State from the most-recent prior snapshot for this ticker; null on first appearance. */
+  previousState: OpportunityState | null;
+  pricingMethod: PriceMethod | undefined;
+  pricingDataAvailable: boolean | undefined;
+  /** null when no EUR-usable price is available — never coerced to 0. */
+  currentPrice: number | null;
+  drawdown30d: number;
+  drawdown60d: number;
+  drawdown90d: number;
+  qualityGates: {
+    liquidity: boolean;
+    quality: boolean;
+    volatility: boolean;
+    portfolioFit: boolean;
+    riskReward: boolean;
+    notSpeculative: boolean;
+  };
+  reasons: string[];
+  suggestedAmountEur: { min: number; max: number };
+  confidence: Confidence;
+  /**
+   * Data-quality composite score (0–10). null until P3-3g implements the model.
+   * Guards BUY_CANDIDATE promotion — low quality blocks actionable states.
+   */
+  dataQualityScore: number | null;
+  /**
+   * Where this asset appeared in the engine output for this run.
+   * undefined = unknown (snapshots predating this field).
+   * surfaced_top5 = in discoveredOpportunities (top 5 shown on dashboard).
+   * qualified / below_threshold / gate_rejected reserved for future scanner output expansion.
+   */
+  visibility?: 'surfaced_top5' | 'qualified' | 'below_threshold' | 'gate_rejected';
+  snapshotVersion: 1;
+}
+
+export interface DiscoverySnapshotsFile {
+  /** ISO timestamp of the most-recent append. */
+  lastUpdatedAt: string;
+  maxAgeDays: number;
+  snapshots: DiscoverySnapshot[];
+}
+
+// --- Discovery Watchlist ---
+
+export type WatchlistState =
+  | 'DISCOVERED'           // reserved — not actively assigned in P3-3c
+  | 'WATCH_RESEARCH'       // EUR-usable price available; score in range; monitoring
+  | 'WATCH_PRICING_BLOCKED' // quality OK but no EUR-usable price (usd_no_fx / proxy / unavailable)
+  | 'BUY_CANDIDATE'        // BUY/READY_TO_BUY state + buy-safe pricing; actionable
+  | 'REJECTED'             // terminal — no auto-transitions
+  | 'STALE'                // absent from discovery output for ≥ WATCHLIST_STALE_AFTER_RUNS runs
+  | 'BOUGHT';              // terminal — no auto-transitions
+
+export interface WatchlistEntry {
+  ticker: string;
+  name: string;
+  type: AssetType;
+  watchlistState: WatchlistState;
+  firstSeenAt: string;      // ISO — set once on creation
+  lastSeenAt: string;       // ISO — updated each run the asset appears
+  lastUpdatedAt: string;    // ISO — updated only on watchlistState transitions
+  consecutiveRunsSeen: number;
+  consecutiveRunsAbsent: number;
+  highestScore: number;     // historical maximum — never decrements
+  latestScore: number;
+  latestOpportunityState: OpportunityState;
+  latestPricingMethod: PriceMethod | undefined;
+  latestPricingDataAvailable: boolean | undefined;
+  /** ISO — set once on the first run where pricingDataAvailable becomes true. Never overwritten. */
+  pricingUnlockedAt: string | null;
+  /** ISO — set once on the first promotion to BUY_CANDIDATE. Never overwritten. */
+  promotedToBuyAt: string | null;
+  latestReasons: string[];
+  latestConfidence: Confidence;
+  /** Composite data-quality score (0–10). null until P3-3g implements the model. */
+  dataQualityScore: number | null;
+  notes?: string;
+  watchlistVersion: 1;
+}
+
+/**
+ * A single state transition recorded by updateWatchlistFromDiscoveries.
+ * Not sent as an alert — consumed by P3-3d alert engine.
+ */
+export interface WatchlistTransition {
+  ticker: string;
+  from: WatchlistState | null;  // null = first discovery
+  to: WatchlistState;
+  reason: string;
+  occurredAt: string;           // ISO — runId of the engine run that triggered this
+}
+
+export interface WatchlistFile {
+  /** ISO timestamp of the most-recent write. */
+  lastUpdatedAt: string;
+  entries: WatchlistEntry[];
+}
+
+// --- Discovery Alerts ---
+
+export type DiscoveryAlertType =
+  | 'WATCH_TO_BUY_CANDIDATE'   // opportunity became BUY_CANDIDATE with buy-safe pricing
+  | 'PRICING_UNLOCKED'         // EUR-usable price now available (was blocked)
+  | 'SCORE_CROSSED_THRESHOLD'  // score crossed from below 6.5 to ≥ 6.5
+  | 'DRAWDOWN_SWEET_SPOT'      // drawdown90d entered the 15–25% buy-on-dip zone
+  | 'QUALITY_GATES_PASSED'     // all quality gates now pass (at least one was failing)
+  | 'PERSISTENT_CANDIDATE'     // in top 5 for ≥ 5 consecutive runs with score ≥ 6.5
+  | 'SHARP_DRAWDOWN_QUALITY'   // reserved — fires when dataQualityScore ≥ 9 (P3-3g)
+  | 'RANKING_TOP5_ENTRY'       // first appearance in discovery top 5
+  | 'PRICING_DEGRADED'         // EUR-usable price lost (BUY_CANDIDATE now blocked)
+  | 'STALE_CANDIDATE';         // absent from top 5 for ≥ WATCHLIST_STALE_AFTER_RUNS runs
+
+export type DiscoveryAlertSeverity = 'low' | 'medium' | 'high';
+
+export interface DiscoveryAlert {
+  id: string;                          // deterministic: ticker_type_runId
+  ticker: string;
+  name: string;
+  type: DiscoveryAlertType;
+  severity: DiscoveryAlertSeverity;
+  createdAt: string;                   // ISO — when the alert was generated
+  runId: string;                       // ISO — engine run that triggered this
+  title: string;                       // short display title
+  message: string;                     // human-readable detail for UI / future Telegram
+  fromState?: WatchlistState | null;   // watchlist state before transition
+  toState?: WatchlistState | null;     // watchlist state after transition
+  score?: number;
+  previousScore?: number | null;
+  scoreDelta?: number | null;
+  pricingMethod?: PriceMethod;
+  previousPricingMethod?: PriceMethod | null;
+  pricingDataAvailable?: boolean;
+  dedupeKey: string;                   // ticker__type__YYYY-MM-DD — used for same-day dedup
+  cooldownUntil: string | null;        // ISO — no new alerts of this type before this time
+  alertVersion: 1;
+}
+
+export interface DiscoveryAlertsFile {
+  lastUpdatedAt: string;
+  maxAgeDays: number;
+  alerts: DiscoveryAlert[];
+}
+
+// --- Drawdown Opportunity Radar ---
+
+/**
+ * Drawdown zone classification for a discovered asset.
+ * Priority order (highest to lowest): recovery_trap > deep_value > sharp_crash > classic_dip > no_dip.
+ */
+export type DrawdownZoneClassification =
+  | 'no_dip'          // drawdown90d < 10% — not an entry opportunity
+  | 'sharp_crash'     // drawdown30d >= 12% AND drawdown90d < 20% — fast recent shock
+  | 'classic_dip'     // drawdown90d 15–30% AND drawdown30d >= 8% — buy-on-dip sweet spot
+  | 'deep_value'      // drawdown90d 30–45% — high potential but needs quality
+  | 'recovery_trap';  // drawdown90d > 45% OR deep fall with weak quality — structural risk
+
+/** Value trap risk based on technical and editorial signals (no fundamentals). */
+export type ValueTrapRisk = 'low' | 'medium' | 'high';
+
+/**
+ * Recommended interpretation of the drawdown opportunity.
+ * Blocking rules always override the raw score.
+ */
+export type DrawdownRadarActionable =
+  | 'buy_candidate_possible'        // pricing safe + quality + fit + score ≥ 6.5
+  | 'watch_research'                // opportunity present but score or conditions not yet buy-ready
+  | 'blocked_pricing'               // pricingDataAvailable !== true — buy sizing impossible
+  | 'blocked_quality'               // companyStrengthScore < 6 — quality insufficient
+  | 'blocked_concentration'         // portfolioFitScore too low — cartera already overexposed
+  | 'needs_fundamental_research';   // value trap risk high or recovery_trap zone
+
+/**
+ * Pure radar assessment for a single discovered opportunity.
+ * Scores combine drawdown severity, editorial quality signals, and portfolio fit.
+ *
+ * Limitations: company strength reflects editorial + gate signals only.
+ * Revenue, earnings, margins, and cash flow are not assessed here — those require P3-3g fundamentals.
+ * Do not interpret companyStrengthScore as a guarantee of fundamental quality.
+ */
+export interface DrawdownRadarAssessment {
+  ticker: string;
+
+  drawdownOpportunityScore: number;  // 0–10 composite (severity + strength + fit + pricing + risk/reward)
+  companyStrengthScore: number;      // 0–10 editorial/gate quality proxy
+  portfolioFitScore: number;         // 0–10 portfolio alignment
+  drawdownSeverityScore: number;     // 0–10 how attractive the drawdown depth is
+
+  /**
+   * Spread between the 90d and 30d drawdown windows (drawdown90d - drawdown30d).
+   * Positive = long-term losses exceed recent losses (accumulated decline).
+   * This is a WINDOW COMPARISON, not a temporal rate of change.
+   * Use drawdownChangeRate for temporal acceleration/deceleration.
+   */
+  drawdownTermSpread: number | null;
+
+  /**
+   * Rate of change in drawdown90d vs. the most-recent prior snapshot.
+   * Positive = drawdown worsening; negative = recovering.
+   * null when no prior snapshot is available — never coerced to 0.
+   */
+  drawdownChangeRate: number | null;
+
+  zone: DrawdownZoneClassification;
+  valueTrapRisk: ValueTrapRisk;
+
+  reasons: string[];   // human-readable opportunity signals
+  warnings: string[];  // human-readable risk / data-quality caveats
+
+  actionable: DrawdownRadarActionable;
 }

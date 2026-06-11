@@ -7,71 +7,11 @@
 // is used as a secondary fallback. Neither failure path crashes the engine.
 
 import { writeJsonFile, readJsonFile } from './file-store';
+import { getKvConfig, sanitizeKvError, kvSet, kvGet } from './kv-client';
 import type { DailyEngineOutput } from '../types';
 
 const ENGINE_OUTPUT_FILE = 'engine-output.json';
 const ENGINE_OUTPUT_KEY = 'engine:latest_output';
-const KV_TIMEOUT_MS = 5000;
-
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
-
-function getKvConfig(): { url: string; token: string } | null {
-  const url = process.env.KV_REST_API_URL;
-  const token = process.env.KV_REST_API_TOKEN;
-  if (url && token) return { url, token };
-  return null;
-}
-
-// Strip KV credentials from error messages before logging or surfacing them
-function sanitizeKvError(msg: string): string {
-  const token = process.env.KV_REST_API_TOKEN;
-  if (token && token.length > 8) msg = msg.replaceAll(token, '[REDACTED]');
-  const url = process.env.KV_REST_API_URL;
-  if (url) msg = msg.replace(url, '[KV_URL]');
-  return msg;
-}
-
-// Upstash Redis REST API — single command format:
-// POST {url}  body: ["COMMAND", arg1, arg2, ...]
-// Returns: { result: ..., error?: string }
-async function upstashCommand(
-  url: string,
-  token: string,
-  command: string[]
-): Promise<unknown> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), KV_TIMEOUT_MS);
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(command),
-      signal: controller.signal,
-    });
-    if (!res.ok) throw new Error(`Upstash HTTP ${res.status}`);
-    const data = await res.json() as { result: unknown; error?: string };
-    if (data.error) throw new Error(data.error);
-    return data.result;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-async function kvSet(url: string, token: string, key: string, value: unknown): Promise<void> {
-  const serialized = JSON.stringify(value);
-  await upstashCommand(url, token, ['SET', key, serialized]);
-}
-
-async function kvGet<T>(url: string, token: string, key: string): Promise<T | null> {
-  const result = await upstashCommand(url, token, ['GET', key]);
-  if (result === null || result === undefined) return null;
-  return JSON.parse(result as string) as T;
-}
 
 // ---------------------------------------------------------------------------
 // Public API
