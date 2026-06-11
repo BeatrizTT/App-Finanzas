@@ -1,6 +1,6 @@
 # App Finanzas — Project State
 
-Last updated: 2026-06-10 · Branch: `main` (PR #21 — Fase 1 KV env inlining fix)
+Last updated: 2026-06-11 · Branch: `main` (PR docs/phase-1-verification-complete — Fase 1 verificación completa)
 
 > Agentes/IA: leer `AGENTS.md` en la raíz del repo antes de cualquier cambio.
 
@@ -31,7 +31,7 @@ A personal investment decision-support app. It scans a curated universe of stock
 
 ## Active branch
 
-`main` — PR #18 merged. All P0 code items complete. Production reality reconciled in PR #19. No active feature branches open.
+`main` — Fase 1 completada (2026-06-11). Todos los items P0 de código y verificación cerrados. Sin ramas de feature activas. Próxima fase: Fase 2 (pendiente confirmación de Beatriz).
 
 ---
 
@@ -45,15 +45,15 @@ A personal investment decision-support app. It scans a curated universe of stock
 | Vercel cron wired | ✓ | `vercel.json` — 07:00 + 16:00 UTC Mon-Fri |
 | `CRON_SECRET` cron auth | ✓ **configured** (since Apr 30) | Fail-closed: 503 if missing, 401 if wrong. `/api/config/status` → `cronSecretSet: true`. |
 | `PRICE_PROVIDER` | ✓ **`twelvedata`** (since May 5) | `TWELVE_DATA_API_KEY` also configured. Production uses real prices — NOT mock. `/api/config/status` → `priceProvider: "twelvedata"`. |
-| Vercel KV connected | ✓ **configured** (since May 6) | `KV_REST_API_URL`, `KV_REST_API_TOKEN`, `KV_URL`, `REDIS_URL`, `KV_REST_API_READ_ONLY_TOKEN` all present. KV write confirmed live (Phase 1). Two read-path bugs found and fixed: stale GET caching (PR #20 — `force-dynamic`) and Turbopack env inlining (PR #21 — bracket notation). Re-test pending post-deploy of PR #21. |
-| Telegram configured | ✓ **configured** (since Apr 30) | `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` present. `/api/config/status` → `telegramConfigured: true`. Message delivery verification pending (Phase 1). |
+| Vercel KV connected | ✓ **verificado end-to-end (2026-06-11)** | `kvConfigured: true`. KV write y read cross-instance confirmados. `/api/opportunities` `stockCount: 4`, `/api/portfolio` `analysesCount: 13`. Bugs de caching (PR #20) e inlining (PR #21) ya corregidos y verificados. |
+| Telegram configured | ✓ **verificado (2026-06-11)** | Bot envió digest tras engine run con `sendDigest: true`. `success: true` confirmado. |
 | EODHD pricing | present but **inactive** | `EODHD_ENABLED=true` + `EODHD_API_KEY` configured in Vercel, but `PRICE_PROVIDER=twelvedata` so EODHD is never instantiated. Safe to ignore until a chain PR activates it. |
 | `PRICE_PROVIDER_CHAIN` | present but **inactive** | Configured in Vercel, but `PRICE_PROVIDER=twelvedata` not `chain`. Do not activate chain until `batchGetRecentHighs` is implemented. |
 | Orphaned env vars | **inert** | `PRICE_REFRESH_MODE`, `PRICE_CACHE_MODE`, `REPORTING_CURRENCY` — configured in Vercel, not read by any code. Harmless; do not build code around them without a PR. |
 | Discovery state (watchlist, snapshots) | ephemeral | file-store → `/tmp` on Vercel; resets per invocation. P1 item. |
 | Alert history / previous states | ephemeral | Same — file-store → `/tmp`. P1 item. |
 
-**Summary: Production is NOT in mock. All core env vars are configured (Twelve Data, KV, Telegram, CRON_SECRET). What remains is end-to-end verification (Phase 1) and P1 reliability work.**
+**Summary: Fase 1 completada el 2026-06-11. Producción verificada end-to-end: precios reales (Twelve Data), KV persistencia cross-instance confirmada, cron auth verificado, CSV import KV-backed, Telegram funcionando. Siguiente: Fase 2 (reliability — KV para alert history y discovery state). No iniciar sin confirmación de Beatriz.**
 
 ---
 
@@ -66,22 +66,21 @@ A personal investment decision-support app. It scans a curated universe of stock
 - Sends a Telegram digest at 07:00 + 16:00 UTC Mon-Fri (once end-to-end is verified)
 - Persists engine output to Vercel KV; write path verified live. Read path re-test pending after PR #21 deploy.
 
-**Verified live (Phase 1, 2026-06-09/10):**
-- KV write confirmed: POST `/api/engine/run` logs `[EngineStore] Output saved to Vercel KV` ✅
-- Twelve Data pricing confirmed: 8/8 symbols fetched, EUR/USD rate 1.15 ✅
-- Portfolio config loads correctly: 13 holdings, €16,995 cash ✅
-- Stale-cache bug discovered and fixed on `/api/opportunities` + `/api/portfolio` (PR #20) ✅
-- Env inlining bug discovered (PR #20 deployed but GET routes still saw no KV) and fixed with bracket notation (PR #21) ✅
+**Verificado end-to-end (Fase 1 completa, 2026-06-11):**
+- KV write y read cross-instance: POST engine → GET engine → `runAt` coincide ✅
+- Twelve Data pricing: 8/8 symbols fetched, EUR/USD rate 1.15 ✅
+- Portfolio config loads correctly: 13 holdings ✅
+- `/api/config/status` → `kvConfigured: true` ✅
+- `/api/opportunities`: `stockCount: 4`, `lastRunAt` no-null ✅
+- `/api/portfolio`: `analysesCount: 13`, `lastRunAt` no-null ✅
+- Cron auth: sin header → 401, header incorrecto → 401, header correcto (`www.beaihub.com`) → 200 ✅
+- CSV import: `saved: true`, `saveSource: "kv"`, `holdingsUpdated: 16` ✅
+- Telegram: `success: true`, bot envió digest ✅
+- Stale-cache bug (PR #20) y env inlining bug (PR #21) corregidos y verificados ✅
 
-**Pending re-test after PR #21 deploy:**
-- `/api/config/status` → `kvConfigured: true`
-- KV read confirmed across Lambda instances: `/api/opportunities` `lastRunAt` non-null, `stockCount >= 1`
-- `/api/portfolio` `analysesCount: 13`
-
-**Not yet verified end-to-end:**
-- Telegram message delivery (configured; message receipt not yet confirmed)
-- Cron execution with real `CRON_SECRET` (code + env ready; live cron log not reviewed)
-- CSV import `saved: true` in Vercel (code ready; live test pending)
+**Fase 2 — pendiente (no iniciar sin confirmación de Beatriz):**
+- `p1-alert-history-kv`: mover history.ts (dedupe ring buffer) a KV
+- `p1-discovery-state-kv`: mover watchlist y snapshots a KV (prefijo `discovery:`)
 
 **Not yet built:**
 - Radar for strong companies outside current portfolio with deep drawdowns (Phase 3 — external screener)
@@ -195,11 +194,8 @@ A personal investment decision-support app. It scans a curated universe of stock
 
 | Item | Blocker |
 |---|---|
-| End-to-end KV verification | Run live: `POST /api/engine/run` → verify `GET /api/engine/run` returns same data. CSV import → verify `saved: true`. |
-| Telegram message delivery | Run `POST /api/engine/run` (with real Telegram configured) → confirm message arrives. |
-| Cron live execution | Review Vercel function logs to confirm cron ran and returned 200. |
-| Alert history persistence | file-store only → needs KV extension (P1/Phase 2) |
-| Discovery watchlist/snapshots | Same — file-store, ephemeral (P1/Phase 2) |
+| Alert history persistence | file-store only → needs KV extension (Fase 2 — pendiente confirmación) |
+| Discovery watchlist/snapshots | file-store, ephemeral → KV (Fase 2 — pendiente confirmación) |
 | Radar for strong companies outside portfolio | External screener not integrated yet. Requires smoke evidence + ExternalCandidate schema (Phase 3) |
 | Single-asset live check | Not built yet (Phase 4) |
 | News/thesis explainer | Not built yet, requires news provider decision (Phase 5) |
@@ -210,11 +206,12 @@ A personal investment decision-support app. It scans a curated universe of stock
 
 | PR | Title | State |
 |---|---|---|
-| #19 | docs: production reality reconciliation + investment roadmap | In progress |
+| docs/phase-1-verification-complete | docs: Fase 1 verificación completa — resultados, lecciones, próximos pasos | En curso |
+| #21 | fix: bracket notation para KV env vars (env inlining Turbopack) | Merged |
+| #20 | fix: force-dynamic en rutas GET-only + static imports | Merged |
+| #19 | docs: production reality reconciliation + investment roadmap | Merged |
 | #18 | docs: roadmap post-P0 and single-asset live check backlog | Merged `6e49be4` |
 | #17 | P0: CSV persistence — portfolio config KV-aware | Merged `6af45c0` |
-| #16 | P0: make /api/opportunities and /api/portfolio KV-aware | Merged `6801160` |
-| #15 | docs: living documentation process — AGENTS.md, PR template | Merged `518bcb4` |
 
 ---
 

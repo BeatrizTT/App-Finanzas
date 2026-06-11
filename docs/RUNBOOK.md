@@ -380,7 +380,7 @@ curl -s "$BASE/api/cron/daily" \
   -H "Authorization: Bearer $CRON_SECRET" | jq '{success, runAt}'
 ```
 
-Verificado 2026-06-11: sin header → 401, header incorrecto → 401, header correcto → 200 ✅
+Verificado 2026-06-11 en `https://www.beaihub.com`: sin header → 401, header incorrecto → 401, header correcto → 200 ✅
 
 ### 3. Engine run manual
 ```bash
@@ -409,11 +409,16 @@ curl -s "$BASE/api/portfolio" | jq '{holdingsCount: (.config.holdings | length),
 ```
 
 ### 6. CSV import
+
+> **Campo correcto**: el formulario multipart debe llamarse `csv`, **no** `file`. `-F "file=@..."` devuelve `{"error": "No CSV file provided"}`.
+
 ```bash
 curl -s -X POST "$BASE/api/portfolio/import" \
   -F "csv=@tu-trades.csv" | jq '{saved, saveSource, holdingsUpdated}'
 ```
 Esperado con KV: `{"saved": true, "saveSource": "kv", "holdingsUpdated": N}`
+
+Verificado 2026-06-11: `saved: true`, `saveSource: "kv"`, `holdingsUpdated: 16` ✅
 
 ### 7. Telegram
 Después del paso 3, espera hasta 30 segundos. El bot debería enviar un digest con señales del portfolio.
@@ -463,6 +468,42 @@ Lo aprendido durante la verificación end-to-end de Fase 1 (2026-06-09/10). Regi
 - Toda ruta API GET-only que lea estado mutable (KV, file-store) debe llevar `export const dynamic = 'force-dynamic'`.
 - Los stores server-side (`engine-store.ts`, `portfolio-store.ts`) deben acceder a las env vars de KV con notación de corchete. No volver a notación de punto.
 - `GET /api/config/status` expone `kvConfigured` — primer check de diagnóstico si la persistencia falla.
+
+---
+
+## Lecciones adicionales Fase 1 (2026-06-11)
+
+Tres lecciones adicionales descubiertas al completar la verificación el 2026-06-11, complementarias a las de PRs #20/#21.
+
+### L3: Vercel Deployment Protection bloquea aliases de rama
+
+Los aliases con formato `app-finanzas-git-main-...vercel.app` tienen Vercel Deployment Protection activada por defecto. Cualquier request a esas URLs devuelve 401 a nivel de proxy — el código Next.js nunca se ejecuta, y el log de la función no aparece en Vercel Logs.
+
+**Regla**: para cualquier test manual de la API en producción, usar siempre `https://www.beaihub.com` (dominio canónico de producción), nunca el alias de rama.
+
+**Diagnóstico**: si un test manual devuelve 401 y no aparece ninguna entrada en Vercel Logs ni en "Invocations" de la ruta, el 401 viene del proxy — no del código.
+
+### L4: Campo del formulario CSV es `csv`, no `file`
+
+`POST /api/portfolio/import` lee `formData.get('csv')`. Si el campo se envía como `file` (e.g., `-F "file=@trades.csv"`), el endpoint devuelve `{"error": "No CSV file provided"}`.
+
+**Regla**: siempre usar `-F "csv=@ruta/al/archivo.csv"` en tests de importación.
+
+### L5: CRON_SECRET — bracket notation en la ruta del cron
+
+`process.env.CRON_SECRET` (dot notation) puede ser inlinado por Turbopack como `undefined` en build time para bundles pequeños. La ruta `/api/cron/daily` usa `process.env['CRON_SECRET']` (bracket notation) — esta es la forma correcta y debe mantenerse así.
+
+**Regla**: cualquier env var leída en rutas de cron o stores server-side debe usar bracket notation `process.env['VAR']`.
+
+### L6: Nunca loguear secretos ni fragmentos de secretos
+
+Durante el debug del 401 del cron (PR #23) se añadió temporalmente un `console.log` que imprimía la longitud y los primeros caracteres de `CRON_SECRET` y del header `Authorization`. Eso quedó en los logs de Vercel. Se revirtió en PR #24.
+
+**Regla permanente** (no negociable):
+- **Nunca** loguear el valor de un secreto, ni siquiera parcialmente: nada de `.substring(0, N)`, `.length`, prefijos, sufijos ni hashes de `CRON_SECRET`, `KV_REST_API_TOKEN`, `TELEGRAM_BOT_TOKEN`, `TWELVE_DATA_API_KEY`, `ENGINE_API_SECRET` ni ningún token.
+- Para depurar auth, loguear únicamente el **resultado** de la comparación (`ok: true/false`, código de estado), nunca el material de entrada.
+- Los fragmentos de secretos en logs son tan sensibles como el secreto completo: reducen el espacio de búsqueda y quedan persistidos en el proveedor de logs.
+- Si un secreto (o fragmento) llega a aparecer en un log o en un chat, **rotarlo** inmediatamente.
 
 ---
 
