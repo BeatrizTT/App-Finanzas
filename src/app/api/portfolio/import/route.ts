@@ -26,6 +26,9 @@ const ISIN_TO_TICKER: Record<string, { ticker: string; name?: string; currency: 
   // sold via Trade Republic. They have no public exchange quote, so the daily
   // engine must NOT request a price for them (see daily-engine.ts private_fund
   // filter). type 'private_fund' marks them so they are imported but never priced.
+  // Identities verified 2026-06-11 against extraetf.com / eltif.info / parqet
+  // (ELTIFs are not exchange-traded; ENXF/APGM are internal labels, not Twelve
+  // Data tickers — they are never sent to a price provider).
   'LU3176111881': { ticker: 'ENXF',  name: 'EQT Nexus Fund ELTIF',                currency: 'EUR', type: 'private_fund', tags: ['private-equity', 'eltif'] },
   'LU3170240538': { ticker: 'APGM',  name: 'Apollo Global Private Markets ELTIF', currency: 'EUR', type: 'private_fund', tags: ['private-equity', 'eltif'] },
 };

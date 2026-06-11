@@ -173,6 +173,20 @@ Review digest format (`digest.ts`). Ensure:
 
 ---
 
+### P1-6: UI específica para fondos privados / ELTIF (mejora futura, NO en el hotfix)
+
+**Contexto**: el hotfix P1-3c sólo evita que los ELTIF rompan el engine (no se les pide precio) y los marca con badge `ELTIF`. **No** resuelve la valoración ni la experiencia de usuario para activos privados. Eso es un bloque aparte, no parte de este hotfix.
+
+**Pendiente (cuando se priorice)**:
+- Vista/sección separada para `private_fund` en el dashboard, distinta de acciones/ETF.
+- Copy claro para usuarios no financieros: explicar que un ELTIF es un fondo privado, que su valor lo publica el gestor (NAV periódico), no el mercado, y que por eso no hay P&L diario ni señal de compra/venta automática.
+- Mostrar coste invertido (del CSV) y, si en el futuro hay una fuente fiable de NAV, valor estimado — **nunca** inventar precio ni usar 0.
+- Decidir cómo (o si) se incluyen en concentración/allocation, dado que no tienen precio de mercado diario.
+
+**Qué NO hacer**: no forzar estos activos al pipeline de scoring/pricing normal. No hardcodear NAV. No tratar `private_fund` como `stock`/`etf`.
+
+---
+
 ## Roadmap — fases post-P0
 
 El código P0 está completo (PRs #13–#17). Las env vars de producción están configuradas (reconciliado en PR #19). Las siguientes fases en orden:
