@@ -26,8 +26,6 @@ export async function GET(req: Request) {
   const cronSecret = process.env['CRON_SECRET'];
   const authHeader = req.headers ? (req as any).headers?.get?.('authorization') : null;
 
-  console.log('[Cron] auth debug — secretLen:', cronSecret?.length, 'secretFirst8:', cronSecret?.substring(0, 8), 'headerLen:', authHeader?.length, 'headerFirst14:', authHeader?.substring(0, 14));
-
   const auth = checkCronAuth(cronSecret, authHeader);
   if (!auth.ok) {
     if (auth.status === 503) console.error('[Cron] CRON_SECRET is not configured — refusing to execute');
