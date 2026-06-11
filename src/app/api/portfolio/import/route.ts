@@ -21,7 +21,25 @@ const ISIN_TO_TICKER: Record<string, { ticker: string; name?: string; currency: 
   'US02079K3059': { ticker: 'GOOGL', currency: 'USD', type: 'stock', tags: ['tech', 'AI', 'cloud'] },
   'US5765811026': { ticker: 'MRVL',  currency: 'USD', type: 'stock', tags: ['semis', 'AI'] },
   'US34959E1091': { ticker: 'FTNT',  currency: 'USD', type: 'stock', tags: ['cybersecurity'] },
+  'US46120E6023': { ticker: 'ISRG',  currency: 'USD', type: 'stock', tags: ['healthcare', 'robotics', 'growth'] },
 };
+
+/**
+ * Pure function: ISINs in the CSV that have no ticker mapping (neither in
+ * ISIN_TO_TICKER nor in the existing config). These holdings would otherwise
+ * enter the portfolio with ticker undefined, and the engine would try to
+ * price them by ISIN ("No data for US…") — surface them as warnings instead.
+ * Exported for unit tests.
+ */
+export function findUnknownIsins(
+  existing: PortfolioConfig,
+  computed: ComputedHolding[]
+): { isin: string; name: string }[] {
+  const existingMap = new Map(existing.holdings.map(h => [(h as any).isin as string, h]));
+  return computed
+    .filter(c => !ISIN_TO_TICKER[c.isin] && !existingMap.get(c.isin)?.ticker)
+    .map(c => ({ isin: c.isin, name: c.name }));
+}
 
 /**
  * Pure function: merge CSV-computed open positions with existing portfolio config.
@@ -93,6 +111,26 @@ export async function POST(req: NextRequest) {
     const { loadPortfolioConfig, savePortfolioConfig } = await import('@/lib/utils/portfolio-store');
     const { config: existing } = await loadPortfolioConfig();
 
+    // ISINs without a ticker mapping: the engine cannot price these holdings.
+    // Fail closed — do NOT persist a portfolio the engine cannot fully analyze.
+    // Otherwise a holding without a ticker silently reaches KV and the next
+    // engine run reports "No data for <ISIN>". The owner must add the mapping
+    // in ISIN_TO_TICKER and re-import. The CSV itself is fine; nothing is saved.
+    const unknownIsins = findUnknownIsins(existing, computed);
+    if (unknownIsins.length > 0) {
+      const warnings = unknownIsins.map(
+        u => `ISIN sin ticker conocido: ${u.isin} (${u.name}). Añade el mapping ISIN → ticker en ISIN_TO_TICKER antes de importar.`
+      );
+      for (const w of warnings) console.warn('[Import]', w);
+      return NextResponse.json({
+        success: false,
+        saved: false,
+        error: 'Hay activos que la app no reconoce. Añade el mapping ISIN → ticker antes de importar. La cartera NO se ha actualizado.',
+        unknownIsins,
+        warnings,
+      }, { status: 422 });
+    }
+
     const updated = buildUpdatedPortfolioConfig(existing, computed, closedPositions);
 
     const { saved, source: saveSource, warning: saveWarning } = await savePortfolioConfig(updated);
@@ -102,6 +140,8 @@ export async function POST(req: NextRequest) {
       success: true,
       saved,
       saveSource,
+      unknownIsins,
+      warnings: [],
       holdingsUpdated: updated.holdings.length,
       totalRealizedPnl: updated.totalRealizedPnl,
       holdings: computed.map(c => ({

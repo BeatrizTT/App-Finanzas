@@ -104,6 +104,33 @@ Fix: extend KV or accept alert repetition (worse UX).
 
 ---
 
+### P1-3b: Hotfix `No data for US46120E6023` ✓ DONE (2026-06-11, PR #28)
+**Diagnóstico**: el CSV import guardó en KV un holding con ISIN `US46120E6023` sin mapping en `ISIN_TO_TICKER` → `ticker: undefined` → el engine usó `h.ticker ?? h.id.toUpperCase()` y pidió precio para el ISIN.
+**Identidad confirmada** (onvista, ad-hoc-news): `US46120E6023` = Intuitive Surgical, Inc. (ISRG, Nasdaq, USD).
+**Fix**:
+- Mapping `US46120E6023 → ISRG` añadido.
+- `findUnknownIsins()` detecta cualquier ISIN sin ticker.
+- **Fail-closed**: si hay ISINs desconocidos, el endpoint responde **HTTP 422** con `success: false`, `saved: false`, `unknownIsins` y `warnings`, y **no escribe en KV**. La cartera no se actualiza con datos que el motor no puede analizar. 6 tests nuevos (incluye verificación de que NO se hace SET a KV).
+**ACCIÓN MANUAL pendiente**: re-importar el CSV tras el deploy para que el holding en KV reciba `ticker: ISRG`.
+
+---
+
+### P1-5: UI — explicar la etiqueta REVISAR en lenguaje sencillo
+
+**Qué significa REVISAR** (badge `REVIEW`), explicado para cualquiera:
+- **"No compres más todavía."**
+- **NO** significa vender automáticamente.
+- Significa: *"Esta acción puede parecer barata, pero tiene una alerta de riesgo. Antes de poner más dinero, confirma que el motivo para tenerla sigue teniendo sentido."*
+
+**Por qué aparece en SMCI**: tiene `manualThesisRisk: "medium"` y `convictionScore: 6` en config. La etiqueta es correcta — es exactamente el caso para el que existe.
+
+**Copy UI objetivo** (reemplazar el texto genérico actual de `badge.tsx`):
+> "Pausa antes de comprar más. Puede parecer barata, pero tiene riesgo marcado. Revisa si la empresa sigue siendo una buena apuesta antes de añadir dinero."
+
+**Mejora pendiente**: tooltip/texto contextual en el dashboard con ese copy, idealmente incluyendo el motivo concreto (`manualThesisRisk: medium`, `convictionScore: 6`) en vez del texto genérico. El texto actual en `src/components/ui/badge.tsx` (`REVIEW`) dice solo "Algo ha cambiado en esta posición. Revisa la tesis de inversión antes de tomar decisiones." — correcto pero abstracto para alguien no técnico.
+
+---
+
 ### P1-4: Daily digest quality
 Review digest format (`digest.ts`). Ensure:
 - Every BUY/REDUCE signal includes: ticker, current price, distance from 52W high/low, conviction, reason, suggested amount, data age, source

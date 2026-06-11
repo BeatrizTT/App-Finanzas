@@ -24,7 +24,7 @@ A personal investment decision-support app. It scans a curated universe of stock
 | FX | USD→EUR via Yahoo FX pair; GBX→GBP built-in |
 | Alerts | Telegram Bot API via `node-telegram-bot-api` |
 | Cron | Vercel Cron — 07:00 UTC + 16:00 UTC Mon–Fri |
-| Test runner | `npx tsx scripts/run-tests.ts` (not Jest) — 24 suites, 1521 asserts |
+| Test runner | `npx tsx scripts/run-tests.ts` (not Jest) — 24 suites, 1527 asserts |
 | Scripts | `npx tsx scripts/<name>.ts` |
 
 ---
@@ -165,7 +165,7 @@ A personal investment decision-support app. It scans a curated universe of stock
 - Portfolio config store (`portfolio-store.ts`): KV-first with `config/portfolio.json` fallback (PR #17)
 - Telegram sender: graceful degradation
 - Digest builder: daily summary format
-- CSV portfolio importer: parsing + KV persistence — `saved: true` in Vercel with KV (PR #17)
+- CSV portfolio importer: parsing + KV persistence — `saved: true` in Vercel with KV (PR #17). **Fail-closed ante ISINs desconocidos**: si un ISIN no está en `ISIN_TO_TICKER`, el endpoint responde **HTTP 422** con `unknownIsins`/`warnings` y **no escribe en KV** — la cartera no se actualiza hasta añadir el mapping y re-importar. Evita holdings sin ticker que producen `No data for <ISIN>`. Caso real: `US46120E6023` → ISRG mapeado 2026-06-11.
 - Cron route: **fail-closed if CRON_SECRET missing (503)** — fixed in PR #13
 - `/api/config/status`: health info — returns `priceProvider`, `telegramConfigured`, `cronSecretSet`, `isVercel`
 - 4 docs: PROJECT_STATE, CTO_BACKLOG, DECISIONS, RUNBOOK
@@ -221,5 +221,5 @@ A personal investment decision-support app. It scans a curated universe of stock
 ## Test suite
 
 ```
-npx tsx scripts/run-tests.ts   →  24 suites · 1521 asserts · 0 failed
+npx tsx scripts/run-tests.ts   →  24 suites · 1527 asserts · 0 failed
 ```

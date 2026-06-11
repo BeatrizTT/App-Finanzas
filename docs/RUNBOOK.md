@@ -414,11 +414,28 @@ curl -s "$BASE/api/portfolio" | jq '{holdingsCount: (.config.holdings | length),
 
 ```bash
 curl -s -X POST "$BASE/api/portfolio/import" \
-  -F "csv=@tu-trades.csv" | jq '{saved, saveSource, holdingsUpdated}'
+  -F "csv=@tu-trades.csv" | jq '{saved, saveSource, holdingsUpdated, unknownIsins, warnings}'
 ```
-Esperado con KV: `{"saved": true, "saveSource": "kv", "holdingsUpdated": N}`
+Esperado con KV: `{"saved": true, "saveSource": "kv", "holdingsUpdated": N, "unknownIsins": [], "warnings": []}`
 
 Verificado 2026-06-11: `saved: true`, `saveSource: "kv"`, `holdingsUpdated: 16` ✅
+
+> **ISINs sin ticker conocido — el import FALLA y NO actualiza la cartera (intencionado)**:
+> si el CSV contiene un ISIN que no está en `ISIN_TO_TICKER`
+> (`src/app/api/portfolio/import/route.ts`), el endpoint responde **HTTP 422** con
+> `{"success": false, "saved": false, "unknownIsins": [...], "warnings": [...], "error": "..."}`
+> y **no escribe nada en KV**. La cartera guardada se queda como estaba.
+>
+> Esto es deliberado: un holding sin ticker llegaría a KV, el motor pediría precio por
+> el ISIN y cada engine run mostraría `No data for <ISIN>`. Preferimos no actualizar la
+> cartera antes que dejarla en un estado que el motor no puede analizar por completo.
+>
+> **Qué hacer si ves `unknownIsins` en la respuesta**:
+> 1. La cartera **no** se ha actualizado — no hay que revertir nada.
+> 2. Añadir el mapping ISIN → ticker en `ISIN_TO_TICKER` (con test) y desplegar.
+> 3. **Repetir el import** del mismo CSV. Esta vez `unknownIsins: []` y `saved: true`.
+>
+> Caso real: `US46120E6023` = Intuitive Surgical (ISRG) — mapeado el 2026-06-11.
 
 ### 7. Telegram
 Después del paso 3, espera hasta 30 segundos. El bot debería enviar un digest con señales del portfolio.
@@ -613,7 +630,7 @@ curl -s "$BASE/api/portfolio" | jq '{holdingsCount: (.config.holdings | length),
 
 ```bash
 npm ci                  # Clean install from lock file
-npm test                # 24 suites, 1521 asserts
+npm test                # 24 suites, 1527 asserts
 npm run build           # Production build
 npx tsc --noEmit        # Type-check
 npm run dev             # Local dev server :3000

@@ -2,7 +2,7 @@
 // Covers: pure builder (preserves manual fields, computes closed positions)
 //         + wiring (route saves to KV → saved:true, saveSource:kv)
 
-import { buildUpdatedPortfolioConfig, POST } from '../route';
+import { buildUpdatedPortfolioConfig, findUnknownIsins, POST } from '../route';
 import type { PortfolioConfig } from '@/lib/types';
 import type { ComputedHolding } from '@/lib/portfolio/csv-importer';
 
@@ -135,6 +135,83 @@ async function main(): Promise<void> {
     assert(result.targetCashReserveEur === 1000, 'targetCashReserveEur preserved');
   });
 
+  // ── ISIN mapping: US46120E6023 → ISRG (Intuitive Surgical) ──────────────
+
+  await test('US46120E6023 maps to ISRG (Intuitive Surgical)', () => {
+    const computedIsrg: ComputedHolding = {
+      isin: 'US46120E6023',
+      name: 'Intuitive Surgical',
+      assetClass: 'STOCK',
+      shares: 2,
+      totalCostEur: 800,
+      avgCostEur: 400,
+      realizedPnl: 0,
+    };
+    const result = buildUpdatedPortfolioConfig(baseConfig, [computedIsrg], []);
+    const isrg = result.holdings.find(h => h.isin === 'US46120E6023');
+    assert(isrg !== undefined, 'ISRG holding should exist');
+    assert(isrg?.ticker === 'ISRG', `ticker should be ISRG, got ${isrg?.ticker}`);
+    assert(isrg?.id === 'isrg', `id should be isrg, got ${isrg?.id}`);
+    assert((isrg as any).currency === 'USD', 'currency should be USD');
+    assert((isrg as any).type === 'stock', 'type should be stock');
+  });
+
+  // ── Unknown ISIN detection (findUnknownIsins) ────────────────────────────
+
+  await test('findUnknownIsins flags ISINs with no ticker mapping', () => {
+    const unknown: ComputedHolding = {
+      isin: 'XX0000000000',
+      name: 'Mystery Corp',
+      assetClass: 'STOCK',
+      shares: 1,
+      totalCostEur: 100,
+      avgCostEur: 100,
+      realizedPnl: 0,
+    };
+    const result = findUnknownIsins(baseConfig, [unknown, computedNvda]);
+    assert(result.length === 1, `expected 1 unknown ISIN, got ${result.length}`);
+    assert(result[0].isin === 'XX0000000000', 'unknown ISIN identified');
+    assert(result[0].name === 'Mystery Corp', 'name carried through');
+  });
+
+  await test('findUnknownIsins does not flag mapped or already-tickered ISINs', () => {
+    // NVDA: in ISIN_TO_TICKER. ISRG: now in ISIN_TO_TICKER.
+    const computedIsrg: ComputedHolding = {
+      isin: 'US46120E6023', name: 'Intuitive Surgical', assetClass: 'STOCK',
+      shares: 2, totalCostEur: 800, avgCostEur: 400, realizedPnl: 0,
+    };
+    // Existing config holding with manual ticker but ISIN not in the map
+    const configWithManualTicker: PortfolioConfig = {
+      ...baseConfig,
+      holdings: [
+        ...baseConfig.holdings,
+        { id: 'cust', ticker: 'CUST', isin: 'ZZ9999999999', name: 'Custom', type: 'stock', avgPrice: 1, units: 1 } as any,
+      ],
+    };
+    const computedCustom: ComputedHolding = {
+      isin: 'ZZ9999999999', name: 'Custom', assetClass: 'STOCK',
+      shares: 1, totalCostEur: 1, avgCostEur: 1, realizedPnl: 0,
+    };
+    const result = findUnknownIsins(configWithManualTicker, [computedNvda, computedIsrg, computedCustom]);
+    assert(result.length === 0, `expected 0 unknown ISINs, got ${result.length}: ${JSON.stringify(result)}`);
+  });
+
+  await test('buildUpdatedPortfolioConfig would leave an unknown ISIN tickerless — why the POST endpoint must block first', () => {
+    // The pure builder does not know about the mapping table guard; it still
+    // produces a tickerless holding. This is exactly the state the POST handler
+    // refuses to persist (findUnknownIsins → 422). This test documents the
+    // hazard that justifies the fail-closed guard.
+    const unknown: ComputedHolding = {
+      isin: 'XX0000000000', name: 'Mystery Corp', assetClass: 'STOCK',
+      shares: 1, totalCostEur: 100, avgCostEur: 100, realizedPnl: 0,
+    };
+    const result = buildUpdatedPortfolioConfig(baseConfig, [unknown], []);
+    const h = result.holdings.find(x => x.isin === 'XX0000000000');
+    assert(h !== undefined, 'builder still produces the holding');
+    assert(h?.ticker === undefined, 'ticker stays undefined — engine would price by ISIN');
+    assert(h?.id === 'xx0000000000', 'id falls back to lowercase ISIN');
+  });
+
   // ── Wiring: POST handler saves to KV → saved:true, saveSource:kv ────────
 
   await test('POST with KV configured returns saved:true and saveSource:kv', async () => {
@@ -188,6 +265,114 @@ async function main(): Promise<void> {
         stored['portfolio:config'] !== undefined,
         'portfolio:config should have been SET in KV'
       );
+    } finally {
+      global.fetch = originalFetch;
+      if (savedUrl === undefined) delete process.env.KV_REST_API_URL;
+      else process.env.KV_REST_API_URL = savedUrl;
+      if (savedToken === undefined) delete process.env.KV_REST_API_TOKEN;
+      else process.env.KV_REST_API_TOKEN = savedToken;
+    }
+  });
+
+  await test('POST with an unknown ISIN fails closed: 422, saved:false, NO KV SET', async () => {
+    const savedUrl = process.env.KV_REST_API_URL;
+    const savedToken = process.env.KV_REST_API_TOKEN;
+    const originalFetch = global.fetch;
+    const setCalls: string[] = [];
+    try {
+      process.env.KV_REST_API_URL = 'https://fake-kv.upstash.io';
+      process.env.KV_REST_API_TOKEN = 'fake-token';
+
+      // Record every SET so we can assert the portfolio was NOT persisted.
+      global.fetch = async (_url, init) => {
+        const cmd = JSON.parse((init?.body as string) ?? '[]') as string[];
+        if (cmd[0] === 'SET') {
+          setCalls.push(cmd[1]);
+          return new Response(JSON.stringify({ result: 'OK' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
+        return new Response(JSON.stringify({ result: null }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      };
+
+      const csvContent = [
+        'type,asset_class,name,symbol,shares,amount,fee',
+        'BUY,STOCK,NVIDIA Corp,US67066G1040,10,-850,0',
+        'BUY,STOCK,Mystery Corp,XX0000000000,3,-300,0',
+      ].join('\n');
+
+      const formData = new FormData();
+      formData.append('csv', new File([csvContent], 'trades.csv', { type: 'text/csv' }));
+
+      const { NextRequest } = await import('next/server');
+      const req = new NextRequest('http://localhost/api/portfolio/import', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const response = await POST(req);
+      const body = await response.json();
+
+      assert(response.status === 422, `expected HTTP 422, got ${response.status}`);
+      assert(body.success === false, 'success must be false when an ISIN is unknown');
+      assert(body.saved === false, 'saved must be false when an ISIN is unknown');
+      assert(typeof body.error === 'string' && body.error.length > 0, 'a clear error message must be present');
+      assert(body.unknownIsins.length === 1, `expected 1 unknown ISIN, got ${body.unknownIsins.length}`);
+      assert(body.unknownIsins[0].isin === 'XX0000000000', 'unknown ISIN reported');
+      assert(body.warnings.length === 1 && body.warnings[0].includes('XX0000000000'), 'warning mentions the ISIN');
+      // The critical guarantee: the portfolio config was NOT written to KV.
+      assert(
+        !setCalls.includes('portfolio:config'),
+        `portfolio:config must NOT be SET when an ISIN is unknown; SET calls: ${JSON.stringify(setCalls)}`
+      );
+    } finally {
+      global.fetch = originalFetch;
+      if (savedUrl === undefined) delete process.env.KV_REST_API_URL;
+      else process.env.KV_REST_API_URL = savedUrl;
+      if (savedToken === undefined) delete process.env.KV_REST_API_TOKEN;
+      else process.env.KV_REST_API_TOKEN = savedToken;
+    }
+  });
+
+  await test('POST with all ISINs known persists and returns unknownIsins:[]', async () => {
+    const savedUrl = process.env.KV_REST_API_URL;
+    const savedToken = process.env.KV_REST_API_TOKEN;
+    const originalFetch = global.fetch;
+    const setCalls: string[] = [];
+    try {
+      process.env.KV_REST_API_URL = 'https://fake-kv.upstash.io';
+      process.env.KV_REST_API_TOKEN = 'fake-token';
+
+      global.fetch = async (_url, init) => {
+        const cmd = JSON.parse((init?.body as string) ?? '[]') as string[];
+        if (cmd[0] === 'SET') {
+          setCalls.push(cmd[1]);
+          return new Response(JSON.stringify({ result: 'OK' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
+        return new Response(JSON.stringify({ result: null }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      };
+
+      // ISRG (US46120E6023) is now mapped — should persist cleanly.
+      const csvContent = [
+        'type,asset_class,name,symbol,shares,amount,fee',
+        'BUY,STOCK,Intuitive Surgical,US46120E6023,2,-800,0',
+      ].join('\n');
+
+      const formData = new FormData();
+      formData.append('csv', new File([csvContent], 'trades.csv', { type: 'text/csv' }));
+
+      const { NextRequest } = await import('next/server');
+      const req = new NextRequest('http://localhost/api/portfolio/import', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const response = await POST(req);
+      const body = await response.json();
+
+      assert(response.status === 200, `expected HTTP 200, got ${response.status}`);
+      assert(body.success === true, 'success must be true when all ISINs are known');
+      assert(body.saved === true, 'saved must be true when all ISINs are known');
+      assert(Array.isArray(body.unknownIsins) && body.unknownIsins.length === 0, 'unknownIsins must be empty');
+      assert(setCalls.includes('portfolio:config'), 'portfolio:config must be SET when import succeeds');
     } finally {
       global.fetch = originalFetch;
       if (savedUrl === undefined) delete process.env.KV_REST_API_URL;
