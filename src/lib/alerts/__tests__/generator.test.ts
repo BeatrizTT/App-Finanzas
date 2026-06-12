@@ -297,7 +297,7 @@ async function main(): Promise<void> {
       assert(msg.includes('podrías vender un 20-25%'), 'sell guidance is suggestive, not imperative');
       assert(msg.includes('€1200–€1500'), 'sell amounts come from suggestedAmountEur');
       assert(msg.includes('no significa vender todo'), 'must clarify partial reduction');
-      assert(msg.includes('Antes era: DO_NOTHING'), 'transition shows previous state');
+      assert(msg.includes('Antes era: DO-NOTHING'), 'transition shows previous state (underscore escaped to hyphen)');
     });
   });
 
@@ -378,6 +378,66 @@ async function main(): Promise<void> {
       assert(!msg.includes('€'), 'no EUR figures when price is unconfirmed');
       assert(msg.includes('Sin precio EUR confirmado'), 'explains why no figures are shown');
       assert(msg.includes('reducir'), 'still gives the defensive guidance');
+    });
+  });
+
+  // ── P1-4b: Markdown escaping ─────────────────────────────────────────────
+
+  await test('BUY_MORE → REDUCE footer: underscore in prevState is escaped (Markdown safe)', async () => {
+    const prev: PreviousStates = {
+      updatedAt: '',
+      portfolio: {
+        nvda: {
+          assetId: 'nvda',
+          state: 'BUY_MORE',
+          lastAlertAt: new Date(Date.now() - 3600 * 1000).toISOString(),
+        },
+      },
+      opportunities: {},
+    };
+    await withKv({ 'alerts:previous_states': prev, 'alerts:history': [] }, async () => {
+      const alerts = await G.generateAlerts(
+        [mkAnalysis('nvda', 'REDUCE')], [], [], [], EMPTY_CONCENTRATION, [],
+      );
+      assert(alerts.length === 1, `expected 1 alert, got ${alerts.length}`);
+      const msg = alerts[0].message;
+      assert(msg.includes('Antes era: BUY-MORE'), 'BUY_MORE underscore must be escaped to BUY-MORE in footer');
+      assert(!msg.includes('BUY_MORE'), 'raw BUY_MORE with underscore must not appear in the Telegram message');
+    });
+  });
+
+  await test('BUY_PARTIAL → REDUCE footer: underscore escaped to hyphen', async () => {
+    const prev: PreviousStates = {
+      updatedAt: '',
+      portfolio: {
+        nvda: {
+          assetId: 'nvda',
+          state: 'BUY_PARTIAL',
+          lastAlertAt: new Date(Date.now() - 3600 * 1000).toISOString(),
+        },
+      },
+      opportunities: {},
+    };
+    await withKv({ 'alerts:previous_states': prev, 'alerts:history': [] }, async () => {
+      const alerts = await G.generateAlerts(
+        [mkAnalysis('nvda', 'REDUCE')], [], [], [], EMPTY_CONCENTRATION, [],
+      );
+      assert(alerts.length === 1, `expected 1 alert, got ${alerts.length}`);
+      const msg = alerts[0].message;
+      assert(msg.includes('Antes era: BUY-PARTIAL'), 'BUY_PARTIAL underscore must be escaped to BUY-PARTIAL');
+      assert(!msg.includes('BUY_PARTIAL'), 'raw BUY_PARTIAL must not appear in the Telegram message');
+    });
+  });
+
+  await test('BUY_MORE → REVIEW footer: underscore in prevState is escaped', async () => {
+    await withKv({ 'alerts:previous_states': mkPrev('BUY_MORE', 96), 'alerts:history': [] }, async () => {
+      const alerts = await G.generateAlerts(
+        [mkAnalysis('nvda', 'REVIEW')], [], [], [], EMPTY_CONCENTRATION, [],
+      );
+      assert(alerts.length === 1, `expected 1 REVIEW alert, got ${alerts.length}`);
+      const msg = alerts[0].message;
+      assert(msg.includes('Antes era: BUY-MORE'), 'BUY_MORE underscore must be escaped in REVIEW footer');
+      assert(!msg.includes('BUY_MORE'), 'raw BUY_MORE must not appear in REVIEW message');
     });
   });
 

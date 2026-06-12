@@ -1,6 +1,6 @@
 # CTO Backlog — App Finanzas
 
-Last updated: 2026-06-12 (P1-4b implementado — alertas defensivas Telegram + recordatorio REDUCE)
+Last updated: 2026-06-12 (P1-4b + Codex fix — Markdown escaping + P1-4d registrado)
 
 Ordered by priority. P0 = production is broken or silent without these. Do not advance to P1 until P0 is solid.
 
@@ -166,6 +166,7 @@ Ambos son **ELTIF** (European Long-Term Investment Fund): fondos de private equi
 - `REVIEW → REVIEW`: sin recordatorio (mejora futura si hace falta).
 - Guards de calidad de datos: `priceError` → sin alerta; `currentPrice: null` sin `priceError` → alerta defensiva (p.ej. concentración) pero **sin cifras**.
 - No implementado a propósito: `firstAlertedAt` no fue necesario — `lastAlertAt` + ventana deslizante cumple el requisito con menos estado.
+- **Codex Review fix (Markdown escaping)**: helper `escapeMd()` añadido en `generator.ts`. Los valores dinámicos (`prevState`, `ticker`, `holding.name`, `reasons`) se escapaban con underscores sin procesar — `_Antes era: BUY_MORE_` rompía el Markdown de Telegram haciendo que pudiera rechazar el mensaje entero. Fix: `_` → `-` en todos los valores dinámicos antes de interpolarlos. Aplicado en todos los templates (REDUCE, REVIEW, genérico de portfolio, oportunidades, concentración). 3 tests nuevos de escaping.
 
 **Anti-spam**: cubierto por PR-1 (#31) + ventana de recordatorio. Cooldown solo para repeticiones de mismo estado; bypass en cambios de estado; `REDUCE` persistente cada 3 días.
 
@@ -176,6 +177,25 @@ Ambos son **ELTIF** (European Long-Term Investment Fund): fondos de private equi
 **Dependencias** (cerradas):
 1. P1-3 (alert history en KV) — **PR #31 mergeado y verificado en producción (2026-06-12)** ✅.
 2. P1-3c verificado en producción (ELTIF + ISRG limpios) — **DONE 2026-06-12** ✅.
+
+---
+
+### P1-4c: Templates defensivos para oportunidades EXIT / REVIEW_FOR_TRIM (pendiente, sin iniciar)
+Ver descripción en Roadmap Fase 2 entrada 4. No iniciar hasta merge de P1-4b.
+
+---
+
+### P1-4d: Avance de `previous_states` antes de confirmar envío Telegram (backlog, riesgo conocido)
+
+**Problema**: en `generator.ts`, `savePreviousStates(newPrev)` se llama al final de `generateAlerts()`. En `daily-engine.ts`, `sendAlerts()` se llama DESPUÉS de que `generateAlerts()` ya regresó — lo que significa que el estado ya está avanzado en KV antes de saber si Telegram aceptó el mensaje.
+
+**Impacto**: si Telegram rechaza el mensaje (p. ej. por un error de formato o rate limit), `previous_states` queda como si la alerta hubiera llegado. La próxima alerta real solo aparecerá pasados `ALERT_REDUCE_REMINDER_DAYS` días (ventana de recordatorio), no inmediatamente.
+
+**Mitigación actual**: el fix de Markdown escaping (P1-4b Codex fix) elimina el caso principal de rechazo. La ventana de recordatorio (3 días por defecto) limita la ventana de pérdida. No es un bug silencioso — el engine loguea `telegram_alerts: <error>`.
+
+**Fix propuesto** (cuando se priorice): cambiar `generateAlerts()` para devolver `{ alerts, pendingStates }` y mover `savePreviousStates()` a `daily-engine.ts` tras confirmar que `sendAlerts()` tuvo éxito. Requiere actualizar los 13 tests del generador que leen `store['alerts:previous_states']` directamente.
+
+**Prioridad**: baja para un app personal. No iniciar en el mismo PR que P1-4b.
 
 ---
 
@@ -252,7 +272,7 @@ Verificación completa en `https://www.beaihub.com`:
    `src/lib/utils/kv-client.ts` como cliente KV compartido. `engine-store.ts` y `portfolio-store.ts` migrados. 12 tests nuevos (24 suites · 1521 asserts). Sin cambio de comportamiento.
 
 1. **`p1-alert-history-kv`** (PR-1, P1-3): mover `history.ts` (alert history + previous-states / dedupe ring buffer) a KV → alertas no se repiten entre invocaciones de Vercel. **MERGEADO Y VERIFICADO EN PRODUCCIÓN — PR #31, commit `270887a` (2026-06-12)**. Incluye fix crítico de Codex Review: cambio de estado bypasa cooldown (`BUY_MORE → REDUCE` dentro de 24h ya no se suprime); `previous_states.state` = último estado alertado, no último observado. 26 suites · 1549 asserts · TSC OK · build OK. Verificación prod: `kvConfigured:true`, engine `errors:[]` (×2), `/api/alerts` JSON válido `count:0` (correcto — `saveAlerts` solo escribe historial con `sendAlertMessages !== false`; ver PROJECT_STATE § "Verificación de producción PR-1").
-2. **P1-4b `telegram-sell-reduce-alerts`**: alertas Telegram de venta/reducción — **IMPLEMENTADO (2026-06-12, rama `p1-telegram-sell-reduce-alerts`)**. Templates defensivos REDUCE/REVIEW + recordatorio `REDUCE → REDUCE` cada `ALERT_REDUCE_REMINDER_DAYS` días (default 3, decisión Opción B resuelta). 26 suites · 1563 asserts · TSC OK · build OK. Ver sección P1-4b arriba. Oportunidades defensivas → P1-4c.
+2. **P1-4b `telegram-sell-reduce-alerts`**: alertas Telegram de venta/reducción — **IMPLEMENTADO (2026-06-12, rama `p1-telegram-sell-reduce-alerts`)**. Templates defensivos REDUCE/REVIEW + recordatorio `REDUCE → REDUCE` cada `ALERT_REDUCE_REMINDER_DAYS` días (default 3, decisión Opción B resuelta) + Codex Review fix: `escapeMd()` para Telegram Markdown (underscores en estados como `BUY_MORE` → `BUY-MORE`). 26 suites · 1566 asserts · TSC OK · build OK. Ver sección P1-4b arriba. Oportunidades defensivas → P1-4c. Riesgo `previous_states` antes de send → P1-4d.
 3. **`p1-discovery-state-kv`** (PR-2, P1-2): mover watchlist y snapshots a KV con prefijo `discovery:` → trend tracking funciona entre runs. Desbloqueado (PR-0 merged); **siguiente candidato tras merge de P1-4b salvo decisión explícita de Beatriz**.
 4. **P1-4c (registrado, sin iniciar)**: templates defensivos para oportunidades (`EXIT` / `REVIEW_FOR_TRIM`) — hoy se alertan con template genérico. Separado de P1-4b a propósito (no mezclar cartera y discovery).
 
