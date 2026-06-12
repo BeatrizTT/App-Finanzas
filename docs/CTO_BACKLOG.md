@@ -116,7 +116,7 @@ Fix: extend KV or accept alert repetition (worse UX).
 ---
 
 ### P1-3c: Hotfix `No data for LU3176111881` / `No data for LU3170240538` — ELTIF (private funds)
-**Estado**: fix en rama `fix/private-fund-eltif-import` (abierta desde `main`). **Verificación en producción PENDIENTE.**
+**Estado**: fix mergeado PR #30 (`f0af3e1`). Desplegado en `app-finanzas-beatriztts-projects.vercel.app`. **Custom domain `beaihub.com` pendiente de promoción manual** (el check post-deploy falló al mergear #30 → Vercel no transfirió el alias del custom domain al nuevo deployment — ver RUNBOOK § Incidente 2026-06-12). Verificación final pendiente tras la promoción.
 
 **Qué se observó (verificado, no hipótesis)**: tras re-importar el CSV (paso del P1-3b) y correr el engine, la respuesta mostró:
 ```
@@ -144,6 +144,34 @@ Ambos son **ELTIF** (European Long-Term Investment Fund): fondos de private equi
 2. Re-importar el CSV (el import ahora reconoce los LU ISINs → no falla con 422).
 3. Re-correr el engine: `errors` debe quedar `[]` (o sin ninguna línea `No data for LU...`).
 4. Confirmar que los ELTIF aparecen en la cartera sin P&L diario y con badge ELTIF.
+
+---
+
+### P1-4b: Alertas de venta / reducción por Telegram (requisito estratégico — no implementar hasta cerrar P1-3c)
+
+**Descripción**: recibir un mensaje de Telegram cada vez que la app considera que es buen momento para vender, reducir o revisar seriamente una posición que ya se tiene.
+
+**Triggers definidos**:
+- `REDUCIR` (estado `REDUCE`): alerta inmediata.
+- Equivalente a venta fuerte / thesis broken / riesgo alto: alerta inmediata.
+- `REVISAR` (estado `REVIEW`): **no** alerta urgente salvo que el motivo sea riesgo alto o deterioro claro del activo (distinguir por `manualThesisRisk`).
+
+**Formato del mensaje** (lenguaje simple, no jerga):
+- Qué posición es (nombre + ticker).
+- Qué ha cambiado (precio, distancia desde máximo, señal anterior vs nueva).
+- Por qué la app recomienda vender / reducir / revisar.
+- Qué acción prudente sugiere: vender todo, reducir parte (20-30%), no comprar más, o revisar tesis.
+
+**Anti-spam**: no repetir la misma alerta todos los días si el estado no ha cambiado. Requiere alert history persistente en KV (P1-3 — pendiente). Sin P1-3, la alerta se repetiría en cada run.
+
+**Dependencias**:
+1. P1-3 (alert history en KV) — necesario para deduplicación entre runs.
+2. P1-3c verificado en producción (ELTIF + ISRG limpios antes de añadir más lógica de alertas).
+
+**Qué NO hacer**:
+- No disparar alerta `REDUCE` si `currentPrice: null` o datos stale.
+- No repetir sin dedupe en KV.
+- No cambiar los umbrales globales de scoring para generar más / menos señales.
 
 ---
 

@@ -209,7 +209,7 @@ A personal investment decision-support app. It scans a curated universe of stock
 
 | PR | Title | State |
 |---|---|---|
-| (this) | fix: private_fund (ELTIF) — importar sin pricing diario, mapear LU3176111881/LU3170240538 | Abierto desde `main` |
+| #30 | fix: private_fund (ELTIF) — importar sin pricing diario, mapear LU3176111881/LU3170240538 | Merged `f0af3e1` — desplegado en `app-finanzas-beatriztts-projects.vercel.app`; custom domain `beaihub.com` pendiente de promoción manual |
 | #28 | fix: ISRG mapping + fail-closed para ISINs desconocidos en CSV import | Merged `cac37f8` |
 | #27 | refactor: shared KV client (`kv-client.ts`) — PR-0 Fase 2 | Merged |
 | #25 | docs: Fase 1 verificación end-to-end completa (2026-06-11) | Merged |

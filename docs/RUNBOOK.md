@@ -510,6 +510,47 @@ Lo aprendido durante la verificación end-to-end de Fase 1 (2026-06-09/10). Regi
 
 ---
 
+## Incidente 2026-06-12 — custom domain atascado en deploy anterior
+
+### Síntoma
+`www.beaihub.com` devolvía `success: false, unknownIsins: [LU3176111881, LU3170240538]` después de mergear y desplegar PR #30 (fix ELTIF). El import fallaba con el fail-closed guard aunque el código correcto ya estaba en `main`.
+
+### Causa raíz
+El PR #30 se construyó con `target: production` y `state: READY` en Vercel. Vercel asignó el alias `app-finanzas-beatriztts-projects.vercel.app` a ese deployment (confirmado vía API). Sin embargo, el check post-deploy marcó `failure`, y como resultado Vercel **no transfirió el custom domain `www.beaihub.com`** al nuevo deployment. `beaihub.com` siguió sirviendo el código de PR #29 (que tiene el fail-closed de #28 pero no los mappings ELTIF de #30).
+
+En paralelo, al intentar importar usando las URLs `.vercel.app` alternativas, se obtenía `jq: parse error` porque esas URLs tienen Vercel Deployment Protection activa (devuelven HTML de login, no JSON).
+
+### Resolución
+Promover manualmente el deployment `dpl_AMKZkeenYGon7F6Kn237cdMvMmPm` (f0af3e1, PR #30) a producción vía Vercel dashboard o API. Esto transfiere `beaihub.com` al deployment correcto.
+
+**Cómo promover manualmente** (si ocurre de nuevo):
+1. Ir a Vercel Dashboard → proyecto `app-finanzas` → pestaña **Deployments**
+2. Localizar el deployment del commit correcto (en este caso f0af3e15)
+3. Hacer clic en los tres puntos `...` → **Promote to Production**
+4. Confirmar. El custom domain ahora apunta al deployment correcto.
+
+### Acción futura
+**Cuando un deploy quede atascado**: antes de depurar código, verificar qué deployment está sirviendo el custom domain:
+```bash
+# Comprobar qué commit sirve el custom domain
+curl -sI https://www.beaihub.com/api/config/status | grep -i x-vercel-id
+# Si el commit no coincide con el último de main → custom domain no fue promovido
+```
+
+### L8: Nombre de archivo con paréntesis en zsh
+
+`Exportación de transacción (2).csv` contiene paréntesis que zsh interpreta como expansión de historial (`event not found: )`). Para evitarlo:
+
+```bash
+# Asignar a variable primero — zsh no expande dentro de cadenas ya asignadas
+f="$HOME/Desktop/Exportación de transacción (2).csv"
+curl -s -X POST "$BASE/api/portfolio/import" -F "csv=@$f" | jq ...
+```
+
+Alternativa: escapar con backslash `\(2\)`.
+
+---
+
 ## Lecciones adicionales Fase 1 (2026-06-11)
 
 Tres lecciones adicionales descubiertas al completar la verificación el 2026-06-11, complementarias a las de PRs #20/#21.
