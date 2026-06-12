@@ -583,7 +583,7 @@ Fallback: si KV no está disponible, se usa file-store (`src/data/` en local, `/
 - `previous_states.state` = **"último estado que generó una alerta"** (no el estado observado más recientemente). Esto garantiza que transiciones no alertadas se reintentan en la siguiente ejecución.
 - Cooldown (`ALERT_COOLDOWN_HOURS`, default 24h) **solo se aplica a repeticiones del mismo estado**.
 - **Cualquier transición a un estado alertable** (p.ej. `BUY_MORE → REDUCE`) **bypasa el cooldown**. Una alerta de protección de capital no se puede suprimir por un cooldown activo.
-- `REDUCE → REDUCE` dentro del cooldown: suprimido. `REDUCE → REDUCE` después del cooldown: `shouldSendAlert` devuelve `true`, pero el generador ya bloquea mismos-estados (`stateChanged = false`) — no hay re-alerta.
+- `REDUCE → REDUCE` dentro del cooldown: suprimido. `REDUCE → REDUCE` después del cooldown: `shouldSendAlert` devuelve `true`, pero el generador ya bloquea mismos-estados (`stateChanged = false`) — no hay re-alerta. **Nota**: hay una decisión pendiente para P1-4b sobre recordatorios de alertas defensivas persistentes (REDUCE sin resolver durante 3/7 días) — ver `CTO_BACKLOG.md` § P1-4b "DECISIÓN PENDIENTE".
 
 ### Verificar alert history en producción
 
