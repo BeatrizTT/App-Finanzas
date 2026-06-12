@@ -51,9 +51,9 @@ A personal investment decision-support app. It scans a curated universe of stock
 | `PRICE_PROVIDER_CHAIN` | present but **inactive** | Configured in Vercel, but `PRICE_PROVIDER=twelvedata` not `chain`. Do not activate chain until `batchGetRecentHighs` is implemented. |
 | Orphaned env vars | **inert** | `PRICE_REFRESH_MODE`, `PRICE_CACHE_MODE`, `REPORTING_CURRENCY` — configured in Vercel, not read by any code. Harmless; do not build code around them without a PR. |
 | Discovery state (watchlist, snapshots) | ephemeral | file-store → `/tmp` on Vercel; resets per invocation. P1 item. |
-| Alert history / previous states | ephemeral | Same — file-store → `/tmp`. P1 item. |
+| Alert history / previous states | **KV-first** (`alerts:history`, `alerts:previous_states`) + file-store fallback | PR-1 `p1-alert-history-kv` — pendiente merge (PR #31) |
 
-**Summary: Fase 1 completada el 2026-06-11. Producción verificada end-to-end: precios reales (Twelve Data), KV persistencia cross-instance confirmada, cron auth verificado, CSV import KV-backed, Telegram funcionando. Siguiente: Fase 2 (reliability — KV para alert history y discovery state). No iniciar sin confirmación de Beatriz.**
+**Summary: Fase 1 completada el 2026-06-11. Producción verificada end-to-end: precios reales (Twelve Data), KV persistencia cross-instance confirmada, cron auth verificado, CSV import KV-backed, Telegram funcionando. Fase 2 en curso: PR-1 `p1-alert-history-kv` (alert history/dedupe KV-first) — listo para merge.**
 
 ---
 
@@ -80,7 +80,7 @@ A personal investment decision-support app. It scans a curated universe of stock
 
 **Fase 2 — en curso (autorizada 2026-06-12):**
 - PR-0 (#27): shared KV client refactor — `kv-client.ts` creado, `engine-store.ts` y `portfolio-store.ts` migrados, 12 nuevos tests. Merged.
-- `p1-alert-history-kv` (PR-1): mover history.ts (alert history + previous-states / dedupe ring buffer) a KV — **EN CURSO** (PR-0 merged ✅). Solo infraestructura/dedupe en KV; sin rediseño de scoring ni copy Telegram.
+- `p1-alert-history-kv` (PR-1): mover history.ts (alert history + previous-states / dedupe ring buffer) a KV — **LISTO PARA MERGE** (PR #31 abierto). Incluye fix crítico: state-change bypasa cooldown (BUY_MORE → REDUCE no se suprime). 26 suites, 1549 asserts, TSC OK, build OK.
 - `p1-discovery-state-kv` (PR-2): mover watchlist y snapshots a KV (prefijo `discovery:`) — desbloqueado (PR-0 merged), siguiente tras PR-1.
 - P1-4b (registrado en backlog): alertas Telegram de venta/reducción — depende de PR-1 (alert history KV para anti-spam).
 
@@ -198,7 +198,7 @@ A personal investment decision-support app. It scans a curated universe of stock
 
 | Item | Blocker |
 |---|---|
-| Alert history persistence | **EN CURSO (PR-1 `p1-alert-history-kv`)** — PR-0 #27 merged, desbloqueado |
+| Alert history persistence | **LISTO PARA MERGE** — PR #31 (`p1-alert-history-kv`) abierto, fix de cooldown incluido |
 | Discovery watchlist/snapshots | file-store, ephemeral → KV (PR-2 — desbloqueado, siguiente tras PR-1) |
 | Radar for strong companies outside portfolio | External screener not integrated yet. Requires smoke evidence + ExternalCandidate schema (Phase 3) |
 | Single-asset live check | Not built yet (Phase 4) |

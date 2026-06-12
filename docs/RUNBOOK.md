@@ -565,6 +565,69 @@ curl -s -X POST "$BASE/api/engine/run" \
 
 Verificado 2026-06-12 tras PR #30: los 3 pasos OK ✅ (ver CTO_BACKLOG P1-3c).
 
+---
+
+## Alert history y dedupe (PR-1, Fase 2)
+
+### Qué se guarda y dónde
+
+| Clave KV | Contenido | Tamaño máximo |
+|---|---|---|
+| `alerts:history` | Ring buffer de alertas enviadas/descartadas (`Alert[]`) | 500 entradas |
+| `alerts:previous_states` | Mapa `assetId → { state, lastAlertAt }` — para detectar cambios de estado y evitar spam | Sin límite (un entry por activo) |
+
+Fallback: si KV no está disponible, se usa file-store (`src/data/` en local, `/tmp/app-finanzas` en Vercel). En Vercel sin KV, el file-store es efímero entre invocaciones — la deduplicación pierde memoria pero el sistema no falla.
+
+### Semántica del cooldown y la deduplicación
+
+- `previous_states.state` = **"último estado que generó una alerta"** (no el estado observado más recientemente). Esto garantiza que transiciones no alertadas se reintentan en la siguiente ejecución.
+- Cooldown (`ALERT_COOLDOWN_HOURS`, default 24h) **solo se aplica a repeticiones del mismo estado**.
+- **Cualquier transición a un estado alertable** (p.ej. `BUY_MORE → REDUCE`) **bypasa el cooldown**. Una alerta de protección de capital no se puede suprimir por un cooldown activo.
+- `REDUCE → REDUCE` dentro del cooldown: suprimido. `REDUCE → REDUCE` después del cooldown: `shouldSendAlert` devuelve `true`, pero el generador ya bloquea mismos-estados (`stateChanged = false`) — no hay re-alerta. **Nota**: hay una decisión pendiente para P1-4b sobre recordatorios de alertas defensivas persistentes (REDUCE sin resolver durante 3/7 días) — ver `CTO_BACKLOG.md` § P1-4b "DECISIÓN PENDIENTE".
+
+### Verificar alert history en producción
+
+```bash
+BASE="https://www.beaihub.com"
+
+# Ver las últimas 5 alertas
+curl -s "$BASE/api/alerts?limit=5" | jq '{count: .count, alerts: [.alerts[] | {id, type, asset, newState, telegramSent, timestamp}]}'
+
+# Ver previous_states en KV (requiere curl directo a Upstash — no expuesto por API)
+# Si previous_states está vacío: las alertas se reenviarán todas en el próximo run (comportamiento correcto)
+```
+
+### Qué hacer si KV no está disponible
+
+1. `GET /api/config/status` → `kvConfigured: false` → las env vars de KV no llegan al runtime.
+2. Sin KV: alert history no persiste entre invocaciones. El motor no falla; simplemente pierde memoria del ciclo anterior.
+3. Corrección: verificar `KV_REST_API_URL` y `KV_REST_API_TOKEN` en Vercel Dashboard → Settings → Environment Variables.
+
+---
+
+## Vercel "Error" en PR con build READY (post-deploy check)
+
+### Síntoma
+El bot de Vercel comenta "Error" en el PR pero el build se completó correctamente (`✓ Compiled successfully`). El deployment list muestra `state: READY`.
+
+### Causa
+Vercel tiene dos capas: (1) build y (2) post-deploy check. El build puede pasar (`READY`) pero el post-deploy check puede fallar. Cuando esto ocurre, Vercel marca el commit como `nextCommitStatus: FAILED` en el comentario del PR aunque el deployment esté `READY` y sirva correctamente.
+
+**Este patrón no indica un error de código.** El mismo patrón ocurrió en PR #30 y PR #31.
+
+### Impacto
+- El deployment preview en `*.vercel.app` funciona correctamente.
+- El custom domain `beaihub.com` **no se promueve automáticamente** — sigue sirviendo el deployment anterior.
+- Merge del PR: seguro si tests locales, TSC y build están verdes.
+- Después del merge: si `beaihub.com` no se actualiza, promover manualmente (ver "Incidente 2026-06-12").
+
+### Diagnóstico
+```bash
+# ¿Qué commit sirve el custom domain actualmente?
+curl -sI https://www.beaihub.com/api/config/status | grep -i x-vercel-id
+# Si no coincide con el HEAD de main → promover manualmente
+```
+
 ### L8: Nombre de archivo con paréntesis en zsh
 
 `Exportación de transacción (2).csv` contiene paréntesis que zsh interpreta como expansión de historial (`event not found: )`). Para evitarlo:

@@ -154,7 +154,7 @@ Ambos son **ELTIF** (European Long-Term Investment Fund): fondos de private equi
 
 ---
 
-### P1-4b: Alertas de venta / reducción por Telegram (requisito estratégico — no implementar hasta cerrar P1-3c)
+### P1-4b: Alertas de venta / reducción por Telegram (siguiente prioridad recomendada tras merge de PR-1 #31)
 
 **Descripción**: recibir un mensaje de Telegram cada vez que la app considera que es buen momento para vender, reducir o revisar seriamente una posición que ya se tiene.
 
@@ -169,16 +169,27 @@ Ambos son **ELTIF** (European Long-Term Investment Fund): fondos de private equi
 - Por qué la app recomienda vender / reducir / revisar.
 - Qué acción prudente sugiere: vender todo, reducir parte (20-30%), no comprar más, o revisar tesis.
 
-**Anti-spam**: no repetir la misma alerta todos los días si el estado no ha cambiado. Requiere alert history persistente en KV (P1-3 — pendiente). Sin P1-3, la alerta se repetiría en cada run.
+**Anti-spam**: no repetir la misma alerta todos los días si el estado no ha cambiado. Cubierto por PR-1 (#31): alert history + previous-states en KV, cooldown solo para mismo estado, bypass en cambios de estado.
 
 **Dependencias**:
-1. P1-3 (alert history en KV) — necesario para deduplicación entre runs.
-2. P1-3c verificado en producción (ELTIF + ISRG limpios antes de añadir más lógica de alertas).
+1. P1-3 (alert history en KV) — **PR #31 listo para merge** ✅.
+2. P1-3c verificado en producción (ELTIF + ISRG limpios) — **DONE 2026-06-12** ✅.
 
 **Qué NO hacer**:
 - No disparar alerta `REDUCE` si `currentPrice: null` o datos stale.
 - No repetir sin dedupe en KV.
 - No cambiar los umbrales globales de scoring para generar más / menos señales.
+
+**DECISIÓN PENDIENTE (registrada 2026-06-12, a resolver en P1-4b): recordatorios de alertas defensivas no resueltas.**
+
+Comportamiento actual tras PR-1 (#31): `REDUCE → REDUCE` no re-alerta nunca, ni siquiera después del cooldown, porque el generador bloquea repeticiones del mismo estado (`stateChanged = false`). Para PR-1 esto es aceptable como anti-spam, pero para protección de capital tiene un riesgo: una señal de salida crítica puede quedar enterrada si la primera alerta pasa desapercibida.
+
+Propuesta a evaluar en P1-4b:
+- `REDUCE` nuevo (transición) → alerta inmediata (ya implementado en PR-1: bypass del cooldown).
+- `REDUCE` persistente sin cambio → sin spam diario (ya implementado).
+- `REDUCE` persistente durante 3/7 días sin resolverse → **recordatorio** (pendiente de decidir: intervalo, si aplica también a `REVIEW` con riesgo alto, y cómo se marca como "resuelto" — venta, cambio de estado, o ack manual).
+
+Implementación candidata: añadir `firstAlertedAt` a `PreviousStateEntry` y comparar contra un `ALERT_REMINDER_DAYS` configurable. No implementar sin decisión explícita de Beatriz sobre el intervalo y el criterio de resolución.
 
 ---
 
@@ -254,8 +265,9 @@ Verificación completa en `https://www.beaihub.com`:
 0. **PR-0 (#27): shared KV client refactor — Merged.**
    `src/lib/utils/kv-client.ts` como cliente KV compartido. `engine-store.ts` y `portfolio-store.ts` migrados. 12 tests nuevos (24 suites · 1521 asserts). Sin cambio de comportamiento.
 
-1. **`p1-alert-history-kv`** (PR-1, P1-3): mover `history.ts` (alert history + previous-states / dedupe ring buffer) a KV → alertas no se repiten entre invocaciones de Vercel. **EN CURSO (2026-06-12)** — PR-0 merged, desbloqueado. Alcance: solo infraestructura/dedupe en KV. NO rediseñar scoring ni copy Telegram (eso es P1-4b, después).
-2. **`p1-discovery-state-kv`** (PR-2, P1-2): mover watchlist y snapshots a KV con prefijo `discovery:` → trend tracking funciona entre runs. Desbloqueado (PR-0 merged); siguiente tras PR-1.
+1. **`p1-alert-history-kv`** (PR-1, P1-3): mover `history.ts` (alert history + previous-states / dedupe ring buffer) a KV → alertas no se repiten entre invocaciones de Vercel. **LISTO PARA MERGE — PR #31 (2026-06-12)**. Incluye fix crítico de Codex Review: cambio de estado bypasa cooldown (`BUY_MORE → REDUCE` dentro de 24h ya no se suprime); `previous_states.state` = último estado alertado, no último observado. 26 suites · 1549 asserts · TSC OK · build OK. Vercel muestra "Error" pero el build es READY (patrón post-deploy check, documentado en RUNBOOK).
+2. **P1-4b `telegram-sell-reduce-alerts`**: alertas Telegram de venta/reducción — **SIGUIENTE PRIORIDAD RECOMENDADA tras merge de PR-1** (ver sección P1-4b arriba, incluye decisión pendiente sobre recordatorios). Protección de capital antes que discovery state.
+3. **`p1-discovery-state-kv`** (PR-2, P1-2): mover watchlist y snapshots a KV con prefijo `discovery:` → trend tracking funciona entre runs. Desbloqueado (PR-0 merged); **queda después de P1-4b salvo decisión explícita de Beatriz**.
 
 ### Fase 3 — Radar amplio de oportunidades
 

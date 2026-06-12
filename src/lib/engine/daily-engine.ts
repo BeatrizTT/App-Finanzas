@@ -373,7 +373,7 @@ export async function runDailyEngine(options?: {
   // --- Alert generation ---
   let generatedAlerts: DailyEngineOutput['alertsGenerated'] = [];
   try {
-    generatedAlerts = generateAlerts(
+    generatedAlerts = await generateAlerts(
       portfolioAnalyses,
       stockOpportunities,
       etfOpportunities,
@@ -392,12 +392,12 @@ export async function runDailyEngine(options?: {
   if (options?.sendAlertMessages !== false) {
     try {
       sentAlerts = await sendAlerts(generatedAlerts);
-      saveAlerts(sentAlerts);
+      await saveAlerts(sentAlerts);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error('[Engine] Sending alerts failed:', msg);
       errors.push(`telegram_alerts: ${msg}`);
-      try { saveAlerts(generatedAlerts); } catch { /* ignore */ }
+      try { await saveAlerts(generatedAlerts); } catch { /* ignore */ }
     }
   }
 

@@ -1,11 +1,32 @@
-// Alert history store — reads and writes the alert history JSON file
-// Also manages previous-state store for change detection
+// Alert history store — KV-first with file-store fallback (PR-1, Fase 2).
+//
+// Persists two things across serverless invocations:
+//   1. Alert history (ring buffer, last 500) — KV key `alerts:history`
+//   2. Previous-states store for change detection / dedupe — KV key
+//      `alerts:previous_states`
+//
+// Production (Vercel + KV): reads/writes Vercel KV (Upstash REST).
+// Local dev without KV: falls back to file-store (src/data or DATA_DIR).
+//
+// Why KV: before PR-1 these lived only in file-store → `/tmp` on Vercel, which
+// resets on every cold start. Dedupe (don't re-send the same unchanged alert)
+// only works if previous-states survives between cron runs. KV makes it durable.
+// In production KV is the source of truth; file-store is the local-dev fallback.
+//
+// KV client shared via kv-client.ts (PR-0) — no copy-pasted helpers.
 
 import { readJsonFile, writeJsonFile } from '../utils/file-store';
-import type { Alert, AlertHistoryStore, PreviousStates, PortfolioState, OpportunityState } from '../types';
+import { getKvConfig, sanitizeKvError, kvSet, kvGet } from '../utils/kv-client';
+import type { Alert, PreviousStates, PortfolioState, OpportunityState } from '../types';
 
 const ALERT_HISTORY_FILE = 'alert-history.json';
 const PREVIOUS_STATES_FILE = 'previous-states.json';
+
+const ALERT_HISTORY_KEY = 'alerts:history';
+const PREVIOUS_STATES_KEY = 'alerts:previous_states';
+
+// Keep at most this many alerts in the ring buffer.
+const MAX_ALERTS = 500;
 
 // Simple ID generator without uuid dependency
 function genId(): string {
@@ -13,41 +34,81 @@ function genId(): string {
 }
 
 // --------------------------------------------------------------------------
+// Internal KV-first read / write helpers
+// --------------------------------------------------------------------------
+
+// Read KV first (if configured); on miss or error fall back to file-store.
+async function loadJson<T>(kvKey: string, fileKey: string, fallback: T): Promise<T> {
+  const kv = getKvConfig();
+  if (kv) {
+    try {
+      const stored = await kvGet<T>(kv.url, kv.token, kvKey);
+      if (stored !== null && stored !== undefined) return stored;
+      // KV returned null (key not set yet) — fall through to file-store
+    } catch (err) {
+      const msg = sanitizeKvError(err instanceof Error ? err.message : String(err));
+      console.warn('[AlertHistory] KV read failed, using file-store:', msg);
+    }
+  }
+  return readJsonFile<T>(fileKey, fallback);
+}
+
+// Write to KV if configured; otherwise (or on KV failure) to file-store.
+// Never throws — persistence failures must not crash the engine.
+async function saveJson(kvKey: string, fileKey: string, value: unknown): Promise<void> {
+  const kv = getKvConfig();
+  if (kv) {
+    try {
+      await kvSet(kv.url, kv.token, kvKey, value);
+      return;
+    } catch (err) {
+      const msg = sanitizeKvError(err instanceof Error ? err.message : String(err));
+      console.warn('[AlertHistory] KV write failed (non-fatal), trying file-store:', msg);
+      // fall through to file-store as a secondary attempt
+    }
+  }
+  try {
+    writeJsonFile(fileKey, value);
+  } catch (err) {
+    console.warn('[AlertHistory] file-store write failed (non-fatal):', err instanceof Error ? err.message : err);
+  }
+}
+
+// --------------------------------------------------------------------------
 // Alert history
 // --------------------------------------------------------------------------
 
-export function getAlertHistory(limit = 100): Alert[] {
-  const all = readJsonFile<Alert[]>(ALERT_HISTORY_FILE, []);
+export async function getAlertHistory(limit = 100): Promise<Alert[]> {
+  const all = await loadJson<Alert[]>(ALERT_HISTORY_KEY, ALERT_HISTORY_FILE, []);
   return all.slice(-limit).reverse(); // most recent first
 }
 
-export function saveAlert(alert: Alert): void {
-  const existing = readJsonFile<Alert[]>(ALERT_HISTORY_FILE, []);
+export async function saveAlert(alert: Alert): Promise<void> {
+  const existing = await loadJson<Alert[]>(ALERT_HISTORY_KEY, ALERT_HISTORY_FILE, []);
   existing.push(alert);
-  // Keep last 500 alerts
-  writeJsonFile(ALERT_HISTORY_FILE, existing.slice(-500));
+  await saveJson(ALERT_HISTORY_KEY, ALERT_HISTORY_FILE, existing.slice(-MAX_ALERTS));
 }
 
-export function saveAlerts(alerts: Alert[]): void {
-  const existing = readJsonFile<Alert[]>(ALERT_HISTORY_FILE, []);
-  const updated = [...existing, ...alerts].slice(-500);
-  writeJsonFile(ALERT_HISTORY_FILE, updated);
+export async function saveAlerts(alerts: Alert[]): Promise<void> {
+  const existing = await loadJson<Alert[]>(ALERT_HISTORY_KEY, ALERT_HISTORY_FILE, []);
+  const updated = [...existing, ...alerts].slice(-MAX_ALERTS);
+  await saveJson(ALERT_HISTORY_KEY, ALERT_HISTORY_FILE, updated);
 }
 
 // --------------------------------------------------------------------------
 // Previous states store (for change detection)
 // --------------------------------------------------------------------------
 
-export function getPreviousStates(): PreviousStates {
-  return readJsonFile<PreviousStates>(PREVIOUS_STATES_FILE, {
+export async function getPreviousStates(): Promise<PreviousStates> {
+  return loadJson<PreviousStates>(PREVIOUS_STATES_KEY, PREVIOUS_STATES_FILE, {
     updatedAt: '',
     portfolio: {},
     opportunities: {},
   });
 }
 
-export function savePreviousStates(states: PreviousStates): void {
-  writeJsonFile(PREVIOUS_STATES_FILE, {
+export async function savePreviousStates(states: PreviousStates): Promise<void> {
+  await saveJson(PREVIOUS_STATES_KEY, PREVIOUS_STATES_FILE, {
     ...states,
     updatedAt: new Date().toISOString(),
   });
@@ -56,23 +117,37 @@ export function savePreviousStates(states: PreviousStates): void {
 // --------------------------------------------------------------------------
 // Check if an alert should be sent (respects cooldown)
 // --------------------------------------------------------------------------
+// Pure function — operates on the `prev` snapshot passed in, reads no storage.
+//
+// Cooldown semantics:
+//   • If no previous alert exists → always send.
+//   • If currentState differs from the last-alerted state → bypass cooldown.
+//     Capital-protection transitions (e.g. BUY_MORE → REDUCE) must not be
+//     swallowed because a recent alert for the old state is still in-window.
+//   • Same state within cooldown → suppress (anti-spam).
+//   • Same state after cooldown → allow.
 
-export function shouldSendAlert(assetId: string, prev: PreviousStates): boolean {
-  const cooldownHours = parseInt(process.env.ALERT_COOLDOWN_HOURS ?? '24', 10);
-  const portfolio = prev.portfolio[assetId];
-  const opp = prev.opportunities[assetId];
-  const entry = portfolio ?? opp;
+export function shouldSendAlert(
+  assetId: string,
+  prev: PreviousStates,
+  currentState?: PortfolioState | OpportunityState,
+): boolean {
+  const entry = prev.portfolio[assetId] ?? prev.opportunities[assetId];
 
   if (!entry?.lastAlertAt) return true;
 
-  const lastAlert = new Date(entry.lastAlertAt);
-  const hoursSince = (Date.now() - lastAlert.getTime()) / (1000 * 60 * 60);
+  // State change always bypasses cooldown.
+  if (currentState !== undefined && entry.state !== currentState) return true;
+
+  const cooldownHours = parseInt(process.env['ALERT_COOLDOWN_HOURS'] ?? '24', 10);
+  const hoursSince = (Date.now() - new Date(entry.lastAlertAt).getTime()) / (1000 * 60 * 60);
   return hoursSince >= cooldownHours;
 }
 
 // --------------------------------------------------------------------------
 // Create a typed alert object
 // --------------------------------------------------------------------------
+// Pure factory — synchronous.
 
 export function createAlert(
   params: Omit<Alert, 'id' | 'timestamp' | 'telegramSent'> & { telegramSent?: boolean }
