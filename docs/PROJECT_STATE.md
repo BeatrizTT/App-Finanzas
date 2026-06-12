@@ -1,6 +1,6 @@
 # App Finanzas — Project State
 
-Last updated: 2026-06-12 · Branch: `main` (PR #30 — hotfix ELTIF verificado en producción)
+Last updated: 2026-06-12 · Branch: `main` (PR #31 — alert history KV-first verificado en producción)
 
 > Agentes/IA: leer `AGENTS.md` en la raíz del repo antes de cualquier cambio.
 
@@ -31,7 +31,7 @@ A personal investment decision-support app. It scans a curated universe of stock
 
 ## Active branch
 
-`main` — Fase 1 completada (2026-06-11) y hotfix ELTIF (PR #30) verificado en producción (2026-06-12). **Fase 2 autorizada por Beatriz (2026-06-12)**. PR-0 (#27, shared KV client) merged → PR-1 (`p1-alert-history-kv`) desbloqueado y en curso.
+`main` — Fase 1 completada (2026-06-11) y hotfix ELTIF (PR #30) verificado en producción (2026-06-12). **Fase 2 autorizada por Beatriz (2026-06-12)**. PR-0 (#27, shared KV client) merged → PR-1 (`p1-alert-history-kv`, PR #31) **mergeado y verificado en producción (2026-06-12)**.
 
 ---
 
@@ -51,9 +51,23 @@ A personal investment decision-support app. It scans a curated universe of stock
 | `PRICE_PROVIDER_CHAIN` | present but **inactive** | Configured in Vercel, but `PRICE_PROVIDER=twelvedata` not `chain`. Do not activate chain until `batchGetRecentHighs` is implemented. |
 | Orphaned env vars | **inert** | `PRICE_REFRESH_MODE`, `PRICE_CACHE_MODE`, `REPORTING_CURRENCY` — configured in Vercel, not read by any code. Harmless; do not build code around them without a PR. |
 | Discovery state (watchlist, snapshots) | ephemeral | file-store → `/tmp` on Vercel; resets per invocation. P1 item. |
-| Alert history / previous states | **KV-first** (`alerts:history`, `alerts:previous_states`) + file-store fallback | PR-1 `p1-alert-history-kv` — pendiente merge (PR #31) |
+| Alert history / previous states | **KV-first** (`alerts:history`, `alerts:previous_states`) + file-store fallback | PR-1 `p1-alert-history-kv` (PR #31) — **mergeado y verificado en producción (2026-06-12)**. `/api/alerts` responde JSON válido (force-dynamic + KV read OK). |
 
-**Summary: Fase 1 completada el 2026-06-11. Producción verificada end-to-end: precios reales (Twelve Data), KV persistencia cross-instance confirmada, cron auth verificado, CSV import KV-backed, Telegram funcionando. Fase 2 en curso: PR-1 `p1-alert-history-kv` (alert history/dedupe KV-first) — listo para merge.**
+**Summary: Fase 1 completada el 2026-06-11. Producción verificada end-to-end: precios reales (Twelve Data), KV persistencia cross-instance confirmada, cron auth verificado, CSV import KV-backed, Telegram funcionando. Fase 2: PR-0 (#27) y PR-1 (#31, alert history/dedupe KV-first) mergeados; PR-1 verificado en producción el 2026-06-12.**
+
+### Verificación de producción PR-1 (#31) — 2026-06-12
+
+Tras el merge a `main` (commit `270887a`), ejecutado desde `www.beaihub.com` (Vercel READY):
+
+| Paso | Resultado | Estado |
+|---|---|---|
+| `/api/config/status` | `kvConfigured: true`, `priceProvider: "twelvedata"` | ✅ |
+| CSV import (`csv=@…`) | `success: true`, `saved: true`, `saveSource: "kv"`, `holdingsUpdated: 16`, `unknownIsins: []` | ✅ |
+| Portfolio ELTIF mapping | `US46120E6023→ISRG/stock`, `LU3176111881→ENXF/private_fund`, `LU3170240538→APGM/private_fund` | ✅ |
+| `POST /api/engine/run` (`sendDigest:false`, `sendAlertMessages:false`) ×2 | `success: true`, `errors: []` | ✅ |
+| `GET /api/alerts?limit=5` | `count: 0`, `alerts: []` (JSON válido) | ✅ |
+
+**Interpretación de `count: 0`** (correcto, no es un fallo): `saveAlerts` (ring buffer `alerts:history`) solo se ejecuta cuando `sendAlertMessages !== false` (ver `daily-engine.ts` § "Send alerts"). El test corrió con `sendAlertMessages: false`, así que el historial no se escribe por diseño. Lo que sí se ejecutó: `generateAlerts` → `savePreviousStates` (dedupe tracking) corre incondicionalmente. El endpoint `/api/alerts` devuelve JSON válido (no error), confirmando `force-dynamic` + lectura KV operativos. La escritura del ring buffer está cubierta por tests unitarios (16+3); no se fuerza en producción para no spamear Telegram.
 
 ---
 
@@ -80,7 +94,7 @@ A personal investment decision-support app. It scans a curated universe of stock
 
 **Fase 2 — en curso (autorizada 2026-06-12):**
 - PR-0 (#27): shared KV client refactor — `kv-client.ts` creado, `engine-store.ts` y `portfolio-store.ts` migrados, 12 nuevos tests. Merged.
-- `p1-alert-history-kv` (PR-1): mover history.ts (alert history + previous-states / dedupe ring buffer) a KV — **LISTO PARA MERGE** (PR #31 abierto). Incluye fix crítico: state-change bypasa cooldown (BUY_MORE → REDUCE no se suprime). 26 suites, 1549 asserts, TSC OK, build OK.
+- `p1-alert-history-kv` (PR-1): mover history.ts (alert history + previous-states / dedupe ring buffer) a KV — **MERGEADO Y VERIFICADO EN PRODUCCIÓN** (PR #31, commit `270887a`, 2026-06-12). Incluye fix crítico: state-change bypasa cooldown (BUY_MORE → REDUCE no se suprime). 26 suites, 1549 asserts, TSC OK, build OK.
 - `p1-discovery-state-kv` (PR-2): mover watchlist y snapshots a KV (prefijo `discovery:`) — desbloqueado (PR-0 merged), siguiente tras PR-1.
 - P1-4b (registrado en backlog): alertas Telegram de venta/reducción — depende de PR-1 (alert history KV para anti-spam).
 
@@ -120,8 +134,8 @@ A personal investment decision-support app. It scans a curated universe of stock
 | Engine output (read: `/api/portfolio`) | `loadEngineOutput()` → KV first, file-store fallback | **Yes if KV configured** |
 | Portfolio config (write: `/api/portfolio/import`) | `savePortfolioConfig()` → KV first, file-store fallback | **Yes if KV configured** |
 | Portfolio config (read: all consumers) | `loadPortfolioConfig()` → KV first, `config/portfolio.json` fallback | **Yes if KV configured** |
-| Alert history | file-store → `/tmp/app-finanzas` | **No — resets each invocation** |
-| Previous states (drawdown) | file-store → `/tmp/app-finanzas` | **No — resets each invocation** |
+| Alert history | `saveAlerts()` → KV first (`alerts:history`, ring buffer max 500) + file-store fallback | **Yes if KV configured** (PR #31) |
+| Previous states (dedupe) | `savePreviousStates()` → KV first (`alerts:previous_states`) + file-store fallback | **Yes if KV configured** (PR #31) |
 | Discovery watchlist | file-store → `/tmp/app-finanzas` | **No — resets each invocation** |
 | Discovery snapshots | file-store → `/tmp/app-finanzas` | **No — resets each invocation** |
 
@@ -133,7 +147,7 @@ A personal investment decision-support app. It scans a curated universe of stock
 
 **Portfolio config is now KV-aware** (PR #17): CSV import saves to KV via `savePortfolioConfig()`. All consumers (`/api/portfolio`, `/api/engine/run`, `runDailyEngine`) load via `loadPortfolioConfig()` — KV first, `config/portfolio.json` fallback. `POST /api/portfolio/import` returns `saved: true` in Vercel when KV is configured.
 
-**Not done yet**: Alert history, watchlist, snapshots via KV (P1).
+**Not done yet**: discovery watchlist y snapshots via KV (P1, PR-2). Alert history + previous states ya migrados a KV (PR #31, verificado en producción 2026-06-12).
 
 ---
 
@@ -198,8 +212,8 @@ A personal investment decision-support app. It scans a curated universe of stock
 
 | Item | Blocker |
 |---|---|
-| Alert history persistence | **LISTO PARA MERGE** — PR #31 (`p1-alert-history-kv`) abierto, fix de cooldown incluido |
-| Discovery watchlist/snapshots | file-store, ephemeral → KV (PR-2 — desbloqueado, siguiente tras PR-1) |
+| Alert history persistence | **DESBLOQUEADO** — PR #31 (`p1-alert-history-kv`) mergeado y verificado en producción (2026-06-12). |
+| Discovery watchlist/snapshots | file-store, ephemeral → KV (PR-2 — desbloqueado, siguiente candidato tras P1-4b) |
 | Radar for strong companies outside portfolio | External screener not integrated yet. Requires smoke evidence + ExternalCandidate schema (Phase 3) |
 | Single-asset live check | Not built yet (Phase 4) |
 | News/thesis explainer | Not built yet, requires news provider decision (Phase 5) |
