@@ -176,15 +176,15 @@ function generateConcentrationAlerts(
 // Main alert generator
 // --------------------------------------------------------------------------
 
-export function generateAlerts(
+export async function generateAlerts(
   portfolioAnalyses: PortfolioAnalysis[],
   stockOpportunities: Opportunity[],
   etfOpportunities: Opportunity[],
   discoveredOpportunities: Opportunity[],
   concentration: ConcentrationData,
   allocationRecommendations: AllocationRecommendation[]
-): Alert[] {
-  const prev = getPreviousStates();
+): Promise<Alert[]> {
+  const prev = await getPreviousStates();
   const allAlerts: Alert[] = [];
 
   // Portfolio state changes
@@ -244,7 +244,7 @@ export function generateAlerts(
     };
   }
 
-  savePreviousStates(newPrev);
+  await savePreviousStates(newPrev);
 
   return allAlerts;
 }

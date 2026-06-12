@@ -2,7 +2,7 @@
 // Produces one Telegram message per day summarizing top opportunities, cash plan, and warnings
 
 import { sendTelegramMessage } from './telegram';
-import { getAlertHistory, saveAlert, createAlert } from './history';
+import { saveAlert, createAlert } from './history';
 import { formatPct } from '../utils/math';
 import type {
   PortfolioAnalysis,
@@ -162,6 +162,6 @@ export async function sendDailyDigest(
     telegramSent: sent,
   });
 
-  saveAlert(alert);
+  await saveAlert(alert);
   return alert;
 }
