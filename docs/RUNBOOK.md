@@ -537,6 +537,34 @@ curl -sI https://www.beaihub.com/api/config/status | grep -i x-vercel-id
 # Si el commit no coincide con el último de main → custom domain no fue promovido
 ```
 
+### Procedimiento de verificación tras un fix de mapping/import (re-import + engine)
+
+Después de desplegar (y promover, si aplica) un fix que cambia `ISIN_TO_TICKER` o el import:
+
+```bash
+BASE="https://www.beaihub.com"
+f="$HOME/Desktop/<tu-export>.csv"   # ver L8 si el nombre tiene paréntesis/espacios
+
+# 1. Re-import — debe persistir en KV sin ISINs desconocidos
+curl -s -X POST "$BASE/api/portfolio/import" -F "csv=@$f" \
+  | jq '{success, saved, saveSource, holdingsUpdated, unknownIsins}'
+# Esperado: success:true, saved:true, saveSource:"kv", unknownIsins:[]
+
+# 2. Verificar que KV tiene los tickers/tipos correctos para los ISINs problemáticos
+curl -s "$BASE/api/portfolio" \
+  | jq '[.config.holdings[] | select(.isin=="US46120E6023" or (.isin|startswith("LU"))) | {isin, ticker, type}]'
+# Esperado: ISRG/stock, ENXF/private_fund, APGM/private_fund
+
+# 3. Re-correr el engine — sin errores "No data for..."
+curl -s -X POST "$BASE/api/engine/run" \
+  -H "Content-Type: application/json" \
+  -d '{"sendDigest": false, "sendAlertMessages": false}' \
+  | jq '{success, errors}'
+# Esperado: success:true, errors:[]
+```
+
+Verificado 2026-06-12 tras PR #30: los 3 pasos OK ✅ (ver CTO_BACKLOG P1-3c).
+
 ### L8: Nombre de archivo con paréntesis en zsh
 
 `Exportación de transacción (2).csv` contiene paréntesis que zsh interpreta como expansión de historial (`event not found: )`). Para evitarlo:

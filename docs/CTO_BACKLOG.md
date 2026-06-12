@@ -254,8 +254,8 @@ Verificación completa en `https://www.beaihub.com`:
 0. **PR-0 (#27): shared KV client refactor — Merged.**
    `src/lib/utils/kv-client.ts` como cliente KV compartido. `engine-store.ts` y `portfolio-store.ts` migrados. 12 tests nuevos (24 suites · 1521 asserts). Sin cambio de comportamiento.
 
-1. **`p1-alert-history-kv`** (PR-1, P1-3): mover `history.ts` (dedupe ring buffer) a KV → alertas no se repiten entre invocaciones de Vercel. **Bloqueado hasta que PR-0 esté merged.**
-2. **`p1-discovery-state-kv`** (PR-2, P1-2): mover watchlist y snapshots a KV con prefijo `discovery:` → trend tracking funciona entre runs. **Bloqueado hasta que PR-0 esté merged.**
+1. **`p1-alert-history-kv`** (PR-1, P1-3): mover `history.ts` (alert history + previous-states / dedupe ring buffer) a KV → alertas no se repiten entre invocaciones de Vercel. **EN CURSO (2026-06-12)** — PR-0 merged, desbloqueado. Alcance: solo infraestructura/dedupe en KV. NO rediseñar scoring ni copy Telegram (eso es P1-4b, después).
+2. **`p1-discovery-state-kv`** (PR-2, P1-2): mover watchlist y snapshots a KV con prefijo `discovery:` → trend tracking funciona entre runs. Desbloqueado (PR-0 merged); siguiente tras PR-1.
 
 ### Fase 3 — Radar amplio de oportunidades
 

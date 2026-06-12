@@ -31,7 +31,7 @@ A personal investment decision-support app. It scans a curated universe of stock
 
 ## Active branch
 
-`main` — Fase 1 completada (2026-06-11). Todos los items P0 de código y verificación cerrados. Sin ramas de feature activas. Próxima fase: Fase 2 (pendiente confirmación de Beatriz).
+`main` — Fase 1 completada (2026-06-11) y hotfix ELTIF (PR #30) verificado en producción (2026-06-12). **Fase 2 autorizada por Beatriz (2026-06-12)**. PR-0 (#27, shared KV client) merged → PR-1 (`p1-alert-history-kv`) desbloqueado y en curso.
 
 ---
 
@@ -78,10 +78,11 @@ A personal investment decision-support app. It scans a curated universe of stock
 - Telegram: `success: true`, bot envió digest ✅
 - Stale-cache bug (PR #20) y env inlining bug (PR #21) corregidos y verificados ✅
 
-**Fase 2 — en curso:**
+**Fase 2 — en curso (autorizada 2026-06-12):**
 - PR-0 (#27): shared KV client refactor — `kv-client.ts` creado, `engine-store.ts` y `portfolio-store.ts` migrados, 12 nuevos tests. Merged.
-- `p1-alert-history-kv` (PR-1): mover history.ts (dedupe ring buffer) a KV — bloqueado hasta que PR-0 esté merged
-- `p1-discovery-state-kv` (PR-2): mover watchlist y snapshots a KV (prefijo `discovery:`) — bloqueado hasta que PR-0 esté merged
+- `p1-alert-history-kv` (PR-1): mover history.ts (alert history + previous-states / dedupe ring buffer) a KV — **EN CURSO** (PR-0 merged ✅). Solo infraestructura/dedupe en KV; sin rediseño de scoring ni copy Telegram.
+- `p1-discovery-state-kv` (PR-2): mover watchlist y snapshots a KV (prefijo `discovery:`) — desbloqueado (PR-0 merged), siguiente tras PR-1.
+- P1-4b (registrado en backlog): alertas Telegram de venta/reducción — depende de PR-1 (alert history KV para anti-spam).
 
 **Not yet built:**
 - Radar for strong companies outside current portfolio with deep drawdowns (Phase 3 — external screener)
@@ -197,8 +198,8 @@ A personal investment decision-support app. It scans a curated universe of stock
 
 | Item | Blocker |
 |---|---|
-| Alert history persistence | file-store only → needs KV extension (PR-1 — blocked until PR-0 #27 is merged) |
-| Discovery watchlist/snapshots | file-store, ephemeral → KV (PR-2 — blocked until PR-0 #27 is merged) |
+| Alert history persistence | **EN CURSO (PR-1 `p1-alert-history-kv`)** — PR-0 #27 merged, desbloqueado |
+| Discovery watchlist/snapshots | file-store, ephemeral → KV (PR-2 — desbloqueado, siguiente tras PR-1) |
 | Radar for strong companies outside portfolio | External screener not integrated yet. Requires smoke evidence + ExternalCandidate schema (Phase 3) |
 | Single-asset live check | Not built yet (Phase 4) |
 | News/thesis explainer | Not built yet, requires news provider decision (Phase 5) |
