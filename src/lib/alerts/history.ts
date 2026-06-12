@@ -17,7 +17,7 @@
 
 import { readJsonFile, writeJsonFile } from '../utils/file-store';
 import { getKvConfig, sanitizeKvError, kvSet, kvGet } from '../utils/kv-client';
-import type { Alert, PreviousStates } from '../types';
+import type { Alert, PreviousStates, PortfolioState, OpportunityState } from '../types';
 
 const ALERT_HISTORY_FILE = 'alert-history.json';
 const PREVIOUS_STATES_FILE = 'previous-states.json';
@@ -118,17 +118,29 @@ export async function savePreviousStates(states: PreviousStates): Promise<void> 
 // Check if an alert should be sent (respects cooldown)
 // --------------------------------------------------------------------------
 // Pure function — operates on the `prev` snapshot passed in, reads no storage.
+//
+// Cooldown semantics:
+//   • If no previous alert exists → always send.
+//   • If currentState differs from the last-alerted state → bypass cooldown.
+//     Capital-protection transitions (e.g. BUY_MORE → REDUCE) must not be
+//     swallowed because a recent alert for the old state is still in-window.
+//   • Same state within cooldown → suppress (anti-spam).
+//   • Same state after cooldown → allow.
 
-export function shouldSendAlert(assetId: string, prev: PreviousStates): boolean {
-  const cooldownHours = parseInt(process.env['ALERT_COOLDOWN_HOURS'] ?? '24', 10);
-  const portfolio = prev.portfolio[assetId];
-  const opp = prev.opportunities[assetId];
-  const entry = portfolio ?? opp;
+export function shouldSendAlert(
+  assetId: string,
+  prev: PreviousStates,
+  currentState?: PortfolioState | OpportunityState,
+): boolean {
+  const entry = prev.portfolio[assetId] ?? prev.opportunities[assetId];
 
   if (!entry?.lastAlertAt) return true;
 
-  const lastAlert = new Date(entry.lastAlertAt);
-  const hoursSince = (Date.now() - lastAlert.getTime()) / (1000 * 60 * 60);
+  // State change always bypasses cooldown.
+  if (currentState !== undefined && entry.state !== currentState) return true;
+
+  const cooldownHours = parseInt(process.env['ALERT_COOLDOWN_HOURS'] ?? '24', 10);
+  const hoursSince = (Date.now() - new Date(entry.lastAlertAt).getTime()) / (1000 * 60 * 60);
   return hoursSince >= cooldownHours;
 }
 

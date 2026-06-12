@@ -214,12 +214,12 @@ async function main(): Promise<void> {
 
   // ── Pure helpers ─────────────────────────────────────────────────────────
 
-  await test('shouldSendAlert: true when no previous alert recorded', () => {
+  await test('shouldSendAlert: true when no previous alert recorded (no currentState)', () => {
     const prev: PreviousStates = { updatedAt: '', portfolio: {}, opportunities: {} };
     assert(H.shouldSendAlert('nvda', prev) === true, 'should allow first alert');
   });
 
-  await test('shouldSendAlert: false within cooldown, true after cooldown', () => {
+  await test('shouldSendAlert: false within cooldown, true after cooldown (same state)', () => {
     const savedCooldown = process.env.ALERT_COOLDOWN_HOURS;
     try {
       delete process.env.ALERT_COOLDOWN_HOURS; // default 24h
@@ -228,14 +228,73 @@ async function main(): Promise<void> {
         portfolio: { nvda: { assetId: 'nvda', state: 'REDUCE', lastAlertAt: new Date().toISOString() } },
         opportunities: {},
       };
-      assert(H.shouldSendAlert('nvda', recent) === false, 'should suppress within 24h cooldown');
+      assert(H.shouldSendAlert('nvda', recent, 'REDUCE') === false, 'should suppress within 24h cooldown for same state');
 
       const old: PreviousStates = {
         updatedAt: '',
         portfolio: { nvda: { assetId: 'nvda', state: 'REDUCE', lastAlertAt: new Date(Date.now() - 48 * 3600 * 1000).toISOString() } },
         opportunities: {},
       };
-      assert(H.shouldSendAlert('nvda', old) === true, 'should allow after cooldown elapsed');
+      assert(H.shouldSendAlert('nvda', old, 'REDUCE') === true, 'should allow after cooldown elapsed');
+    } finally {
+      if (savedCooldown === undefined) delete process.env.ALERT_COOLDOWN_HOURS;
+      else process.env.ALERT_COOLDOWN_HOURS = savedCooldown;
+    }
+  });
+
+  await test('shouldSendAlert: state change bypasses cooldown (BUY_MORE → REDUCE)', () => {
+    const savedCooldown = process.env.ALERT_COOLDOWN_HOURS;
+    try {
+      delete process.env.ALERT_COOLDOWN_HOURS;
+      // lastAlertAt = 1 hour ago — well within the 24h cooldown
+      const prev: PreviousStates = {
+        updatedAt: '',
+        portfolio: {
+          nvda: { assetId: 'nvda', state: 'BUY_MORE', lastAlertAt: new Date(Date.now() - 3600 * 1000).toISOString() },
+        },
+        opportunities: {},
+      };
+      // Same state → suppressed
+      assert(H.shouldSendAlert('nvda', prev, 'BUY_MORE') === false, 'same state within cooldown must be suppressed');
+      // State change → bypass cooldown → must send
+      assert(H.shouldSendAlert('nvda', prev, 'REDUCE') === true, 'BUY_MORE→REDUCE must bypass cooldown');
+    } finally {
+      if (savedCooldown === undefined) delete process.env.ALERT_COOLDOWN_HOURS;
+      else process.env.ALERT_COOLDOWN_HOURS = savedCooldown;
+    }
+  });
+
+  await test('shouldSendAlert: REDUCE → REDUCE within cooldown is suppressed', () => {
+    const savedCooldown = process.env.ALERT_COOLDOWN_HOURS;
+    try {
+      delete process.env.ALERT_COOLDOWN_HOURS;
+      const prev: PreviousStates = {
+        updatedAt: '',
+        portfolio: {
+          nvda: { assetId: 'nvda', state: 'REDUCE', lastAlertAt: new Date(Date.now() - 3600 * 1000).toISOString() },
+        },
+        opportunities: {},
+      };
+      assert(H.shouldSendAlert('nvda', prev, 'REDUCE') === false, 'REDUCE→REDUCE within cooldown must be suppressed');
+    } finally {
+      if (savedCooldown === undefined) delete process.env.ALERT_COOLDOWN_HOURS;
+      else process.env.ALERT_COOLDOWN_HOURS = savedCooldown;
+    }
+  });
+
+  await test('shouldSendAlert: REDUCE → REDUCE after cooldown is allowed', () => {
+    const savedCooldown = process.env.ALERT_COOLDOWN_HOURS;
+    try {
+      delete process.env.ALERT_COOLDOWN_HOURS;
+      const prev: PreviousStates = {
+        updatedAt: '',
+        portfolio: {
+          nvda: { assetId: 'nvda', state: 'REDUCE', lastAlertAt: new Date(Date.now() - 48 * 3600 * 1000).toISOString() },
+        },
+        opportunities: {},
+      };
+      // shouldSendAlert allows it; generator still blocks via stateChanged=false
+      assert(H.shouldSendAlert('nvda', prev, 'REDUCE') === true, 'REDUCE→REDUCE after cooldown should return true from shouldSendAlert');
     } finally {
       if (savedCooldown === undefined) delete process.env.ALERT_COOLDOWN_HOURS;
       else process.env.ALERT_COOLDOWN_HOURS = savedCooldown;

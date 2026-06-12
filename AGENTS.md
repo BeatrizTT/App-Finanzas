@@ -90,7 +90,7 @@ Esto cambiará cuando se implemente autenticación del dashboard (pendiente en `
 
 El estado real y actualizado está en `docs/PROJECT_STATE.md`. No asumir el estado a partir de este archivo.
 
-Resumen a fecha de última actualización de este archivo (2026-06-12, Fase 2 autorizada — PR-1 en curso):
+Resumen a fecha de última actualización de este archivo (2026-06-12, Fase 2 — PR-1 listo para merge):
 - **Hotfix ELTIF (PR #30) verificado en producción 2026-06-12**: import `success:true`, KV con `US46120E6023→ISRG/stock`, `LU3176111881→ENXF/private_fund`, `LU3170240538→APGM/private_fund`, engine `errors:[]`. Los `private_fund` (ELTIF) NO se piden a Twelve Data (excluidos en `daily-engine.ts`).
 - **Precios**: `PRICE_PROVIDER=twelvedata` en Vercel desde Mayo 2026. `priceProvider: "twelvedata"` en `/api/config/status`. **NO** en mock. **NO** cambiar a yahoo (yahoo rate-limita desde Vercel cloud IPs).
 - **Cron**: `CRON_SECRET` configurado. `cronSecretSet: true`. Fail-closed activo. Cron auth verificado 2026-06-11: sin header → 401, header incorrecto → 401, header correcto → 200 ✅.
@@ -118,7 +118,7 @@ Ver `docs/CTO_BACKLOG.md` sección "Roadmap" para detalle completo. Orden actual
 
 **Fase 2 (código — EN CURSO, autorizada 2026-06-12)**:
 0. PR-0 (#27): shared KV client refactor — Merged. `kv-client.ts` creado, `engine-store.ts` + `portfolio-store.ts` migrados, 12 tests nuevos.
-1. `p1-alert-history-kv` (PR-1) — mover `history.ts` (alert history/deduplication) a KV. **EN CURSO.** PR-0 merged. Solo infraestructura/dedupe; NO rediseñar scoring ni copy Telegram.
+1. `p1-alert-history-kv` (PR-1) — historial/dedupe de alertas a KV. **LISTO PARA MERGE** (PR #31). Incluye fix crítico: `shouldSendAlert` bypasa cooldown en cambios de estado (`BUY_MORE → REDUCE` no puede suprimirse). `previous_states.state` = último estado alertado (no último observado). 26 suites, 1549 asserts, TSC OK, build OK. Nota: Vercel muestra "Error" en el PR pero el build es `READY` — es el patrón post-deploy check, no un error de código (documentado en RUNBOOK).
 2. `p1-discovery-state-kv` (PR-2) — mover watchlist y snapshots a KV (prefijo `discovery:`). Desbloqueado; siguiente tras PR-1.
 
 **Branch workflow (regla del propietario)**: cada PR funcional sale de una rama limpia desde `main` (p.ej. `p1-alert-history-kv`). **NO** usar `claude/personal-investing-app-BG2r1` como base — historia divergente, conflictos masivos.

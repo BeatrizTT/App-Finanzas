@@ -41,7 +41,9 @@ function generatePortfolioAlerts(
 
     if (!stateChanged && !newlyActionable) continue;
     if (!ALERT_PORTFOLIO_STATES.includes(currentState) && !stateChanged) continue;
-    if (!shouldSendAlert(assetId, prev)) continue;
+    // Bypass cooldown only when transitioning INTO an alertable state (not for DO_NOTHING/WAIT).
+    const alertableState = ALERT_PORTFOLIO_STATES.includes(currentState) ? currentState : undefined;
+    if (!shouldSendAlert(assetId, prev, alertableState)) continue;
 
     const ticker = analysis.holding.ticker ?? analysis.holding.id.toUpperCase();
     const drawdownStr = `-${analysis.drawdown.maxDrawdown.toFixed(1)}%`;
@@ -97,7 +99,9 @@ function generateOpportunityAlerts(
     const isActionable = ALERT_OPPORTUNITY_STATES.includes(currentState);
 
     if (!isActionable && !stateChanged) continue;
-    if (!shouldSendAlert(assetId, prev)) continue;
+    // Bypass cooldown only when transitioning INTO an alertable state.
+    const alertableState = ALERT_OPPORTUNITY_STATES.includes(currentState) ? currentState : undefined;
+    if (!shouldSendAlert(assetId, prev, alertableState)) continue;
 
     const drawdownStr = `-${opp.drawdown.maxDrawdown.toFixed(1)}%`;
     const priceStr = opp.currentPrice != null
@@ -213,26 +217,33 @@ export async function generateAlerts(
   };
 
   for (const analysis of portfolioAnalyses) {
-    // Use the same ticker derivation used when creating the alert
     const ticker = analysis.holding.ticker ?? analysis.holding.id.toUpperCase();
+    const alertFired = allAlerts.some((a) => a.asset === ticker);
+    const existingEntry = prev.portfolio[analysis.holding.id];
     newPrev.portfolio[analysis.holding.id] = {
       assetId: analysis.holding.id,
-      state: analysis.state,
-      lastAlertAt: allAlerts.some((a) => a.asset === ticker)
+      // Only advance the recorded state when an alert actually fired.
+      // This keeps "last alerted state" semantics: if a transition was not
+      // alerted (e.g. non-alertable state), future runs still detect the
+      // change from the last alerted state.
+      state: alertFired ? analysis.state : (existingEntry?.state ?? analysis.state),
+      lastAlertAt: alertFired
         ? new Date().toISOString()
-        : (prev.portfolio[analysis.holding.id]?.lastAlertAt ?? ''),
+        : (existingEntry?.lastAlertAt ?? ''),
     };
   }
 
   for (const opp of [...stockOpportunities, ...etfOpportunities, ...discoveredOpportunities]) {
     const id = opp.ticker.toLowerCase();
+    const alertFired = allAlerts.some((a) => a.asset === opp.ticker);
+    const existingEntry = prev.opportunities[id];
     newPrev.opportunities[id] = {
       assetId: id,
-      state: opp.state,
+      state: alertFired ? opp.state : (existingEntry?.state ?? opp.state),
       score: opp.score.total,
-      lastAlertAt: allAlerts.some((a) => a.asset === opp.ticker)
+      lastAlertAt: alertFired
         ? new Date().toISOString()
-        : (prev.opportunities[id]?.lastAlertAt ?? ''),
+        : (existingEntry?.lastAlertAt ?? ''),
     };
   }
 

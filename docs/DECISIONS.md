@@ -70,10 +70,17 @@ They are inert (do not affect any code path). They may represent planned feature
 **Rule**: All new KV stores must import from `kv-client.ts`. No copy-paste of the KV helpers. Bracket notation for env vars is enforced in `kv-client.ts` — don't bypass it.
 **Contract unchanged**: public API of both stores is identical before and after. No behavior change.
 
+### KV-first for alert history and previous states (PR-1, Fase 2)
+**Decision**: Alert history (`alerts:history`) and previous-states/dedupe map (`alerts:previous_states`) are stored in KV-first with file-store fallback, following the same pattern as `engine-store.ts` and `portfolio-store.ts`.
+**Reason**: The dedupe mechanism (`shouldSendAlert`) relies on `previous_states` surviving between serverless invocations. With file-store only, `/tmp` resets on every cold start → all alerts re-fire daily regardless of state changes. KV makes deduplication durable across invocations.
+**Cooldown semantics**: Cooldown only suppresses SAME-state repetitions. Any transition INTO a new alertable state bypasses the cooldown — capital-protection alerts (e.g. BUY_MORE → REDUCE) must never be swallowed.
+**Invariant**: `previous_states.state` = "last alerted state", not "last observed state." State is only advanced when an alert actually fires, so unsent transitions are retried on the next run.
+**Implementation**: `history.ts` — `loadJson`/`saveJson` helpers (KV-first, file-store fallback, never throws). `shouldSendAlert` is pure/sync. Bracket notation for KV env vars enforced via `kv-client.ts`.
+
 ### File-store for local dev, ephemeral for discovery state
-**Decision**: Discovery watchlist, snapshots, alert history use file-store. On Vercel this becomes `/tmp/app-finanzas`.
+**Decision**: Discovery watchlist and snapshots use file-store. On Vercel this becomes `/tmp/app-finanzas`.
 **Reason**: Discovery state is advisory, not financial. Losing it between runs is annoying but not dangerous — the next run rebuilds it from live prices.
-**Revisit when**: Discovery state is large enough that rebuilding it every run is expensive, or we need trend tracking (drawdown progression over multiple runs). Then extend KV.
+**Revisit when**: Need trend tracking over multiple runs. Then extend to KV (PR-2, Fase 2).
 
 ---
 
