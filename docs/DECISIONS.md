@@ -77,6 +77,17 @@ They are inert (do not affect any code path). They may represent planned feature
 **Invariant**: `previous_states.state` = "last alerted state", not "last observed state." State is only advanced when an alert actually fires, so unsent transitions are retried on the next run.
 **Implementation**: `history.ts` — `loadJson`/`saveJson` helpers (KV-first, file-store fallback, never throws). `shouldSendAlert` is pure/sync. Bracket notation for KV env vars enforced via `kv-client.ts`.
 
+### REDUCE reminder window for unresolved defensive alerts (P1-4b)
+**Decision** (owner, 2026-06-12): An unresolved `REDUCE` (position stays in REDUCE without the owner acting) re-alerts every `ALERT_REDUCE_REMINDER_DAYS` days (default 3; `0` disables). The reminder message carries a `🔁 Recordatorio` prefix so it is distinguishable from a fresh signal. Each fired reminder resets the window.
+**Reason**: A capital-protection signal must not stay buried forever just because the first alert went unnoticed. With the PR-1 behavior alone, `REDUCE → REDUCE` never re-fired (generator blocked same-state repetitions), burying the exit signal.
+**Scope**: Portfolio holdings only. `REVIEW → REVIEW` does NOT get reminders (future improvement if needed). Opportunity states (`EXIT`/`REVIEW_FOR_TRIM`) are deferred to P1-4c.
+**Implementation**: `shouldSendAlert` applies the reminder window instead of the standard cooldown when `currentState === entry.state === 'REDUCE'`; the generator lets `REDUCE → REDUCE` through to `shouldSendAlert` (a `stateChanged=false` early-exit would make the reminder unreachable). Env var read with bracket notation.
+
+### Defensive Telegram copy for REDUCE / REVIEW (P1-4b)
+**Decision**: Portfolio `REDUCE` and `REVIEW` alerts use dedicated templates instead of the generic portfolio template.
+**Reason**: The generic template showed buy copy ("Plantéate añadir €X–€Y") on REDUCE signals — `suggestedAmountEur` holds the *sell* amount for REDUCE, so the message was actively wrong and dangerous.
+**Copy rules**: suggestive tone ("podrías vender un 20-25%"), never "sell everything", always states the goal (protect gains / lower risk). `REVIEW` distinguishes urgent (drawdown >35%, mirrors the engine override) from preventive (thesis risk). No figures are shown when `currentPrice` is null (unconfirmed EUR price). `priceError` analyses never alert.
+
 ### File-store for local dev, ephemeral for discovery state
 **Decision**: Discovery watchlist and snapshots use file-store. On Vercel this becomes `/tmp/app-finanzas`.
 **Reason**: Discovery state is advisory, not financial. Losing it between runs is annoying but not dangerous — the next run rebuilds it from live prices.

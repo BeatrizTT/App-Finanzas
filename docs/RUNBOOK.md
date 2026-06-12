@@ -583,7 +583,33 @@ Fallback: si KV no está disponible, se usa file-store (`src/data/` en local, `/
 - `previous_states.state` = **"último estado que generó una alerta"** (no el estado observado más recientemente). Esto garantiza que transiciones no alertadas se reintentan en la siguiente ejecución.
 - Cooldown (`ALERT_COOLDOWN_HOURS`, default 24h) **solo se aplica a repeticiones del mismo estado**.
 - **Cualquier transición a un estado alertable** (p.ej. `BUY_MORE → REDUCE`) **bypasa el cooldown**. Una alerta de protección de capital no se puede suprimir por un cooldown activo.
-- `REDUCE → REDUCE` dentro del cooldown: suprimido. `REDUCE → REDUCE` después del cooldown: `shouldSendAlert` devuelve `true`, pero el generador ya bloquea mismos-estados (`stateChanged = false`) — no hay re-alerta. **Nota**: hay una decisión pendiente para P1-4b sobre recordatorios de alertas defensivas persistentes (REDUCE sin resolver durante 3/7 días) — ver `CTO_BACKLOG.md` § P1-4b "DECISIÓN PENDIENTE".
+- `REVIEW → REVIEW`: no se re-alerta nunca (el generador bloquea repeticiones del mismo estado). Recordatorios para REVIEW persistente quedan como mejora futura si se ve necesario.
+
+### Recordatorio REDUCE sin resolver (P1-4b)
+
+Decisión del propietario (2026-06-12): una posición que sigue en `REDUCE` sin que se haya actuado **se recuerda cada N días** — una señal defensiva no puede quedar enterrada para siempre porque la primera alerta pasó desapercibida.
+
+- `REDUCE` nuevo (transición desde otro estado) → alerta inmediata, bypasa cooldown.
+- `REDUCE → REDUCE` dentro de la ventana de recordatorio → suprimido.
+- `REDUCE → REDUCE` pasada la ventana → re-alerta con prefijo `🔁 Recordatorio` (distinguible de una señal nueva). Cada recordatorio reinicia la ventana.
+
+**Variable**: `ALERT_REDUCE_REMINDER_DAYS`
+- Default: `3` (no hace falta configurarla en Vercel si se quiere el default).
+- `0` = recordatorios desactivados (`REDUCE → REDUCE` no se repite nunca, comportamiento PR-1).
+- Valor inválido → se usa el default 3.
+- El código la lee con bracket notation (`process.env['ALERT_REDUCE_REMINDER_DAYS']`) — regla anti-inlining de Turbopack.
+
+**No es tiempo real**: la alerta se evalúa en cada ejecución del engine (cron 07:00/16:00 UTC L-V o run manual). Más frecuencia de ejecución sería una fase posterior.
+
+### Copy defensivo de Telegram (P1-4b)
+
+`REDUCE` y `REVIEW` de cartera tienen templates propios (en `generator.ts`), distintos del template genérico de compra:
+
+- `REDUCE` (🟡): explica la causa (beneficio/concentración/target, vía `reasons` del engine), sugiere en tono no imperativo ("podrías vender un 20-25%"), y aclara que **no significa vender todo**. Nunca contiene copy de compra ("Plantéate añadir").
+- `REDUCE` con `currentPrice: null` (precio EUR no confirmado en ese run): se alerta igualmente (p.ej. por concentración) pero **sin cifras** — nunca se muestran importes que podrían ser incorrectos.
+- `REVIEW` (⚠️): si la causa es caída >35%, copy urgente ("Caída fuerte: revisa antes de actuar"); si es riesgo de tesis, copy preventivo ("No es urgente, pero conviene revisarla"). Siempre cierra con: no compres más todavía, revisa la tesis, no significa vender automáticamente.
+- `priceError` → no se genera alerta (sin datos no hay señal).
+- Oportunidades (`EXIT` / `REVIEW_FOR_TRIM`) **no** están cubiertas — siguen con template genérico hasta P1-4c.
 
 ### Verificar alert history en producción
 

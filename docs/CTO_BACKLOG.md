@@ -1,6 +1,6 @@
 # CTO Backlog — App Finanzas
 
-Last updated: 2026-06-12 (P1-3c verificado en producción ✅ — producción limpia)
+Last updated: 2026-06-12 (P1-4b implementado — alertas defensivas Telegram + recordatorio REDUCE)
 
 Ordered by priority. P0 = production is broken or silent without these. Do not advance to P1 until P0 is solid.
 
@@ -154,42 +154,28 @@ Ambos son **ELTIF** (European Long-Term Investment Fund): fondos de private equi
 
 ---
 
-### P1-4b: Alertas de venta / reducción por Telegram (siguiente prioridad recomendada tras merge de PR-1 #31)
+### P1-4b: Alertas de venta / reducción por Telegram ✓ IMPLEMENTADO (2026-06-12, rama `p1-telegram-sell-reduce-alerts`)
 
 **Descripción**: recibir un mensaje de Telegram cada vez que la app considera que es buen momento para vender, reducir o revisar seriamente una posición que ya se tiene.
 
-**Triggers definidos**:
-- `REDUCIR` (estado `REDUCE`): alerta inmediata.
-- Equivalente a venta fuerte / thesis broken / riesgo alto: alerta inmediata.
-- `REVISAR` (estado `REVIEW`): **no** alerta urgente salvo que el motivo sea riesgo alto o deterioro claro del activo (distinguir por `manualThesisRisk`).
+**Implementado** (decisiones CTO 2026-06-12):
+- Templates defensivos dedicados para `REDUCE` (🟡) y `REVIEW` (⚠️) de cartera en `generator.ts` — el template genérico mostraba copy de compra ("Plantéate añadir") sobre el importe de *venta* en REDUCE.
+- `REDUCE` copy: tono sugerente ("podrías vender un 20-25%"), causa explícita vía `reasons` del engine (beneficio / concentración / target), y siempre "no significa vender todo: el objetivo es proteger ganancias y bajar el riesgo".
+- `REVIEW` copy: urgente si caída >35% ("Caída fuerte: revisa antes de actuar"), preventivo si riesgo de tesis ("No es urgente, pero conviene revisarla"). Siempre: no compres más todavía / revisa la tesis / no significa vender automáticamente.
+- **Recordatorio REDUCE sin resolver** (decisión resuelta, Opción B): `REDUCE → REDUCE` re-alerta cada `ALERT_REDUCE_REMINDER_DAYS` días (default 3, `0` desactiva) con prefijo `🔁 Recordatorio`. Implementado en `shouldSendAlert` (ventana de recordatorio en lugar del cooldown estándar) + gate del generador (`reduceReminder` deja pasar el mismo-estado hasta `shouldSendAlert` — sin esto el recordatorio era inalcanzable).
+- `REVIEW → REVIEW`: sin recordatorio (mejora futura si hace falta).
+- Guards de calidad de datos: `priceError` → sin alerta; `currentPrice: null` sin `priceError` → alerta defensiva (p.ej. concentración) pero **sin cifras**.
+- No implementado a propósito: `firstAlertedAt` no fue necesario — `lastAlertAt` + ventana deslizante cumple el requisito con menos estado.
 
-**Formato del mensaje** (lenguaje simple, no jerga):
-- Qué posición es (nombre + ticker).
-- Qué ha cambiado (precio, distancia desde máximo, señal anterior vs nueva).
-- Por qué la app recomienda vender / reducir / revisar.
-- Qué acción prudente sugiere: vender todo, reducir parte (20-30%), no comprar más, o revisar tesis.
+**Anti-spam**: cubierto por PR-1 (#31) + ventana de recordatorio. Cooldown solo para repeticiones de mismo estado; bypass en cambios de estado; `REDUCE` persistente cada 3 días.
 
-**Anti-spam**: no repetir la misma alerta todos los días si el estado no ha cambiado. Cubierto por PR-1 (#31): alert history + previous-states en KV, cooldown solo para mismo estado, bypass en cambios de estado.
+**Alcance**: solo posiciones de cartera. Oportunidades `EXIT` / `REVIEW_FOR_TRIM` quedan para **P1-4c** (no mezclar cartera y discovery). No se tocó engine, scoring, thresholds, providers ni claves KV.
 
-**Dependencias**:
+**No es tiempo real**: la alerta se evalúa en cada engine run (cron 07:00/16:00 UTC L-V o manual). Más frecuencia sería una fase posterior.
+
+**Dependencias** (cerradas):
 1. P1-3 (alert history en KV) — **PR #31 mergeado y verificado en producción (2026-06-12)** ✅.
 2. P1-3c verificado en producción (ELTIF + ISRG limpios) — **DONE 2026-06-12** ✅.
-
-**Qué NO hacer**:
-- No disparar alerta `REDUCE` si `currentPrice: null` o datos stale.
-- No repetir sin dedupe en KV.
-- No cambiar los umbrales globales de scoring para generar más / menos señales.
-
-**DECISIÓN PENDIENTE (registrada 2026-06-12, a resolver en P1-4b): recordatorios de alertas defensivas no resueltas.**
-
-Comportamiento actual tras PR-1 (#31): `REDUCE → REDUCE` no re-alerta nunca, ni siquiera después del cooldown, porque el generador bloquea repeticiones del mismo estado (`stateChanged = false`). Para PR-1 esto es aceptable como anti-spam, pero para protección de capital tiene un riesgo: una señal de salida crítica puede quedar enterrada si la primera alerta pasa desapercibida.
-
-Propuesta a evaluar en P1-4b:
-- `REDUCE` nuevo (transición) → alerta inmediata (ya implementado en PR-1: bypass del cooldown).
-- `REDUCE` persistente sin cambio → sin spam diario (ya implementado).
-- `REDUCE` persistente durante 3/7 días sin resolverse → **recordatorio** (pendiente de decidir: intervalo, si aplica también a `REVIEW` con riesgo alto, y cómo se marca como "resuelto" — venta, cambio de estado, o ack manual).
-
-Implementación candidata: añadir `firstAlertedAt` a `PreviousStateEntry` y comparar contra un `ALERT_REMINDER_DAYS` configurable. No implementar sin decisión explícita de Beatriz sobre el intervalo y el criterio de resolución.
 
 ---
 
@@ -266,8 +252,9 @@ Verificación completa en `https://www.beaihub.com`:
    `src/lib/utils/kv-client.ts` como cliente KV compartido. `engine-store.ts` y `portfolio-store.ts` migrados. 12 tests nuevos (24 suites · 1521 asserts). Sin cambio de comportamiento.
 
 1. **`p1-alert-history-kv`** (PR-1, P1-3): mover `history.ts` (alert history + previous-states / dedupe ring buffer) a KV → alertas no se repiten entre invocaciones de Vercel. **MERGEADO Y VERIFICADO EN PRODUCCIÓN — PR #31, commit `270887a` (2026-06-12)**. Incluye fix crítico de Codex Review: cambio de estado bypasa cooldown (`BUY_MORE → REDUCE` dentro de 24h ya no se suprime); `previous_states.state` = último estado alertado, no último observado. 26 suites · 1549 asserts · TSC OK · build OK. Verificación prod: `kvConfigured:true`, engine `errors:[]` (×2), `/api/alerts` JSON válido `count:0` (correcto — `saveAlerts` solo escribe historial con `sendAlertMessages !== false`; ver PROJECT_STATE § "Verificación de producción PR-1").
-2. **P1-4b `telegram-sell-reduce-alerts`**: alertas Telegram de venta/reducción — **SIGUIENTE PRIORIDAD RECOMENDADA tras merge de PR-1** (ver sección P1-4b arriba, incluye decisión pendiente sobre recordatorios). Protección de capital antes que discovery state.
-3. **`p1-discovery-state-kv`** (PR-2, P1-2): mover watchlist y snapshots a KV con prefijo `discovery:` → trend tracking funciona entre runs. Desbloqueado (PR-0 merged); **queda después de P1-4b salvo decisión explícita de Beatriz**.
+2. **P1-4b `telegram-sell-reduce-alerts`**: alertas Telegram de venta/reducción — **IMPLEMENTADO (2026-06-12, rama `p1-telegram-sell-reduce-alerts`)**. Templates defensivos REDUCE/REVIEW + recordatorio `REDUCE → REDUCE` cada `ALERT_REDUCE_REMINDER_DAYS` días (default 3, decisión Opción B resuelta). 26 suites · 1563 asserts · TSC OK · build OK. Ver sección P1-4b arriba. Oportunidades defensivas → P1-4c.
+3. **`p1-discovery-state-kv`** (PR-2, P1-2): mover watchlist y snapshots a KV con prefijo `discovery:` → trend tracking funciona entre runs. Desbloqueado (PR-0 merged); **siguiente candidato tras merge de P1-4b salvo decisión explícita de Beatriz**.
+4. **P1-4c (registrado, sin iniciar)**: templates defensivos para oportunidades (`EXIT` / `REVIEW_FOR_TRIM`) — hoy se alertan con template genérico. Separado de P1-4b a propósito (no mezclar cartera y discovery).
 
 ### Fase 3 — Radar amplio de oportunidades
 

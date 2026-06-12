@@ -90,7 +90,7 @@ Esto cambiará cuando se implemente autenticación del dashboard (pendiente en `
 
 El estado real y actualizado está en `docs/PROJECT_STATE.md`. No asumir el estado a partir de este archivo.
 
-Resumen a fecha de última actualización de este archivo (2026-06-12, Fase 2 — PR-1 mergeado y verificado en producción):
+Resumen a fecha de última actualización de este archivo (2026-06-12, Fase 2 — PR-1 verificado en producción; P1-4b implementado en rama):
 - **PR-1 (#31, `p1-alert-history-kv`) verificado en producción 2026-06-12**: merge a `main` (commit `270887a`), Vercel READY. `/api/config/status` → `kvConfigured:true`, `priceProvider:"twelvedata"`. CSV import `saved:true`, `saveSource:"kv"`, `holdingsUpdated:16`. Engine `errors:[]` (×2). `/api/alerts?limit=5` → `count:0` JSON válido (correcto: `saveAlerts` solo escribe el ring buffer cuando `sendAlertMessages !== false`; el test corrió con `false`. `force-dynamic` + lectura KV operativos). Alert history + previous states ahora KV-first.
 - **Hotfix ELTIF (PR #30) verificado en producción 2026-06-12**: import `success:true`, KV con `US46120E6023→ISRG/stock`, `LU3176111881→ENXF/private_fund`, `LU3170240538→APGM/private_fund`, engine `errors:[]`. Los `private_fund` (ELTIF) NO se piden a Twelve Data (excluidos en `daily-engine.ts`).
 - **Precios**: `PRICE_PROVIDER=twelvedata` en Vercel desde Mayo 2026. `priceProvider: "twelvedata"` en `/api/config/status`. **NO** en mock. **NO** cambiar a yahoo (yahoo rate-limita desde Vercel cloud IPs).
@@ -120,8 +120,8 @@ Ver `docs/CTO_BACKLOG.md` sección "Roadmap" para detalle completo. Orden actual
 **Fase 2 (código — EN CURSO, autorizada 2026-06-12)**:
 0. PR-0 (#27): shared KV client refactor — Merged. `kv-client.ts` creado, `engine-store.ts` + `portfolio-store.ts` migrados, 12 tests nuevos.
 1. `p1-alert-history-kv` (PR-1) — historial/dedupe de alertas a KV. **MERGEADO Y VERIFICADO EN PRODUCCIÓN** (PR #31, commit `270887a`, 2026-06-12). Incluye fix crítico: `shouldSendAlert` bypasa cooldown en cambios de estado (`BUY_MORE → REDUCE` no puede suprimirse). `previous_states.state` = último estado alertado (no último observado). 26 suites, 1549 asserts, TSC OK, build OK.
-2. **P1-4b `telegram-sell-reduce-alerts`** — alertas Telegram de venta/reducción. **Siguiente prioridad recomendada** (protección de capital antes que discovery state). Incluye decisión pendiente sobre recordatorios de alertas defensivas no resueltas (ver `CTO_BACKLOG.md` § P1-4b).
-3. `p1-discovery-state-kv` (PR-2) — mover watchlist y snapshots a KV (prefijo `discovery:`). Desbloqueado; candidato tras P1-4b salvo decisión explícita de reordenar.
+2. **P1-4b `telegram-sell-reduce-alerts`** — alertas defensivas Telegram (REDUCE/REVIEW de cartera). **IMPLEMENTADO** (2026-06-12, rama `p1-telegram-sell-reduce-alerts`, decisiones CTO registradas en `CTO_BACKLOG.md` § P1-4b y `DECISIONS.md`). Templates dedicados + recordatorio `REDUCE → REDUCE` cada `ALERT_REDUCE_REMINDER_DAYS` días (default 3, `0` desactiva). No cubre oportunidades `EXIT`/`REVIEW_FOR_TRIM` (P1-4c). 26 suites, 1563 asserts, TSC OK, build OK.
+3. `p1-discovery-state-kv` (PR-2) — mover watchlist y snapshots a KV (prefijo `discovery:`). Desbloqueado; siguiente candidato tras merge de P1-4b salvo decisión explícita de reordenar.
 
 **Branch workflow (regla del propietario)**: cada PR funcional sale de una rama limpia desde `main` (p.ej. `p1-alert-history-kv`). **NO** usar `claude/personal-investing-app-BG2r1` como base — historia divergente, conflictos masivos.
 

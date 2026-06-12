@@ -18,6 +18,73 @@ const ALERT_PORTFOLIO_STATES: PortfolioState[] = ['BUY_MORE', 'BUY_PARTIAL', 'BU
 const ALERT_OPPORTUNITY_STATES: OpportunityState[] = ['BUY', 'READY_TO_BUY', 'REVIEW_FOR_TRIM', 'EXIT'];
 
 // --------------------------------------------------------------------------
+// Defensive Telegram templates (P1-4b) — REDUCE and REVIEW for portfolio
+// holdings. Plain language, suggestive tone (never "sell everything"), and
+// no buy copy ("Plantéate añadir") on a sell/reduce signal.
+// --------------------------------------------------------------------------
+
+const WINDOW_LABELS: Record<string, string> = { '30d': '30 días', '60d': '60 días', '90d': '90 días' };
+
+function buildReduceMessage(
+  analysis: PortfolioAnalysis,
+  prevState: PortfolioState | undefined,
+  stateChanged: boolean,
+  isReminder: boolean,
+): string {
+  const ticker = analysis.holding.ticker ?? analysis.holding.id.toUpperCase();
+  const typeEs = analysis.holding.type === 'etf' ? 'ETF' : 'Acción';
+  // Engine converts portfolio prices to EUR before analysis — € is always correct here.
+  const hasPrice = analysis.currentPrice != null;
+  const priceStr = hasPrice ? ` | Precio: €${analysis.currentPrice!.toFixed(2)}` : '';
+
+  // The engine's sell-guidance reason is imperative ("Vende el 20-25% ahora…");
+  // the template has its own softer action line, so skip it to avoid duplication.
+  const reasons = analysis.reasons.filter((r) => !r.startsWith('Vende el 20-25%')).slice(0, 4);
+
+  let message = isReminder
+    ? `🔁 *Recordatorio* — *${ticker}* sigue en zona de reducir\n`
+    : `🟡 *${ticker}* — Considera reducir una parte\n`;
+  message += `${analysis.holding.name} | ${typeEs}${priceStr}\n\n`;
+  message += `*Por qué aparece esta alerta:*\n${reasons.map((r) => `• ${r}`).join('\n')}\n\n`;
+  if (hasPrice && analysis.suggestedAmountEur.max > 0) {
+    message += `*Acción prudente:* podrías vender un 20-25% de la posición (aprox. €${analysis.suggestedAmountEur.min}–€${analysis.suggestedAmountEur.max}).\n`;
+  } else {
+    // No confirmed EUR price this run — never show figures that could be wrong.
+    message += `*Acción prudente:* considera reducir una parte de la posición. Sin precio EUR confirmado en esta ejecución, no se muestran cifras.\n`;
+  }
+  message += `Esto no significa vender todo: el objetivo es proteger ganancias y bajar el riesgo.`;
+  if (stateChanged && prevState) message += `\n\n_Antes era: ${prevState}_`;
+  return message;
+}
+
+function buildReviewMessage(
+  analysis: PortfolioAnalysis,
+  prevState: PortfolioState | undefined,
+  stateChanged: boolean,
+): string {
+  const ticker = analysis.holding.ticker ?? analysis.holding.id.toUpperCase();
+  const typeEs = analysis.holding.type === 'etf' ? 'ETF' : 'Acción';
+  const priceStr = analysis.currentPrice != null ? ` | Precio: €${analysis.currentPrice.toFixed(2)}` : '';
+  // Mirrors the engine's deep-drawdown REVIEW override (engine.ts: maxDrawdown > 35).
+  const deepDrop = analysis.drawdown.maxDrawdown > 35;
+  const windowLabel = WINDOW_LABELS[analysis.drawdown.primaryWindow] ?? analysis.drawdown.primaryWindow;
+
+  let message = deepDrop
+    ? `⚠️ *${ticker}* — Caída fuerte: revisa antes de actuar\n`
+    : `⚠️ *${ticker}* — Revisa tu tesis antes de seguir\n`;
+  message += `${analysis.holding.name} | ${typeEs}${priceStr}\n\n`;
+  if (deepDrop) {
+    message += `*Qué está pasando:* ha caído un ${analysis.drawdown.maxDrawdown.toFixed(1)}% desde su máximo de ${windowLabel}. Una caída así puede deberse a un problema concreto de la empresa (noticias, resultados, regulación), no solo al mercado.\n\n`;
+  } else {
+    message += `*Qué está pasando:* hay señales de riesgo en la tesis de esta posición. No es urgente, pero conviene revisarla con calma.\n\n`;
+  }
+  message += `*Por qué:*\n${analysis.reasons.slice(0, 3).map((r) => `• ${r}`).join('\n')}\n\n`;
+  message += `*Qué hacer:* no compres más todavía. Revisa si la tesis (el motivo por el que invertiste) sigue siendo válida. Esto no significa vender automáticamente.`;
+  if (stateChanged && prevState) message += `\n\n_Antes era: ${prevState}_`;
+  return message;
+}
+
+// --------------------------------------------------------------------------
 // Portfolio change alerts
 // --------------------------------------------------------------------------
 
@@ -38,29 +105,41 @@ function generatePortfolioAlerts(
     // or when this asset has no previous record at all (first run).
     const stateChanged = prevState !== undefined && prevState !== currentState;
     const newlyActionable = prevState === undefined && ALERT_PORTFOLIO_STATES.includes(currentState);
+    // P1-4b: an unresolved REDUCE must reach shouldSendAlert — the reminder
+    // window (ALERT_REDUCE_REMINDER_DAYS) decides there whether to re-alert.
+    // Without this, stateChanged=false would bury the defensive signal forever.
+    const reduceReminder = prevState === 'REDUCE' && currentState === 'REDUCE';
 
-    if (!stateChanged && !newlyActionable) continue;
+    if (!stateChanged && !newlyActionable && !reduceReminder) continue;
     if (!ALERT_PORTFOLIO_STATES.includes(currentState) && !stateChanged) continue;
     // Bypass cooldown only when transitioning INTO an alertable state (not for DO_NOTHING/WAIT).
     const alertableState = ALERT_PORTFOLIO_STATES.includes(currentState) ? currentState : undefined;
     if (!shouldSendAlert(assetId, prev, alertableState)) continue;
 
     const ticker = analysis.holding.ticker ?? analysis.holding.id.toUpperCase();
-    const drawdownStr = `-${analysis.drawdown.maxDrawdown.toFixed(1)}%`;
-    const priceStr = analysis.currentPrice != null
-      ? `${analysis.holding.currency === 'EUR' ? '€' : '$'}${analysis.currentPrice.toFixed(2)}`
-      : '—';
-    const confidenceEs = analysis.confidence === 'high' ? 'ALTA' : analysis.confidence === 'medium' ? 'MEDIA' : 'BAJA';
 
-    let message = `📊 *${ticker}* — Alerta de cartera\n`;
-    message += `Tipo: ${analysis.holding.type === 'etf' ? 'ETF' : 'Acción'}\n`;
-    message += `Estado: \`${currentState}\`${stateChanged ? ` (antes: ${prevState})` : ''}\n`;
-    message += `Precio: ${priceStr} | Caída desde máximo (${analysis.drawdown.primaryWindow}): ${drawdownStr}\n\n`;
-    message += `*Por qué:*\n${analysis.reasons.slice(0, 3).map((r) => `• ${r}`).join('\n')}\n\n`;
-    if (analysis.suggestedAmountEur.max > 0) {
-      message += `*Sugerencia:* Plantéate añadir €${analysis.suggestedAmountEur.min}–€${analysis.suggestedAmountEur.max}\n`;
+    let message: string;
+    if (currentState === 'REDUCE') {
+      message = buildReduceMessage(analysis, prevState, stateChanged, reduceReminder);
+    } else if (currentState === 'REVIEW') {
+      message = buildReviewMessage(analysis, prevState, stateChanged);
+    } else {
+      const drawdownStr = `-${analysis.drawdown.maxDrawdown.toFixed(1)}%`;
+      const priceStr = analysis.currentPrice != null
+        ? `${analysis.holding.currency === 'EUR' ? '€' : '$'}${analysis.currentPrice.toFixed(2)}`
+        : '—';
+      const confidenceEs = analysis.confidence === 'high' ? 'ALTA' : analysis.confidence === 'medium' ? 'MEDIA' : 'BAJA';
+
+      message = `📊 *${ticker}* — Alerta de cartera\n`;
+      message += `Tipo: ${analysis.holding.type === 'etf' ? 'ETF' : 'Acción'}\n`;
+      message += `Estado: \`${currentState}\`${stateChanged ? ` (antes: ${prevState})` : ''}\n`;
+      message += `Precio: ${priceStr} | Caída desde máximo (${analysis.drawdown.primaryWindow}): ${drawdownStr}\n\n`;
+      message += `*Por qué:*\n${analysis.reasons.slice(0, 3).map((r) => `• ${r}`).join('\n')}\n\n`;
+      if (analysis.suggestedAmountEur.max > 0) {
+        message += `*Sugerencia:* Plantéate añadir €${analysis.suggestedAmountEur.min}–€${analysis.suggestedAmountEur.max}\n`;
+      }
+      message += `*Confianza:* ${confidenceEs}`;
     }
-    message += `*Confianza:* ${confidenceEs}`;
 
     alerts.push(
       createAlert({

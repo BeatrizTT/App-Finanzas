@@ -73,7 +73,11 @@ async function withKv(
   }
 }
 
-function mkAnalysis(id: string, state: import('../../types').PortfolioState): PortfolioAnalysis {
+function mkAnalysis(
+  id: string,
+  state: import('../../types').PortfolioState,
+  overrides: Partial<Omit<PortfolioAnalysis, 'holding'>> = {},
+): PortfolioAnalysis {
   return {
     holding: {
       id,
@@ -97,6 +101,21 @@ function mkAnalysis(id: string, state: import('../../types').PortfolioState): Po
     reasons: ['test reason'],
     concentrationPenalty: 0,
     confidence: 'medium',
+    ...overrides,
+  };
+}
+
+function mkPrev(state: import('../../types').PortfolioState, hoursAgo: number): PreviousStates {
+  return {
+    updatedAt: '',
+    portfolio: {
+      nvda: {
+        assetId: 'nvda',
+        state,
+        lastAlertAt: new Date(Date.now() - hoursAgo * 3600 * 1000).toISOString(),
+      },
+    },
+    opportunities: {},
   };
 }
 
@@ -189,6 +208,176 @@ async function main(): Promise<void> {
         saved.portfolio['nvda']?.state === 'BUY_MORE',
         `expected last-alerted state BUY_MORE preserved, got ${String(saved.portfolio['nvda']?.state)}`,
       );
+    });
+  });
+
+  // ── P1-4b: REDUCE reminder window ────────────────────────────────────────
+
+  await test('REDUCE → REDUCE at 2 days does not fire (within 3-day reminder window)', async () => {
+    const saved = process.env.ALERT_REDUCE_REMINDER_DAYS;
+    try {
+      delete process.env.ALERT_REDUCE_REMINDER_DAYS; // default 3
+      await withKv({ 'alerts:previous_states': mkPrev('REDUCE', 48), 'alerts:history': [] }, async () => {
+        const alerts = await G.generateAlerts(
+          [mkAnalysis('nvda', 'REDUCE')], [], [], [], EMPTY_CONCENTRATION, [],
+        );
+        assert(alerts.length === 0, `expected 0 alerts at 2 days, got ${alerts.length}`);
+      });
+    } finally {
+      if (saved === undefined) delete process.env.ALERT_REDUCE_REMINDER_DAYS;
+      else process.env.ALERT_REDUCE_REMINDER_DAYS = saved;
+    }
+  });
+
+  await test('REDUCE → REDUCE at 4 days fires a reminder with 🔁 prefix', async () => {
+    const saved = process.env.ALERT_REDUCE_REMINDER_DAYS;
+    try {
+      delete process.env.ALERT_REDUCE_REMINDER_DAYS;
+      await withKv({ 'alerts:previous_states': mkPrev('REDUCE', 96), 'alerts:history': [] }, async (store) => {
+        const alerts = await G.generateAlerts(
+          [mkAnalysis('nvda', 'REDUCE')], [], [], [], EMPTY_CONCENTRATION, [],
+        );
+        assert(alerts.length === 1, `expected 1 reminder alert at 4 days, got ${alerts.length}`);
+        assert(alerts[0].message.includes('🔁'), 'reminder must carry the 🔁 prefix');
+        assert(alerts[0].message.includes('Recordatorio'), 'reminder must say Recordatorio');
+        // Reminder resets the clock: lastAlertAt must be refreshed for the next 3-day window.
+        const savedStates = store['alerts:previous_states'] as PreviousStates;
+        const entry = savedStates.portfolio['nvda'];
+        assert(entry?.state === 'REDUCE', 'state stays REDUCE after reminder');
+        const hoursSince = (Date.now() - new Date(entry!.lastAlertAt!).getTime()) / 3600000;
+        assert(hoursSince < 1, 'lastAlertAt must be refreshed when the reminder fires');
+      });
+    } finally {
+      if (saved === undefined) delete process.env.ALERT_REDUCE_REMINDER_DAYS;
+      else process.env.ALERT_REDUCE_REMINDER_DAYS = saved;
+    }
+  });
+
+  await test('REDUCE → REDUCE with ALERT_REDUCE_REMINDER_DAYS=0: no reminder ever', async () => {
+    const saved = process.env.ALERT_REDUCE_REMINDER_DAYS;
+    try {
+      process.env.ALERT_REDUCE_REMINDER_DAYS = '0';
+      await withKv({ 'alerts:previous_states': mkPrev('REDUCE', 240), 'alerts:history': [] }, async () => {
+        const alerts = await G.generateAlerts(
+          [mkAnalysis('nvda', 'REDUCE')], [], [], [], EMPTY_CONCENTRATION, [],
+        );
+        assert(alerts.length === 0, `reminders disabled → expected 0 alerts after 10 days, got ${alerts.length}`);
+      });
+    } finally {
+      if (saved === undefined) delete process.env.ALERT_REDUCE_REMINDER_DAYS;
+      else process.env.ALERT_REDUCE_REMINDER_DAYS = saved;
+    }
+  });
+
+  await test('REVIEW → REVIEW does not re-alert (no reminder for REVIEW in P1-4b)', async () => {
+    await withKv({ 'alerts:previous_states': mkPrev('REVIEW', 96), 'alerts:history': [] }, async () => {
+      const alerts = await G.generateAlerts(
+        [mkAnalysis('nvda', 'REVIEW')], [], [], [], EMPTY_CONCENTRATION, [],
+      );
+      assert(alerts.length === 0, `expected 0 alerts for persistent REVIEW, got ${alerts.length}`);
+    });
+  });
+
+  // ── P1-4b: defensive copy ────────────────────────────────────────────────
+
+  await test('REDUCE template: no buy copy ("añadir"), suggestive sell guidance', async () => {
+    await withKv({ 'alerts:previous_states': mkPrev('DO_NOTHING', 96), 'alerts:history': [] }, async () => {
+      const alerts = await G.generateAlerts(
+        [mkAnalysis('nvda', 'REDUCE', {
+          unrealizedPnlPct: 73,
+          reasons: ['Ganancia en papel de +73% — cerca de máximos. Considera vender un 20-30% para asegurar beneficios y liberar capital'],
+          suggestedAmountEur: { min: 1200, max: 1500 },
+        })], [], [], [], EMPTY_CONCENTRATION, [],
+      );
+      assert(alerts.length === 1, `expected 1 REDUCE alert, got ${alerts.length}`);
+      const msg = alerts[0].message;
+      assert(!msg.includes('añadir'), 'REDUCE message must never contain buy copy ("añadir")');
+      assert(msg.includes('🟡'), 'REDUCE message uses 🟡 (action, not panic)');
+      assert(msg.includes('reducir'), 'REDUCE message mentions reducir');
+      assert(msg.includes('podrías vender un 20-25%'), 'sell guidance is suggestive, not imperative');
+      assert(msg.includes('€1200–€1500'), 'sell amounts come from suggestedAmountEur');
+      assert(msg.includes('no significa vender todo'), 'must clarify partial reduction');
+      assert(msg.includes('Antes era: DO_NOTHING'), 'transition shows previous state');
+    });
+  });
+
+  await test('REDUCE template: engine sell-guidance reason is not duplicated in Por qué', async () => {
+    await withKv({ 'alerts:previous_states': mkPrev('DO_NOTHING', 96), 'alerts:history': [] }, async () => {
+      const alerts = await G.generateAlerts(
+        [mkAnalysis('nvda', 'REDUCE', {
+          reasons: [
+            'Has superado tu precio objetivo (+40% de ganancia). Es un buen momento para vender una parte y asegurar beneficios.',
+            'Vende el 20-25% ahora = aprox. €1200–€1500. El resto: el motor te avisará si toca reducir de nuevo. También puedes poner un stop-loss del 10% desde el precio actual para proteger ganancias.',
+          ],
+        })], [], [], [], EMPTY_CONCENTRATION, [],
+      );
+      assert(alerts.length === 1, `expected 1 alert, got ${alerts.length}`);
+      const msg = alerts[0].message;
+      assert(msg.includes('precio objetivo'), 'cause reason (target price) is shown');
+      assert(!msg.includes('Vende el 20-25% ahora'), 'imperative engine sell line is replaced by the softer template action line');
+    });
+  });
+
+  await test('REVIEW template: deep drawdown (>35%) uses urgent copy with caída', async () => {
+    await withKv({ 'alerts:previous_states': mkPrev('BUY_PARTIAL', 96), 'alerts:history': [] }, async () => {
+      const alerts = await G.generateAlerts(
+        [mkAnalysis('nvda', 'REVIEW', {
+          drawdown: { drawdown30d: 20, drawdown60d: 30, drawdown90d: 38.2, maxDrawdown: 38.2, primaryWindow: '90d' },
+          reasons: ['Bajó un 38.2% desde el máximo de 90 días'],
+        })], [], [], [], EMPTY_CONCENTRATION, [],
+      );
+      assert(alerts.length === 1, `expected 1 REVIEW alert, got ${alerts.length}`);
+      const msg = alerts[0].message;
+      assert(msg.includes('Caída fuerte'), 'deep-drop REVIEW headline is urgent');
+      assert(msg.includes('38.2%'), 'shows the drawdown percentage');
+      assert(msg.includes('revisa') || msg.includes('Revisa'), 'tells the user to review');
+      assert(msg.includes('no compres más todavía'), 'explicit: do not buy more yet');
+      assert(msg.includes('no significa vender automáticamente'), 'explicit: not an automatic sell');
+    });
+  });
+
+  await test('REVIEW template: thesis risk (no deep drop) uses preventive copy with tesis', async () => {
+    await withKv({ 'alerts:previous_states': mkPrev('DO_NOTHING', 96), 'alerts:history': [] }, async () => {
+      const alerts = await G.generateAlerts(
+        [mkAnalysis('nvda', 'REVIEW', {
+          reasons: ['Riesgo en tesis de inversión: media', 'Revisa tu tesis antes de añadir más'],
+        })], [], [], [], EMPTY_CONCENTRATION, [],
+      );
+      assert(alerts.length === 1, `expected 1 REVIEW alert, got ${alerts.length}`);
+      const msg = alerts[0].message;
+      assert(msg.includes('tesis'), 'preventive REVIEW mentions tesis');
+      assert(msg.includes('No es urgente'), 'preventive tone, not alarmist');
+      assert(!msg.includes('Caída fuerte'), 'no urgent headline without deep drawdown');
+    });
+  });
+
+  // ── P1-4b: data-quality guards ───────────────────────────────────────────
+
+  await test('priceError: no defensive alert is generated', async () => {
+    await withKv({ 'alerts:previous_states': mkPrev('BUY_MORE', 1), 'alerts:history': [] }, async () => {
+      const alerts = await G.generateAlerts(
+        [mkAnalysis('nvda', 'REDUCE', { priceError: 'No price data for NVDA', currentPrice: null, unrealizedPnlPct: null })],
+        [], [], [], EMPTY_CONCENTRATION, [],
+      );
+      assert(alerts.length === 0, `expected 0 alerts with priceError, got ${alerts.length}`);
+    });
+  });
+
+  await test('currentPrice null (no priceError): defensive alert without misleading figures', async () => {
+    await withKv({ 'alerts:previous_states': mkPrev('DO_NOTHING', 96), 'alerts:history': [] }, async () => {
+      const alerts = await G.generateAlerts(
+        [mkAnalysis('nvda', 'REDUCE', {
+          currentPrice: null,
+          unrealizedPnlPct: null,
+          reasons: ['Concentración elevada en semis — reducir esta posición equilibra la cartera'],
+          suggestedAmountEur: { min: 0, max: 0 },
+        })], [], [], [], EMPTY_CONCENTRATION, [],
+      );
+      assert(alerts.length === 1, `expected 1 concentration-driven REDUCE alert, got ${alerts.length}`);
+      const msg = alerts[0].message;
+      assert(!msg.includes('€'), 'no EUR figures when price is unconfirmed');
+      assert(msg.includes('Sin precio EUR confirmado'), 'explains why no figures are shown');
+      assert(msg.includes('reducir'), 'still gives the defensive guidance');
     });
   });
 
