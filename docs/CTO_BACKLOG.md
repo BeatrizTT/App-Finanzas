@@ -1,6 +1,6 @@
 # CTO Backlog — App Finanzas
 
-Last updated: 2026-06-11 (hotfix ELTIF P1-3c — verificación en producción pendiente)
+Last updated: 2026-06-12 (P1-3c verificado en producción ✅ — producción limpia)
 
 Ordered by priority. P0 = production is broken or silent without these. Do not advance to P1 until P0 is solid.
 
@@ -115,8 +115,15 @@ Fix: extend KV or accept alert repetition (worse UX).
 
 ---
 
-### P1-3c: Hotfix `No data for LU3176111881` / `No data for LU3170240538` — ELTIF (private funds)
-**Estado**: fix mergeado PR #30 (`f0af3e1`). Desplegado en `app-finanzas-beatriztts-projects.vercel.app`. **Custom domain `beaihub.com` pendiente de promoción manual** (el check post-deploy falló al mergear #30 → Vercel no transfirió el alias del custom domain al nuevo deployment — ver RUNBOOK § Incidente 2026-06-12). Verificación final pendiente tras la promoción.
+### P1-3c: Hotfix `No data for LU3176111881` / `No data for LU3170240538` — ELTIF (private funds) ✓ DONE (2026-06-12)
+**Estado**: fix mergeado PR #30 (`f0af3e1`), promovido a producción manualmente (ver RUNBOOK § Incidente 2026-06-12), verificado en `https://www.beaihub.com`.
+
+**Verificado 2026-06-12**:
+- Import: `success: true, saved: true, saveSource: "kv", holdingsUpdated: 16, unknownIsins: []` ✅
+- KV: `US46120E6023 → ISRG/stock`, `LU3176111881 → ENXF/private_fund`, `LU3170240538 → APGM/private_fund` ✅
+- Engine: `success: true, errors: []` — sin ningún `No data for...` ✅
+
+**Sobre `US46120E6023` (ISRG)**: confirmado que el error original fue stale KV (import corrió antes de que PR #28 fuera desplegado). El KV ahora tiene `ticker: ISRG, type: stock` tras el re-import con código de #30. Hipótesis cerrada.
 
 **Qué se observó (verificado, no hipótesis)**: tras re-importar el CSV (paso del P1-3b) y correr el engine, la respuesta mostró:
 ```
