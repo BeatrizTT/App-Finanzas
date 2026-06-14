@@ -74,7 +74,7 @@ They are inert (do not affect any code path). They may represent planned feature
 **Decision**: Alert history (`alerts:history`) and previous-states/dedupe map (`alerts:previous_states`) are stored in KV-first with file-store fallback, following the same pattern as `engine-store.ts` and `portfolio-store.ts`.
 **Reason**: The dedupe mechanism (`shouldSendAlert`) relies on `previous_states` surviving between serverless invocations. With file-store only, `/tmp` resets on every cold start → all alerts re-fire daily regardless of state changes. KV makes deduplication durable across invocations.
 **Cooldown semantics**: Cooldown only suppresses SAME-state repetitions. Any transition INTO a new alertable state bypasses the cooldown — capital-protection alerts (e.g. BUY_MORE → REDUCE) must never be swallowed.
-**Invariant**: `previous_states.state` = "last alerted state", not "last observed state." State is only advanced when an alert actually fires, so unsent transitions are retried on the next run.
+**Invariant** (refined by P1-4d): `previous_states.state` = "last **delivered/notified** state", not "last generated" and not "last observed." The dedupe state is only advanced for an alertable transition when Telegram confirmed delivery — so a failed or disabled send retries on the next run. Non-alertable states (DO_NOTHING, WAIT, …) still update an observed baseline (without `lastAlertAt`) so a future transition into an alertable state is detected.
 **Implementation**: `history.ts` — `loadJson`/`saveJson` helpers (KV-first, file-store fallback, never throws). `shouldSendAlert` is pure/sync. Bracket notation for KV env vars enforced via `kv-client.ts`.
 
 ### REDUCE reminder window for unresolved defensive alerts (P1-4b)
@@ -87,6 +87,20 @@ They are inert (do not affect any code path). They may represent planned feature
 **Decision**: Portfolio `REDUCE` and `REVIEW` alerts use dedicated templates instead of the generic portfolio template.
 **Reason**: The generic template showed buy copy ("Plantéate añadir €X–€Y") on REDUCE signals — `suggestedAmountEur` holds the *sell* amount for REDUCE, so the message was actively wrong and dangerous.
 **Copy rules**: suggestive tone ("podrías vender un 20-25%"), never "sell everything", always states the goal (protect gains / lower risk). `REVIEW` distinguishes urgent (drawdown >35%, mirrors the engine override) from preventive (thesis risk). No figures are shown when `currentPrice` is null (unconfirmed EUR price). `priceError` analyses never alert.
+
+### Markdown escaping for dynamic values in Telegram messages (P1-4b, Codex Review fix)
+**Decision**: All dynamic values interpolated into Telegram messages (`prevState`, `ticker`, `holding.name`, each `reason`, opportunity name, concentration warnings) are passed through `escapeMd()` in `generator.ts`.
+**Reason**: Telegram uses `parse_mode: "Markdown"`. State names contain underscores (`BUY_MORE`, `BUY_PARTIAL`, `REVIEW_FOR_TRIM`). A footer like `_Antes era: BUY_MORE_` pairs the outer italic marker with the underscore inside `BUY`, producing malformed Markdown — Telegram can reject the **entire** message, losing the defensive alert.
+**Implementation**: old Markdown mode has no official escape sequence for `_`, so `escapeMd()` replaces `_` → `-` (`BUY_MORE` → `BUY-MORE`, still readable) and strips `*`, `` ` ``, `[`, `]`. Only dynamic values are escaped; static template markup (bold, hardcoded copy) is left intact.
+
+### Dedupe advances only on confirmed Telegram delivery (P1-4d, resolved inside P1-4b)
+**Decision** (owner, 2026-06-14): `generateAlerts()` no longer persists `previous_states`. It returns `{ alerts, context }`; the engine calls `commitPreviousStates(context, deliveredAlerts)` **after** sending, where `deliveredAlerts = sentAlerts.filter(a => a.telegramSent)`.
+**Reason**: Previously `previous_states` advanced at generation time, before `sendAlerts`. If Telegram rejected the message (e.g. malformed Markdown) or `sendAlertMessages:false`, the system recorded the alert as sent and buried the defensive signal until the reminder window — for `REVIEW` (no reminder) potentially forever. For capital-protection alerts this is unacceptable.
+**Rules**:
+- Alertable state delivered successfully → advance `state` + `lastAlertAt` (reminder window counts from delivery).
+- Alertable state not delivered (Telegram failed / `sendAlertMessages:false` / partial send) → do NOT advance; keep the last notified state → re-alerts next run.
+- Non-alertable state → update observed baseline without `lastAlertAt`.
+**Why the filter is enough**: `createAlert` defaults `telegramSent:false`; `sendAlerts` stamps it per-message. So `sentAlerts.filter(a => a.telegramSent)` is naturally empty when sending is disabled, when a send throws (engine keeps the generated array), and excludes individually-failed messages on partial sends — no special-casing.
 
 ### File-store for local dev, ephemeral for discovery state
 **Decision**: Discovery watchlist and snapshots use file-store. On Vercel this becomes `/tmp/app-finanzas`.

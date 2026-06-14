@@ -580,10 +580,23 @@ Fallback: si KV no está disponible, se usa file-store (`src/data/` en local, `/
 
 ### Semántica del cooldown y la deduplicación
 
-- `previous_states.state` = **"último estado que generó una alerta"** (no el estado observado más recientemente). Esto garantiza que transiciones no alertadas se reintentan en la siguiente ejecución.
+- `previous_states.state` = **"último estado notificado con éxito"** (refinado por P1-4d — ver abajo). No es "último generado" ni "último observado": el dedupe solo avanza para una transición alertable cuando Telegram confirmó la entrega.
 - Cooldown (`ALERT_COOLDOWN_HOURS`, default 24h) **solo se aplica a repeticiones del mismo estado**.
 - **Cualquier transición a un estado alertable** (p.ej. `BUY_MORE → REDUCE`) **bypasa el cooldown**. Una alerta de protección de capital no se puede suprimir por un cooldown activo.
 - `REVIEW → REVIEW`: no se re-alerta nunca (el generador bloquea repeticiones del mismo estado). Recordatorios para REVIEW persistente quedan como mejora futura si se ve necesario.
+
+### Si Telegram falla, el dedupe NO avanza (P1-4d)
+
+**Garantía central de las alertas defensivas**: si la app detecta una señal de venta/reducción, Beatriz la recibe. Para que esto se cumpla, el avance del dedupe está condicionado a la entrega real, no a la generación.
+
+- `generateAlerts()` **no** persiste `previous_states`. Devuelve `{ alerts, context }`.
+- El engine envía por Telegram y luego llama `commitPreviousStates(context, deliveredAlerts)`, donde `deliveredAlerts = sentAlerts.filter(a => a.telegramSent)`.
+- Reglas:
+  - **Alertable + entregado** → avanza `state` + `lastAlertAt` (la ventana de recordatorio cuenta desde la entrega).
+  - **Alertable + NO entregado** (Telegram falló / `sendAlertMessages:false` / envío parcial) → **no avanza**; se mantiene el último estado notificado → se vuelve a alertar en el siguiente run.
+  - **No alertable** (`DO_NOTHING`, `WAIT`, …) → actualiza baseline observado sin `lastAlertAt`, para detectar futuras transiciones.
+- Consecuencia operativa: si ves en logs `telegram_alerts: <error>`, las alertas defensivas de ese run **no** quedaron marcadas como enviadas y reaparecerán en el próximo run. No hace falta intervención manual para recuperarlas.
+- `alerts:history` (ring buffer) sí guarda todas las alertas generadas con su flag `telegramSent` — es el registro de auditoría, independiente del dedupe.
 
 ### Recordatorio REDUCE sin resolver (P1-4b)
 
@@ -610,6 +623,7 @@ Decisión del propietario (2026-06-12): una posición que sigue en `REDUCE` sin 
 - `REVIEW` (⚠️): si la causa es caída >35%, copy urgente ("Caída fuerte: revisa antes de actuar"); si es riesgo de tesis, copy preventivo ("No es urgente, pero conviene revisarla"). Siempre cierra con: no compres más todavía, revisa la tesis, no significa vender automáticamente.
 - `priceError` → no se genera alerta (sin datos no hay señal).
 - Oportunidades (`EXIT` / `REVIEW_FOR_TRIM`) **no** están cubiertas — siguen con template genérico hasta P1-4c.
+- **Escape de Markdown** (Codex Review fix): los valores dinámicos (`prevState`, `ticker`, nombre, `reasons`) pasan por `escapeMd()` antes de interpolarse. Telegram usa `parse_mode: Markdown` y los nombres de estado llevan underscores (`BUY_MORE`), que romperían el formato (`_Antes era: BUY_MORE_`) y podrían hacer que Telegram rechace el mensaje entero. `escapeMd()` convierte `_` → `-` (`BUY-MORE`) y elimina `*`, `` ` ``, `[`, `]`. Solo se escapan valores dinámicos; el markup estático del template se mantiene.
 
 ### Verificar alert history en producción
 

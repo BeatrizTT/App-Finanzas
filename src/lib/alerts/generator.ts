@@ -269,6 +269,20 @@ function generateConcentrationAlerts(
 // Main alert generator
 // --------------------------------------------------------------------------
 
+// Everything commitPreviousStates needs to persist dedupe state AFTER we know
+// which alerts were actually delivered. generateAlerts no longer writes
+// previous_states itself — see commitPreviousStates and P1-4d in CTO_BACKLOG.
+export interface PreviousStatesContext {
+  prev: PreviousStates;
+  portfolioAnalyses: PortfolioAnalysis[];
+  opportunities: Opportunity[];
+}
+
+export interface AlertGenerationResult {
+  alerts: Alert[];
+  context: PreviousStatesContext;
+}
+
 export async function generateAlerts(
   portfolioAnalyses: PortfolioAnalysis[],
   stockOpportunities: Opportunity[],
@@ -276,7 +290,7 @@ export async function generateAlerts(
   discoveredOpportunities: Opportunity[],
   concentration: ConcentrationData,
   allocationRecommendations: AllocationRecommendation[]
-): Promise<Alert[]> {
+): Promise<AlertGenerationResult> {
   const prev = await getPreviousStates();
   const allAlerts: Alert[] = [];
 
@@ -298,53 +312,82 @@ export async function generateAlerts(
   // Concentration warnings
   allAlerts.push(...generateConcentrationAlerts(concentration, prev));
 
-  // Update previous states
+  // previous_states is intentionally NOT persisted here. Advancing the dedupe
+  // state on generation alone would mark a defensive signal as "alerted" even
+  // when Telegram never delivered it (or sending was disabled), burying the
+  // alert until the reminder window. The engine calls commitPreviousStates
+  // AFTER sending, passing only the alerts that were actually delivered.
+  return {
+    alerts: allAlerts,
+    context: {
+      prev,
+      portfolioAnalyses,
+      opportunities: [...stockOpportunities, ...etfOpportunities, ...discoveredOpportunities],
+    },
+  };
+}
+
+// --------------------------------------------------------------------------
+// Persist dedupe state — only for alerts that were actually delivered (P1-4d)
+// --------------------------------------------------------------------------
+// previous_states.state means "last NOTIFIED state", not "last generated".
+// Rules:
+//   • Alertable state delivered successfully → advance state + lastAlertAt.
+//   • Alertable state not delivered (Telegram failed / sendAlertMessages:false /
+//     partial send) → do NOT advance; keep the last notified state so the next
+//     run still detects the transition and re-alerts.
+//   • Non-alertable state (DO_NOTHING, WAIT, …) → update the observed baseline
+//     without lastAlertAt, so a future transition into an alertable state is
+//     still detected as a change.
+export async function commitPreviousStates(
+  context: PreviousStatesContext,
+  deliveredAlerts: Alert[],
+): Promise<void> {
+  const { prev, portfolioAnalyses, opportunities } = context;
+  const now = new Date().toISOString();
+
   const newPrev: PreviousStates = {
-    updatedAt: new Date().toISOString(),
+    updatedAt: now,
     portfolio: { ...prev.portfolio },
     opportunities: { ...prev.opportunities },
   };
 
   for (const analysis of portfolioAnalyses) {
     const ticker = analysis.holding.ticker ?? analysis.holding.id.toUpperCase();
-    const alertFired = allAlerts.some((a) => a.asset === ticker);
+    const delivered = deliveredAlerts.some((a) => a.telegramSent && a.asset === ticker);
     const existingEntry = prev.portfolio[analysis.holding.id];
     newPrev.portfolio[analysis.holding.id] = {
       assetId: analysis.holding.id,
-      // Only advance the recorded state when an alert actually fired.
-      // This keeps "last alerted state" semantics: if a transition was not
-      // alerted (e.g. non-alertable state), future runs still detect the
-      // change from the last alerted state.
-      state: alertFired ? analysis.state : (existingEntry?.state ?? analysis.state),
-      lastAlertAt: alertFired
-        ? new Date().toISOString()
+      // Advance only on confirmed delivery; otherwise keep the last notified
+      // state (or fall back to the current state as the observed baseline).
+      state: delivered ? analysis.state : (existingEntry?.state ?? analysis.state),
+      lastAlertAt: delivered
+        ? now
         : (existingEntry?.lastAlertAt ?? ''),
     };
   }
 
-  for (const opp of [...stockOpportunities, ...etfOpportunities, ...discoveredOpportunities]) {
+  for (const opp of opportunities) {
     const id = opp.ticker.toLowerCase();
-    const alertFired = allAlerts.some((a) => a.asset === opp.ticker);
+    const delivered = deliveredAlerts.some((a) => a.telegramSent && a.asset === opp.ticker);
     const existingEntry = prev.opportunities[id];
     newPrev.opportunities[id] = {
       assetId: id,
-      state: alertFired ? opp.state : (existingEntry?.state ?? opp.state),
+      state: delivered ? opp.state : (existingEntry?.state ?? opp.state),
       score: opp.score.total,
-      lastAlertAt: alertFired
-        ? new Date().toISOString()
+      lastAlertAt: delivered
+        ? now
         : (existingEntry?.lastAlertAt ?? ''),
     };
   }
 
-  if (allAlerts.some((a) => a.type === 'concentration_warning')) {
+  if (deliveredAlerts.some((a) => a.telegramSent && a.type === 'concentration_warning')) {
     newPrev.opportunities['__concentration_warning__'] = {
       assetId: '__concentration_warning__',
       state: 'WATCH',
-      lastAlertAt: new Date().toISOString(),
+      lastAlertAt: now,
     };
   }
 
   await savePreviousStates(newPrev);
-
-  return allAlerts;
 }
