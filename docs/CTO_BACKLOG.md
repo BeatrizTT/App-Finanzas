@@ -81,19 +81,36 @@ All KV-aware code is deployed (PRs #16 + #17):
 
 ## P1 — Automation and reliability
 
-### P1-1: Verify end-to-end cron → alert → Telegram ✓ DONE (2026-06-11) — ⚠️ ejecución real del scheduler sin verificar
-Verificación completa del código y la auth — ver Fase 1 en el roadmap de arriba y `docs/RUNBOOK.md` § "Lección Fase 1".
+### P1-1: Verify end-to-end cron → alert → Telegram ✓ DONE (2026-06-11) — código y auth
+Verificación completa del código y la auth — ver Fase 1 en el roadmap de arriba y `docs/RUNBOOK.md` § "Lección Fase 1". (La ejecución real del scheduler sin navegador es P1-1a, abierto.)
 
-**Actualización 2026-06-15 — diagnóstico de cron**: los logs de producción (ventana retenida ~2h, plan Hobby) muestran **cero invocaciones** de `/api/cron/daily`. Solo se detectó un `POST /api/engine/run` manual (botón "Analizar" del navegador a las 09:53 UTC). El código del cron es correcto; la duda es si el **scheduler de Vercel Hobby** realmente dispara los crons.
+---
 
-**Checks pendientes de ejecución manual (autoritativos):**
-- **A** — Vercel Dashboard → app-finanzas → pestaña **"Cron Jobs"**: muestra historial de ejecuciones. Si no hay entradas en días laborables → scheduler no dispara en Hobby.
-- **B** — Comparar `runAt` de `GET /api/engine/run` antes y después del horario del cron (09:00/18:00 Madrid) sin abrir el navegador. Si cambia → el cron ejecutó.
-- **C** — Test manual: `curl -s -H "Authorization: Bearer $CRON_SECRET" https://www.beaihub.com/api/cron/daily | jq` → confirma que el endpoint funciona, no que el scheduler lo invoque.
+### P1-1a: Confirmar ejecución real de Vercel Cron sin navegador abierto (ABIERTO, 2026-06-15)
 
-**Nota horario**: los crons corren a 07:00 y 16:00 UTC = **09:00 y 18:00 Madrid en verano (CEST, UTC+2)** — 1h más tarde de lo que podría esperarse en horario de invierno.
+**Síntoma reportado**: las alertas de Telegram solo llegaban con el navegador abierto. La causa raíz **no está confirmada**. Diagnóstico completo en `RUNBOOK.md` § "Diagnóstico de cron".
 
-**Decisión pendiente** si check A confirma que el scheduler no dispara: Hobby → Pro (coste ~$20/mes), trigger externo (GitHub Actions), o aceptar operación manual. Ver `RUNBOOK.md` § "Diagnóstico de cron".
+**Hechos verificados:**
+- La app está configurada con crons en `vercel.json` (`0 7` y `0 16` UTC, L-V).
+- El horario real en Madrid verano es **09:00 y 18:00** (CEST = UTC+2), no 08:00 y 17:00.
+- En la **ventana de logs retenida** (plan Hobby ≈ 2h) **no aparecen invocaciones** de `/api/cron/daily`; solo GET del dashboard y un `POST /api/engine/run` manual. La ventana del cron 07:00 UTC quedó fuera de retención (`ExceedsBillingLimitError`) → la ausencia está verificada solo dentro de la ventana retenida.
+- El código del cron no depende del navegador.
+
+**Hipótesis pendientes (no confirmadas):**
+1. El cron no se ejecuta por limitación/fiabilidad del plan Hobby (crons best-effort).
+2. El cron se ejecuta pero fuera de la ventana de logs retenida.
+3. El cron se ejecuta pero falla auth (401).
+4. El cron se ejecuta pero falla Telegram.
+5. Producción/custom domain sirve otro deployment.
+
+**Checks autoritativos (pendientes, cierran la causa real):**
+- **A** — Vercel Dashboard → app-finanzas → pestaña **"Cron Jobs"**: historial de ejecuciones + estado. Cierra hipótesis 1 y 2.
+- **B** — Comparar `runAt` de `GET /api/engine/run` antes/después del horario del cron sin navegador. Si cambia → el cron ejecutó (descarta 1, 2, 3).
+- **C** — `curl -s -H "Authorization: Bearer $CRON_SECRET" https://www.beaihub.com/api/cron/daily | jq` → confirma endpoint/auth/motor (cierra 3, aísla 4); **no** confirma que el scheduler lo invoque.
+
+**Recomendación estratégica**: si A/B/C confirman que Vercel Hobby no garantiza el cron (hipótesis 1), la opción recomendada para una app de **alertas defensivas** es **subir a Pro** o **usar un trigger externo fiable** (GitHub Actions Scheduled Workflow). Las alertas de venta/reducción protegen capital y **no pueden depender de un scheduler best-effort**. El ajuste de horario UTC (`0 6`/`0 15`) solo corrige la hora, no la fiabilidad.
+
+**Decisión**: registrar en `DECISIONS.md` cuando se tome, tras cerrar la causa con A/B/C.
 
 ---
 

@@ -42,7 +42,7 @@ A personal investment decision-support app. It scans a curated universe of stock
 | Item | Status | Notes |
 |---|---|---|
 | App deployed on Vercel | ✓ | `main` auto-deploys |
-| Vercel cron wired | ✓ (código) / ⚠️ **ejecución real sin verificar** | `vercel.json` — 07:00 + 16:00 UTC Mon-Fri (= 09:00/18:00 Madrid CEST verano). Logs muestran 0 invocaciones de `/api/cron/daily` — ver diagnóstico 2026-06-15 en RUNBOOK §. Hobby plan = crons best-effort, no garantizados. |
+| Vercel cron wired | ✓ (código + auth) / ⚠️ **ejecución real del scheduler sin confirmar** | `vercel.json` — 07:00 + 16:00 UTC Mon-Fri (= 09:00/18:00 Madrid CEST verano). En la ventana de logs retenida (Hobby ≈ 2h) no aparecen invocaciones de `/api/cron/daily`, pero la ventana del cron quedó fuera de retención. Causa raíz NO confirmada — ver hipótesis y checks A/B/C en RUNBOOK § "Diagnóstico de cron" y backlog P1-1a. |
 | `CRON_SECRET` cron auth | ✓ **configured** (since Apr 30) | Fail-closed: 503 if missing, 401 if wrong. `/api/config/status` → `cronSecretSet: true`. |
 | `PRICE_PROVIDER` | ✓ **`twelvedata`** (since May 5) | `TWELVE_DATA_API_KEY` also configured. Production uses real prices — NOT mock. `/api/config/status` → `priceProvider: "twelvedata"`. |
 | Vercel KV connected | ✓ **verificado end-to-end (2026-06-11)** | `kvConfigured: true`. KV write y read cross-instance confirmados. `/api/opportunities` `stockCount: 4`, `/api/portfolio` `analysesCount: 13`. Bugs de caching (PR #20) e inlining (PR #21) ya corregidos y verificados. |
@@ -53,7 +53,7 @@ A personal investment decision-support app. It scans a curated universe of stock
 | Discovery state (watchlist, snapshots) | ephemeral | file-store → `/tmp` on Vercel; resets per invocation. P1 item. |
 | Alert history / previous states | **KV-first** (`alerts:history`, `alerts:previous_states`) + file-store fallback | PR-1 `p1-alert-history-kv` (PR #31) — **mergeado y verificado en producción (2026-06-12)**. `/api/alerts` responde JSON válido (force-dynamic + KV read OK). |
 
-**Summary: Fase 1 completada el 2026-06-11. Producción verificada end-to-end: precios reales (Twelve Data), KV persistencia cross-instance confirmada, cron auth verificado, CSV import KV-backed, Telegram funcionando. Fase 2: PR-0 (#27), PR-1 (#31, alert history/dedupe KV-first) y PR #33 (P1-4b, alertas defensivas + P1-4d) mergeados. ⚠️ Pendiente: verificar que el scheduler de Vercel realmente invoca el cron (ver RUNBOOK § "Diagnóstico de cron" y checks A/B/C).**
+**Summary: Fase 1 completada el 2026-06-11. Producción verificada end-to-end: precios reales (Twelve Data), KV persistencia cross-instance confirmada, cron auth verificado, CSV import KV-backed, Telegram funcionando. Fase 2: PR-0 (#27), PR-1 (#31, alert history/dedupe KV-first) y PR #33 (P1-4b, alertas defensivas + P1-4d) mergeados. ⚠️ Abierto (P1-1a): confirmar que el scheduler de Vercel invoca el cron sin navegador abierto — causa raíz no confirmada, hipótesis y checks A/B/C en RUNBOOK § "Diagnóstico de cron".**
 
 ### Verificación de producción PR-1 (#31) — 2026-06-12
 

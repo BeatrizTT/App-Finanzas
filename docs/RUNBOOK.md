@@ -651,45 +651,50 @@ curl -s "$BASE/api/alerts?limit=5" | jq '{count: .count, alerts: [.alerts[] | {i
 
 Las alertas de Telegram sólo llegaban cuando el navegador estaba abierto. Con el navegador cerrado, no llegaba nada aunque el cron debería haber corrido.
 
-### El horario UTC → Madrid
+> **Estado del diagnóstico**: la causa raíz **no está confirmada todavía**. Esta sección separa lo que está verificado de lo que es hipótesis. Los checks A/B/C (abajo) son los que cierran la causa real. Ver `CTO_BACKLOG.md` § P1-1a.
 
-`vercel.json` define los dos crons en UTC:
+### Hechos verificados
 
-```json
-{ "path": "/api/cron/daily", "schedule": "0 7 * * 1-5"  }   →  09:00 Madrid (CEST verano, UTC+2)
-{ "path": "/api/cron/daily", "schedule": "0 16 * * 1-5" }   →  18:00 Madrid (CEST verano, UTC+2)
-```
+1. **La app está configurada con crons en `vercel.json`** (UTC):
+   ```json
+   { "path": "/api/cron/daily", "schedule": "0 7 * * 1-5"  }
+   { "path": "/api/cron/daily", "schedule": "0 16 * * 1-5" }
+   ```
+   Vercel Cron siempre corre en UTC; no hay configuración de timezone en `vercel.json`.
 
-**En invierno (CET, UTC+1)**: disparan a las 08:00 y 17:00 Madrid.
-**En verano (CEST, UTC+2)**: disparan a las 09:00 y 18:00 Madrid — 1 hora más tarde de lo que podría esperarse.
+2. **El horario real en Madrid es 09:00 y 18:00, no 08:00 y 17:00** (verano, CEST = UTC+2):
+   - `0 7 * * 1-5` → **09:00 Madrid** en verano (08:00 en invierno CET).
+   - `0 16 * * 1-5` → **18:00 Madrid** en verano (17:00 en invierno CET).
 
-Vercel Cron siempre corre en UTC. No hay configuración de timezone en `vercel.json`.
+3. **En la ventana de logs retenida no aparecen invocaciones de `/api/cron/daily`.** Consultados los logs de Vercel de la ventana disponible (plan Hobby ≈ 2h de retención):
+   - Cero invocaciones de `/api/cron/daily`.
+   - Solo peticiones GET periódicas del dashboard (uptime monitor / auto-refresh) — leen el output del motor, no lo ejecutan.
+   - Un único `POST /api/engine/run` a las 09:53 UTC = botón "Analizar" del navegador.
+   - `ExceedsBillingLimitError` al consultar logs de más de ~2h de antigüedad → **la ventana del cron de 07:00 UTC no era recuperable desde logs**. Es decir: la ausencia de invocaciones está verificada **solo dentro de la ventana retenida**, no para el horario exacto del cron.
 
-### Lo que se verificó en logs
+4. **El código del cron no depende del navegador.** `src/app/api/cron/daily/route.ts` solo requiere que Vercel invoque el endpoint con el header `Authorization: Bearer $CRON_SECRET`. No hay WebSocket, SSE ni polling del cliente. El navegador abierto solo provoca el `POST /api/engine/run` del botón "Analizar", que es un camino distinto del cron.
 
-Consulta de los logs de Vercel de la ventana retenida (plan Hobby: ~2 horas de retención):
+### Hipótesis pendientes (no confirmadas)
 
-- **Ninguna invocación de `/api/cron/daily`** en la ventana disponible.
-- Solo peticiones GET periódicas del dashboard (uptime monitor / auto-refresh) — esas leen el output del motor pero NO lo ejecutan.
-- Un único `POST /api/engine/run` a las 09:53 UTC — ese fue el botón "Analizar" del navegador.
+Cualquiera de estas explicaría el síntoma. No están descartadas entre sí; los checks A/B/C deben cerrar cuál es la real.
 
-**Plan Hobby**: `ExceedsBillingLimitError` al intentar consultar logs de más de ~2h de antigüedad. Los logs de la ventana 07:00 UTC no se podían recuperar directamente.
+1. **El cron no se ejecuta** por limitación o fiabilidad del plan Hobby (Vercel documenta los crons de Hobby como best-effort, no garantizados).
+2. **El cron se ejecuta pero fuera de la ventana de logs retenida** (07:00 UTC queda fuera de las ~2h que el plan Hobby conserva), así que su ausencia en logs no prueba que no corriera.
+3. **El cron se ejecuta pero falla la auth** (401 — p.ej. `CRON_SECRET` desincronizado), y nunca llega a ejecutar el motor.
+4. **El cron se ejecuta y autentica, pero falla Telegram** (el motor corre pero la entrega no llega).
+5. **El custom domain sirve otro deployment** del que está configurado el cron (patrón Vercel Error/READY, ver § "Incidente 2026-06-12").
 
-### Causa probable
+### Checks autoritativos (pendientes de ejecución manual)
 
-Vercel Hobby plan documenta los crons como **best-effort** — no están garantizados. En un plan Hobby, es posible que el scheduler de Vercel no ejecute los crons con fiabilidad (o no los ejecute en absoluto).
-
-El código del cron (`route.ts`) es correcto: no tiene dependencia del navegador. El problema está en el nivel de infraestructura (Vercel Hobby), no en el código.
-
-### Tres checks autoritativos (pendientes de ejecución manual)
+Estos checks cierran cuál de las hipótesis es la causa real.
 
 **A — Vercel Dashboard → Cron Jobs:**
 ```
 Vercel Dashboard → app-finanzas → pestaña "Cron Jobs"
 ```
-Muestra el historial de ejecuciones con timestamp. Si el scheduler no aparece en el histórico durante días laborables en el horario previsto → los crons no están disparando en Hobby.
+Muestra el historial de ejecuciones con timestamp y estado. Cierra las hipótesis 1 y 2: si hay entradas en días laborables → el scheduler dispara (descarta 1); si no hay ninguna → no dispara. El estado de cada ejecución (success / error) ayuda con 3 y 4.
 
-**B — Comparar `runAt` antes y después del horario del cron:**
+**B — Comparar `runAt` antes y después del horario del cron (sin navegador):**
 ```bash
 BASE="https://www.beaihub.com"
 # Antes del cron (ej. 08:50 Madrid)
@@ -697,7 +702,7 @@ curl -s "$BASE/api/engine/run" | jq '{runAt}'
 # Después del cron (ej. 09:15 Madrid) — sin abrir el navegador
 curl -s "$BASE/api/engine/run" | jq '{runAt}'
 ```
-Si `runAt` cambia entre los dos checks → el cron ejecutó el motor. Si no cambia → el cron no disparó.
+Si `runAt` cambia → el cron ejecutó el motor (descarta 1, 2 y 3). Si no cambia → el motor no corrió por el cron.
 
 **C — Test manual del endpoint:**
 ```bash
@@ -706,24 +711,20 @@ SECRET="<tu-CRON_SECRET>"
 curl -s "$BASE/api/cron/daily" \
   -H "Authorization: Bearer $SECRET" | jq '{success, runAt, alerts, errors}'
 ```
-Respuesta esperada: `{"success": true, "runAt": "...", "alerts": N, "errors": []}`. Este test confirma que el endpoint funciona; no confirma que el scheduler lo invoque.
+Respuesta esperada: `{"success": true, "runAt": "...", "alerts": N, "errors": []}`. Confirma que el endpoint, la auth y el motor funcionan cuando se invoca a mano (cierra 3 y aísla 4). **No** confirma que el scheduler lo invoque por sí solo — para eso son A y B.
 
-### Decisión pendiente
+### Recomendación estratégica
 
-Si el check A confirma que el scheduler no ejecuta en Hobby:
+Si tras A/B/C se confirma que **Vercel Hobby no garantiza la ejecución del cron** (hipótesis 1), la opción recomendada para una app de **alertas defensivas** es **subir a Vercel Pro** o **usar un trigger externo fiable** (p.ej. GitHub Actions Scheduled Workflow que haga `curl` al endpoint con el header). Las alertas de venta/reducción protegen capital y **no pueden depender de un scheduler best-effort**.
 
-| Opción | Descripción |
-|---|---|
-| **Hobby → Pro** | Upgrade a Vercel Pro garantiza crons. Coste ~$20/mes. |
-| **Ajuste de horario UTC** | Mover a `0 6` / `0 15` UTC en verano para obtener 08:00/17:00 Madrid. No resuelve si el scheduler no dispara. |
-| **Trigger externo** | Un job de GitHub Actions o cron externo hace `curl … /api/cron/daily` en el horario deseado. Gratuito. |
-| **Aceptar** | Usar sólo el botón "Analizar" del dashboard. Sin automatización. |
+| Opción | Descripción | Recomendada para alertas defensivas |
+|---|---|---|
+| **Hobby → Pro** | Vercel Pro ejecuta crons de forma fiable. Coste ~$20/mes. | ✅ Sí |
+| **Trigger externo** | GitHub Actions (u otro scheduler fiable) hace `curl … /api/cron/daily` con el header. Gratuito. | ✅ Sí |
+| **Ajuste de horario UTC** | Mover a `0 6` / `0 15` UTC para obtener 08:00/17:00 Madrid en verano. Solo corrige el horario, **no** la fiabilidad. | ⚠️ Solo complementario |
+| **Aceptar best-effort / manual** | Usar el botón "Analizar" del dashboard. Sin garantía de automatización. | ❌ No |
 
-Registrar la decisión en `docs/DECISIONS.md` cuando se tome.
-
-### El código del cron no tiene dependencia del navegador
-
-Para referencia: `src/app/api/cron/daily/route.ts` únicamente requiere que Vercel invoque el endpoint con el header correcto. No hay WebSocket, no hay SSE, no hay polling del cliente. El navegador abierto sólo causa el `POST /api/engine/run` del botón "Analizar" — eso es distinto del cron.
+Registrar la decisión en `docs/DECISIONS.md` cuando se tome (tras cerrar la causa con A/B/C).
 
 ---
 
