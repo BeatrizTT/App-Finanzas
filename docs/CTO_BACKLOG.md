@@ -1,6 +1,6 @@
 # CTO Backlog — App Finanzas
 
-Last updated: 2026-06-14 (P1-4b + Codex fixes — Markdown escaping + P1-4d resuelto: dedupe solo avanza con entrega Telegram confirmada)
+Last updated: 2026-06-15 (PR #33 mergeado — P1-4b completo; diagnóstico de cron Vercel documentado)
 
 Ordered by priority. P0 = production is broken or silent without these. Do not advance to P1 until P0 is solid.
 
@@ -81,8 +81,36 @@ All KV-aware code is deployed (PRs #16 + #17):
 
 ## P1 — Automation and reliability
 
-### P1-1: Verify end-to-end cron → alert → Telegram ✓ DONE (2026-06-11)
-Verificación completa — ver Fase 1 en el roadmap de arriba y `docs/RUNBOOK.md` § "Lección Fase 1".
+### P1-1: Verify end-to-end cron → alert → Telegram ✓ DONE (2026-06-11) — código y auth
+Verificación completa del código y la auth — ver Fase 1 en el roadmap de arriba y `docs/RUNBOOK.md` § "Lección Fase 1". (La ejecución real del scheduler sin navegador es P1-1a, abierto.)
+
+---
+
+### P1-1a: Confirmar ejecución real de Vercel Cron sin navegador abierto (ABIERTO, 2026-06-15)
+
+**Síntoma reportado**: las alertas de Telegram solo llegaban con el navegador abierto. La causa raíz **no está confirmada**. Diagnóstico completo en `RUNBOOK.md` § "Diagnóstico de cron".
+
+**Hechos verificados:**
+- La app está configurada con crons en `vercel.json` (`0 7` y `0 16` UTC, L-V).
+- El horario real en Madrid verano es **09:00 y 18:00** (CEST = UTC+2), no 08:00 y 17:00.
+- En la **ventana de logs retenida** (plan Hobby ≈ 2h) **no aparecen invocaciones** de `/api/cron/daily`; solo GET del dashboard y un `POST /api/engine/run` manual. La ventana del cron 07:00 UTC quedó fuera de retención (`ExceedsBillingLimitError`) → la ausencia está verificada solo dentro de la ventana retenida.
+- El código del cron no depende del navegador.
+
+**Hipótesis pendientes (no confirmadas):**
+1. El cron no se ejecuta por limitación/fiabilidad del plan Hobby (crons best-effort).
+2. El cron se ejecuta pero fuera de la ventana de logs retenida.
+3. El cron se ejecuta pero falla auth (401).
+4. El cron se ejecuta pero falla Telegram.
+5. Producción/custom domain sirve otro deployment.
+
+**Checks autoritativos (pendientes, cierran la causa real):**
+- **A** — Vercel Dashboard → app-finanzas → pestaña **"Cron Jobs"**: historial de ejecuciones + estado. Cierra hipótesis 1 y 2.
+- **B** — Comparar `runAt` de `GET /api/engine/run` antes/después del horario del cron sin navegador. Si cambia → el cron ejecutó (descarta 1, 2, 3).
+- **C** — `curl -s -H "Authorization: Bearer $CRON_SECRET" https://www.beaihub.com/api/cron/daily | jq` → confirma endpoint/auth/motor (cierra 3, aísla 4); **no** confirma que el scheduler lo invoque.
+
+**Recomendación estratégica**: si A/B/C confirman que Vercel Hobby no garantiza el cron (hipótesis 1), la opción recomendada para una app de **alertas defensivas** es **subir a Pro** o **usar un trigger externo fiable** (GitHub Actions Scheduled Workflow). Las alertas de venta/reducción protegen capital y **no pueden depender de un scheduler best-effort**. El ajuste de horario UTC (`0 6`/`0 15`) solo corrige la hora, no la fiabilidad.
+
+**Decisión**: registrar en `DECISIONS.md` cuando se tome, tras cerrar la causa con A/B/C.
 
 ---
 
@@ -276,7 +304,7 @@ Verificación completa en `https://www.beaihub.com`:
    `src/lib/utils/kv-client.ts` como cliente KV compartido. `engine-store.ts` y `portfolio-store.ts` migrados. 12 tests nuevos (24 suites · 1521 asserts). Sin cambio de comportamiento.
 
 1. **`p1-alert-history-kv`** (PR-1, P1-3): mover `history.ts` (alert history + previous-states / dedupe ring buffer) a KV → alertas no se repiten entre invocaciones de Vercel. **MERGEADO Y VERIFICADO EN PRODUCCIÓN — PR #31, commit `270887a` (2026-06-12)**. Incluye fix crítico de Codex Review: cambio de estado bypasa cooldown (`BUY_MORE → REDUCE` dentro de 24h ya no se suprime); `previous_states.state` = último estado alertado, no último observado. 26 suites · 1549 asserts · TSC OK · build OK. Verificación prod: `kvConfigured:true`, engine `errors:[]` (×2), `/api/alerts` JSON válido `count:0` (correcto — `saveAlerts` solo escribe historial con `sendAlertMessages !== false`; ver PROJECT_STATE § "Verificación de producción PR-1").
-2. **P1-4b `telegram-sell-reduce-alerts`**: alertas Telegram de venta/reducción — **IMPLEMENTADO (2026-06-12, rama `p1-telegram-sell-reduce-alerts`)**. Templates defensivos REDUCE/REVIEW + recordatorio `REDUCE → REDUCE` cada `ALERT_REDUCE_REMINDER_DAYS` días (default 3, decisión Opción B resuelta) + Codex Review fixes: (a) `escapeMd()` para Telegram Markdown (underscores en estados como `BUY_MORE` → `BUY-MORE`); (b) **P1-4d resuelto** — dedupe (`previous_states`) solo avanza con entrega Telegram confirmada (`commitPreviousStates` tras send). 26 suites · 1571 asserts · TSC OK · build OK. Ver secciones P1-4b y P1-4d arriba. Oportunidades defensivas → P1-4c.
+2. **P1-4b `telegram-sell-reduce-alerts`**: alertas Telegram de venta/reducción — **MERGEADO** (PR #33, 2026-06-15). Templates defensivos REDUCE/REVIEW + recordatorio `REDUCE → REDUCE` cada `ALERT_REDUCE_REMINDER_DAYS` días (default 3, decisión Opción B resuelta) + Codex Review fixes: (a) `escapeMd()` para Telegram Markdown (underscores en estados como `BUY_MORE` → `BUY-MORE`); (b) **P1-4d resuelto** — dedupe (`previous_states`) solo avanza con entrega Telegram confirmada (`commitPreviousStates` tras send). 26 suites · 1571 asserts · TSC OK · build OK. Ver secciones P1-4b y P1-4d arriba. Oportunidades defensivas → P1-4c.
 3. **`p1-discovery-state-kv`** (PR-2, P1-2): mover watchlist y snapshots a KV con prefijo `discovery:` → trend tracking funciona entre runs. Desbloqueado (PR-0 merged); **siguiente candidato tras merge de P1-4b salvo decisión explícita de Beatriz**.
 4. **P1-4c (registrado, sin iniciar)**: templates defensivos para oportunidades (`EXIT` / `REVIEW_FOR_TRIM`) — hoy se alertan con template genérico. Separado de P1-4b a propósito (no mezclar cartera y discovery).
 

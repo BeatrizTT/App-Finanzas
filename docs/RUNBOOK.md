@@ -197,7 +197,7 @@ npm test
 npx tsx scripts/run-tests.ts
 ```
 
-Runs all 23 suites. Exits 0 if all pass.
+Runs all 26 suites. Exits 0 if all pass.
 
 To run a single suite:
 ```bash
@@ -645,6 +645,89 @@ curl -s "$BASE/api/alerts?limit=5" | jq '{count: .count, alerts: [.alerts[] | {i
 
 ---
 
+## Diagnóstico de cron — alertas sin navegador abierto (2026-06-15)
+
+### Síntoma reportado
+
+Las alertas de Telegram sólo llegaban cuando el navegador estaba abierto. Con el navegador cerrado, no llegaba nada aunque el cron debería haber corrido.
+
+> **Estado del diagnóstico**: la causa raíz **no está confirmada todavía**. Esta sección separa lo que está verificado de lo que es hipótesis. Los checks A/B/C (abajo) son los que cierran la causa real. Ver `CTO_BACKLOG.md` § P1-1a.
+
+### Hechos verificados
+
+1. **La app está configurada con crons en `vercel.json`** (UTC):
+   ```json
+   { "path": "/api/cron/daily", "schedule": "0 7 * * 1-5"  }
+   { "path": "/api/cron/daily", "schedule": "0 16 * * 1-5" }
+   ```
+   Vercel Cron siempre corre en UTC; no hay configuración de timezone en `vercel.json`.
+
+2. **El horario real en Madrid es 09:00 y 18:00, no 08:00 y 17:00** (verano, CEST = UTC+2):
+   - `0 7 * * 1-5` → **09:00 Madrid** en verano (08:00 en invierno CET).
+   - `0 16 * * 1-5` → **18:00 Madrid** en verano (17:00 en invierno CET).
+
+3. **En la ventana de logs retenida no aparecen invocaciones de `/api/cron/daily`.** Consultados los logs de Vercel de la ventana disponible (plan Hobby ≈ 2h de retención):
+   - Cero invocaciones de `/api/cron/daily`.
+   - Solo peticiones GET periódicas del dashboard (uptime monitor / auto-refresh) — leen el output del motor, no lo ejecutan.
+   - Un único `POST /api/engine/run` a las 09:53 UTC = botón "Analizar" del navegador.
+   - `ExceedsBillingLimitError` al consultar logs de más de ~2h de antigüedad → **la ventana del cron de 07:00 UTC no era recuperable desde logs**. Es decir: la ausencia de invocaciones está verificada **solo dentro de la ventana retenida**, no para el horario exacto del cron.
+
+4. **El código del cron no depende del navegador.** `src/app/api/cron/daily/route.ts` solo requiere que Vercel invoque el endpoint con el header `Authorization: Bearer $CRON_SECRET`. No hay WebSocket, SSE ni polling del cliente. El navegador abierto solo provoca el `POST /api/engine/run` del botón "Analizar", que es un camino distinto del cron.
+
+### Hipótesis pendientes (no confirmadas)
+
+Cualquiera de estas explicaría el síntoma. No están descartadas entre sí; los checks A/B/C deben cerrar cuál es la real.
+
+1. **El cron no se ejecuta** por limitación o fiabilidad del plan Hobby (Vercel documenta los crons de Hobby como best-effort, no garantizados).
+2. **El cron se ejecuta pero fuera de la ventana de logs retenida** (07:00 UTC queda fuera de las ~2h que el plan Hobby conserva), así que su ausencia en logs no prueba que no corriera.
+3. **El cron se ejecuta pero falla la auth** (401 — p.ej. `CRON_SECRET` desincronizado), y nunca llega a ejecutar el motor.
+4. **El cron se ejecuta y autentica, pero falla Telegram** (el motor corre pero la entrega no llega).
+5. **El custom domain sirve otro deployment** del que está configurado el cron (patrón Vercel Error/READY, ver § "Incidente 2026-06-12").
+
+### Checks autoritativos (pendientes de ejecución manual)
+
+Estos checks cierran cuál de las hipótesis es la causa real.
+
+**A — Vercel Dashboard → Cron Jobs:**
+```
+Vercel Dashboard → app-finanzas → pestaña "Cron Jobs"
+```
+Muestra el historial de ejecuciones con timestamp y estado. Cierra las hipótesis 1 y 2: si hay entradas en días laborables → el scheduler dispara (descarta 1); si no hay ninguna → no dispara. El estado de cada ejecución (success / error) ayuda con 3 y 4.
+
+**B — Comparar `runAt` antes y después del horario del cron (sin navegador):**
+```bash
+BASE="https://www.beaihub.com"
+# Antes del cron (ej. 08:50 Madrid)
+curl -s "$BASE/api/engine/run" | jq '{runAt}'
+# Después del cron (ej. 09:15 Madrid) — sin abrir el navegador
+curl -s "$BASE/api/engine/run" | jq '{runAt}'
+```
+Si `runAt` cambia → el cron ejecutó el motor (descarta 1, 2 y 3). Si no cambia → el motor no corrió por el cron.
+
+**C — Test manual del endpoint:**
+```bash
+BASE="https://www.beaihub.com"
+SECRET="<tu-CRON_SECRET>"
+curl -s "$BASE/api/cron/daily" \
+  -H "Authorization: Bearer $SECRET" | jq '{success, runAt, alerts, errors}'
+```
+Respuesta esperada: `{"success": true, "runAt": "...", "alerts": N, "errors": []}`. Confirma que el endpoint, la auth y el motor funcionan cuando se invoca a mano (cierra 3 y aísla 4). **No** confirma que el scheduler lo invoque por sí solo — para eso son A y B.
+
+### Recomendación estratégica
+
+Si tras A/B/C se confirma que **Vercel Hobby no garantiza la ejecución del cron** (hipótesis 1), la opción recomendada para una app de **alertas defensivas** es **subir a Vercel Pro** o **usar un trigger externo fiable** (p.ej. GitHub Actions Scheduled Workflow que haga `curl` al endpoint con el header). Las alertas de venta/reducción protegen capital y **no pueden depender de un scheduler best-effort**.
+
+| Opción | Descripción | Recomendada para alertas defensivas |
+|---|---|---|
+| **Hobby → Pro** | Vercel Pro ejecuta crons de forma fiable. Coste ~$20/mes. | ✅ Sí |
+| **Trigger externo** | GitHub Actions (u otro scheduler fiable) hace `curl … /api/cron/daily` con el header. Gratuito. | ✅ Sí |
+| **Ajuste de horario UTC** | Mover a `0 6` / `0 15` UTC para obtener 08:00/17:00 Madrid en verano. Solo corrige el horario, **no** la fiabilidad. | ⚠️ Solo complementario |
+| **Aceptar best-effort / manual** | Usar el botón "Analizar" del dashboard. Sin garantía de automatización. | ❌ No |
+
+Registrar la decisión en `docs/DECISIONS.md` cuando se tome (tras cerrar la causa con A/B/C).
+
+---
+
 ## Vercel "Error" en PR con build READY (post-deploy check)
 
 ### Síntoma
@@ -824,7 +907,7 @@ curl -s "$BASE/api/portfolio" | jq '{holdingsCount: (.config.holdings | length),
 
 ```bash
 npm ci                  # Clean install from lock file
-npm test                # 24 suites, 1527 asserts
+npm test                # 26 suites, 1571 asserts
 npm run build           # Production build
 npx tsc --noEmit        # Type-check
 npm run dev             # Local dev server :3000
