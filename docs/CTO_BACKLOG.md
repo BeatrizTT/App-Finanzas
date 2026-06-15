@@ -1,6 +1,6 @@
 # CTO Backlog — App Finanzas
 
-Last updated: 2026-06-14 (P1-4b + Codex fixes — Markdown escaping + P1-4d resuelto: dedupe solo avanza con entrega Telegram confirmada)
+Last updated: 2026-06-15 (PR #33 mergeado — P1-4b completo; diagnóstico de cron Vercel documentado)
 
 Ordered by priority. P0 = production is broken or silent without these. Do not advance to P1 until P0 is solid.
 
@@ -81,8 +81,19 @@ All KV-aware code is deployed (PRs #16 + #17):
 
 ## P1 — Automation and reliability
 
-### P1-1: Verify end-to-end cron → alert → Telegram ✓ DONE (2026-06-11)
-Verificación completa — ver Fase 1 en el roadmap de arriba y `docs/RUNBOOK.md` § "Lección Fase 1".
+### P1-1: Verify end-to-end cron → alert → Telegram ✓ DONE (2026-06-11) — ⚠️ ejecución real del scheduler sin verificar
+Verificación completa del código y la auth — ver Fase 1 en el roadmap de arriba y `docs/RUNBOOK.md` § "Lección Fase 1".
+
+**Actualización 2026-06-15 — diagnóstico de cron**: los logs de producción (ventana retenida ~2h, plan Hobby) muestran **cero invocaciones** de `/api/cron/daily`. Solo se detectó un `POST /api/engine/run` manual (botón "Analizar" del navegador a las 09:53 UTC). El código del cron es correcto; la duda es si el **scheduler de Vercel Hobby** realmente dispara los crons.
+
+**Checks pendientes de ejecución manual (autoritativos):**
+- **A** — Vercel Dashboard → app-finanzas → pestaña **"Cron Jobs"**: muestra historial de ejecuciones. Si no hay entradas en días laborables → scheduler no dispara en Hobby.
+- **B** — Comparar `runAt` de `GET /api/engine/run` antes y después del horario del cron (09:00/18:00 Madrid) sin abrir el navegador. Si cambia → el cron ejecutó.
+- **C** — Test manual: `curl -s -H "Authorization: Bearer $CRON_SECRET" https://www.beaihub.com/api/cron/daily | jq` → confirma que el endpoint funciona, no que el scheduler lo invoque.
+
+**Nota horario**: los crons corren a 07:00 y 16:00 UTC = **09:00 y 18:00 Madrid en verano (CEST, UTC+2)** — 1h más tarde de lo que podría esperarse en horario de invierno.
+
+**Decisión pendiente** si check A confirma que el scheduler no dispara: Hobby → Pro (coste ~$20/mes), trigger externo (GitHub Actions), o aceptar operación manual. Ver `RUNBOOK.md` § "Diagnóstico de cron".
 
 ---
 
@@ -276,7 +287,7 @@ Verificación completa en `https://www.beaihub.com`:
    `src/lib/utils/kv-client.ts` como cliente KV compartido. `engine-store.ts` y `portfolio-store.ts` migrados. 12 tests nuevos (24 suites · 1521 asserts). Sin cambio de comportamiento.
 
 1. **`p1-alert-history-kv`** (PR-1, P1-3): mover `history.ts` (alert history + previous-states / dedupe ring buffer) a KV → alertas no se repiten entre invocaciones de Vercel. **MERGEADO Y VERIFICADO EN PRODUCCIÓN — PR #31, commit `270887a` (2026-06-12)**. Incluye fix crítico de Codex Review: cambio de estado bypasa cooldown (`BUY_MORE → REDUCE` dentro de 24h ya no se suprime); `previous_states.state` = último estado alertado, no último observado. 26 suites · 1549 asserts · TSC OK · build OK. Verificación prod: `kvConfigured:true`, engine `errors:[]` (×2), `/api/alerts` JSON válido `count:0` (correcto — `saveAlerts` solo escribe historial con `sendAlertMessages !== false`; ver PROJECT_STATE § "Verificación de producción PR-1").
-2. **P1-4b `telegram-sell-reduce-alerts`**: alertas Telegram de venta/reducción — **IMPLEMENTADO (2026-06-12, rama `p1-telegram-sell-reduce-alerts`)**. Templates defensivos REDUCE/REVIEW + recordatorio `REDUCE → REDUCE` cada `ALERT_REDUCE_REMINDER_DAYS` días (default 3, decisión Opción B resuelta) + Codex Review fixes: (a) `escapeMd()` para Telegram Markdown (underscores en estados como `BUY_MORE` → `BUY-MORE`); (b) **P1-4d resuelto** — dedupe (`previous_states`) solo avanza con entrega Telegram confirmada (`commitPreviousStates` tras send). 26 suites · 1571 asserts · TSC OK · build OK. Ver secciones P1-4b y P1-4d arriba. Oportunidades defensivas → P1-4c.
+2. **P1-4b `telegram-sell-reduce-alerts`**: alertas Telegram de venta/reducción — **MERGEADO** (PR #33, 2026-06-15). Templates defensivos REDUCE/REVIEW + recordatorio `REDUCE → REDUCE` cada `ALERT_REDUCE_REMINDER_DAYS` días (default 3, decisión Opción B resuelta) + Codex Review fixes: (a) `escapeMd()` para Telegram Markdown (underscores en estados como `BUY_MORE` → `BUY-MORE`); (b) **P1-4d resuelto** — dedupe (`previous_states`) solo avanza con entrega Telegram confirmada (`commitPreviousStates` tras send). 26 suites · 1571 asserts · TSC OK · build OK. Ver secciones P1-4b y P1-4d arriba. Oportunidades defensivas → P1-4c.
 3. **`p1-discovery-state-kv`** (PR-2, P1-2): mover watchlist y snapshots a KV con prefijo `discovery:` → trend tracking funciona entre runs. Desbloqueado (PR-0 merged); **siguiente candidato tras merge de P1-4b salvo decisión explícita de Beatriz**.
 4. **P1-4c (registrado, sin iniciar)**: templates defensivos para oportunidades (`EXIT` / `REVIEW_FOR_TRIM`) — hoy se alertan con template genérico. Separado de P1-4b a propósito (no mezclar cartera y discovery).
 

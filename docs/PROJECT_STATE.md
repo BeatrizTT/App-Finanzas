@@ -1,6 +1,6 @@
 # App Finanzas — Project State
 
-Last updated: 2026-06-14 · Branch: `p1-telegram-sell-reduce-alerts` (P1-4b — alertas defensivas Telegram + recordatorio REDUCE + Codex fixes: Markdown escaping y dedupe condicionado a entrega Telegram)
+Last updated: 2026-06-15 · Branch: `main` (PR #33 merged — P1-4b completo: alertas defensivas Telegram, Markdown escaping, P1-4d dedupe condicionado a entrega)
 
 > Agentes/IA: leer `AGENTS.md` en la raíz del repo antes de cualquier cambio.
 
@@ -31,7 +31,7 @@ A personal investment decision-support app. It scans a curated universe of stock
 
 ## Active branch
 
-`main` — Fase 1 completada (2026-06-11) y hotfix ELTIF (PR #30) verificado en producción (2026-06-12). **Fase 2 autorizada por Beatriz (2026-06-12)**. PR-0 (#27, shared KV client) merged → PR-1 (`p1-alert-history-kv`, PR #31) **mergeado y verificado en producción (2026-06-12)**.
+`main` — Fase 1 completada (2026-06-11) y hotfix ELTIF (PR #30) verificado en producción (2026-06-12). **Fase 2 autorizada por Beatriz (2026-06-12)**. PR-0 (#27, shared KV client) merged → PR-1 (`p1-alert-history-kv`, PR #31) **mergeado y verificado en producción (2026-06-12)** → PR #33 (`p1-telegram-sell-reduce-alerts`, P1-4b) **mergeado manualmente por Beatriz (2026-06-15)**.
 
 ---
 
@@ -42,7 +42,7 @@ A personal investment decision-support app. It scans a curated universe of stock
 | Item | Status | Notes |
 |---|---|---|
 | App deployed on Vercel | ✓ | `main` auto-deploys |
-| Vercel cron wired | ✓ | `vercel.json` — 07:00 + 16:00 UTC Mon-Fri |
+| Vercel cron wired | ✓ (código) / ⚠️ **ejecución real sin verificar** | `vercel.json` — 07:00 + 16:00 UTC Mon-Fri (= 09:00/18:00 Madrid CEST verano). Logs muestran 0 invocaciones de `/api/cron/daily` — ver diagnóstico 2026-06-15 en RUNBOOK §. Hobby plan = crons best-effort, no garantizados. |
 | `CRON_SECRET` cron auth | ✓ **configured** (since Apr 30) | Fail-closed: 503 if missing, 401 if wrong. `/api/config/status` → `cronSecretSet: true`. |
 | `PRICE_PROVIDER` | ✓ **`twelvedata`** (since May 5) | `TWELVE_DATA_API_KEY` also configured. Production uses real prices — NOT mock. `/api/config/status` → `priceProvider: "twelvedata"`. |
 | Vercel KV connected | ✓ **verificado end-to-end (2026-06-11)** | `kvConfigured: true`. KV write y read cross-instance confirmados. `/api/opportunities` `stockCount: 4`, `/api/portfolio` `analysesCount: 13`. Bugs de caching (PR #20) e inlining (PR #21) ya corregidos y verificados. |
@@ -53,7 +53,7 @@ A personal investment decision-support app. It scans a curated universe of stock
 | Discovery state (watchlist, snapshots) | ephemeral | file-store → `/tmp` on Vercel; resets per invocation. P1 item. |
 | Alert history / previous states | **KV-first** (`alerts:history`, `alerts:previous_states`) + file-store fallback | PR-1 `p1-alert-history-kv` (PR #31) — **mergeado y verificado en producción (2026-06-12)**. `/api/alerts` responde JSON válido (force-dynamic + KV read OK). |
 
-**Summary: Fase 1 completada el 2026-06-11. Producción verificada end-to-end: precios reales (Twelve Data), KV persistencia cross-instance confirmada, cron auth verificado, CSV import KV-backed, Telegram funcionando. Fase 2: PR-0 (#27) y PR-1 (#31, alert history/dedupe KV-first) mergeados; PR-1 verificado en producción el 2026-06-12.**
+**Summary: Fase 1 completada el 2026-06-11. Producción verificada end-to-end: precios reales (Twelve Data), KV persistencia cross-instance confirmada, cron auth verificado, CSV import KV-backed, Telegram funcionando. Fase 2: PR-0 (#27), PR-1 (#31, alert history/dedupe KV-first) y PR #33 (P1-4b, alertas defensivas + P1-4d) mergeados. ⚠️ Pendiente: verificar que el scheduler de Vercel realmente invoca el cron (ver RUNBOOK § "Diagnóstico de cron" y checks A/B/C).**
 
 ### Verificación de producción PR-1 (#31) — 2026-06-12
 
@@ -95,7 +95,7 @@ Tras el merge a `main` (commit `270887a`), ejecutado desde `www.beaihub.com` (Ve
 **Fase 2 — en curso (autorizada 2026-06-12):**
 - PR-0 (#27): shared KV client refactor — `kv-client.ts` creado, `engine-store.ts` y `portfolio-store.ts` migrados, 12 nuevos tests. Merged.
 - `p1-alert-history-kv` (PR-1): mover history.ts (alert history + previous-states / dedupe ring buffer) a KV — **MERGEADO Y VERIFICADO EN PRODUCCIÓN** (PR #31, commit `270887a`, 2026-06-12). Incluye fix crítico: state-change bypasa cooldown (BUY_MORE → REDUCE no se suprime). 26 suites, 1549 asserts, TSC OK, build OK.
-- P1-4b `telegram-sell-reduce-alerts`: alertas defensivas Telegram (REDUCE/REVIEW de cartera) — **IMPLEMENTADO** (2026-06-12, rama `p1-telegram-sell-reduce-alerts`). Templates dedicados (🟡 REDUCE / ⚠️ REVIEW, copy en lenguaje simple) + recordatorio `REDUCE → REDUCE` cada `ALERT_REDUCE_REMINDER_DAYS` días (default 3, `0` desactiva, prefijo `🔁 Recordatorio`). Guards: `priceError` no alerta; `currentPrice: null` alerta sin cifras. **Codex Review fixes (2026-06-14)**: (a) `escapeMd()` escapa valores dinámicos para Telegram Markdown (`BUY_MORE` → `BUY-MORE`); (b) **P1-4d** — `generateAlerts()` ya no persiste `previous_states`; el dedupe avanza solo con entrega Telegram confirmada vía `commitPreviousStates(context, deliveredAlerts)` (`previous_states.state` = último estado notificado con éxito). 26 suites, 1571 asserts, TSC OK, build OK. No cubre oportunidades `EXIT`/`REVIEW_FOR_TRIM` (P1-4c). No es tiempo real: evalúa en cada engine run (cron/manual).
+- P1-4b `telegram-sell-reduce-alerts`: alertas defensivas Telegram (REDUCE/REVIEW de cartera) — **MERGEADO** (PR #33, 2026-06-15). Templates dedicados (🟡 REDUCE / ⚠️ REVIEW, copy en lenguaje simple) + recordatorio `REDUCE → REDUCE` cada `ALERT_REDUCE_REMINDER_DAYS` días (default 3, `0` desactiva, prefijo `🔁 Recordatorio`). Guards: `priceError` no alerta; `currentPrice: null` alerta sin cifras. **Codex Review fixes (2026-06-14)**: (a) `escapeMd()` escapa valores dinámicos para Telegram Markdown (`BUY_MORE` → `BUY-MORE`); (b) **P1-4d** — `generateAlerts()` ya no persiste `previous_states`; el dedupe avanza solo con entrega Telegram confirmada vía `commitPreviousStates(context, deliveredAlerts)` (`previous_states.state` = último estado notificado con éxito). 26 suites, 1571 asserts, TSC OK, build OK. No cubre oportunidades `EXIT`/`REVIEW_FOR_TRIM` (P1-4c). No es tiempo real: evalúa en cada engine run (cron/manual).
 - `p1-discovery-state-kv` (PR-2): mover watchlist y snapshots a KV (prefijo `discovery:`) — desbloqueado (PR-0 merged), siguiente candidato tras P1-4b.
 
 **Not yet built:**
@@ -224,6 +224,8 @@ Tras el merge a `main` (commit `270887a`), ejecutado desde `www.beaihub.com` (Ve
 
 | PR | Title | State |
 |---|---|---|
+| #33 | feat(alerts): P1-4b — alertas defensivas Telegram REDUCE/REVIEW + Codex fixes (Markdown, P1-4d) | Merged `ff1a038` (2026-06-15) ✅ |
+| #31 | feat: alert history + previous states KV-first (PR-1, P1-3) | Merged `270887a` — verificado en producción 2026-06-12 ✅ |
 | #30 | fix: private_fund (ELTIF) — importar sin pricing diario, mapear LU3176111881/LU3170240538 | Merged `f0af3e1` — verificado en producción 2026-06-12 ✅ |
 | #28 | fix: ISRG mapping + fail-closed para ISINs desconocidos en CSV import | Merged `cac37f8` |
 | #27 | refactor: shared KV client (`kv-client.ts`) — PR-0 Fase 2 | Merged |
@@ -239,5 +241,5 @@ Tras el merge a `main` (commit `270887a`), ejecutado desde `www.beaihub.com` (Ve
 ## Test suite
 
 ```
-npx tsx scripts/run-tests.ts   →  24 suites · 1530 asserts · 0 failed
+npx tsx scripts/run-tests.ts   →  26 suites · 1571 asserts · 0 failed
 ```

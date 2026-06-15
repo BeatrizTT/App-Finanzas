@@ -197,7 +197,7 @@ npm test
 npx tsx scripts/run-tests.ts
 ```
 
-Runs all 23 suites. Exits 0 if all pass.
+Runs all 26 suites. Exits 0 if all pass.
 
 To run a single suite:
 ```bash
@@ -645,6 +645,88 @@ curl -s "$BASE/api/alerts?limit=5" | jq '{count: .count, alerts: [.alerts[] | {i
 
 ---
 
+## Diagnóstico de cron — alertas sin navegador abierto (2026-06-15)
+
+### Síntoma reportado
+
+Las alertas de Telegram sólo llegaban cuando el navegador estaba abierto. Con el navegador cerrado, no llegaba nada aunque el cron debería haber corrido.
+
+### El horario UTC → Madrid
+
+`vercel.json` define los dos crons en UTC:
+
+```json
+{ "path": "/api/cron/daily", "schedule": "0 7 * * 1-5"  }   →  09:00 Madrid (CEST verano, UTC+2)
+{ "path": "/api/cron/daily", "schedule": "0 16 * * 1-5" }   →  18:00 Madrid (CEST verano, UTC+2)
+```
+
+**En invierno (CET, UTC+1)**: disparan a las 08:00 y 17:00 Madrid.
+**En verano (CEST, UTC+2)**: disparan a las 09:00 y 18:00 Madrid — 1 hora más tarde de lo que podría esperarse.
+
+Vercel Cron siempre corre en UTC. No hay configuración de timezone en `vercel.json`.
+
+### Lo que se verificó en logs
+
+Consulta de los logs de Vercel de la ventana retenida (plan Hobby: ~2 horas de retención):
+
+- **Ninguna invocación de `/api/cron/daily`** en la ventana disponible.
+- Solo peticiones GET periódicas del dashboard (uptime monitor / auto-refresh) — esas leen el output del motor pero NO lo ejecutan.
+- Un único `POST /api/engine/run` a las 09:53 UTC — ese fue el botón "Analizar" del navegador.
+
+**Plan Hobby**: `ExceedsBillingLimitError` al intentar consultar logs de más de ~2h de antigüedad. Los logs de la ventana 07:00 UTC no se podían recuperar directamente.
+
+### Causa probable
+
+Vercel Hobby plan documenta los crons como **best-effort** — no están garantizados. En un plan Hobby, es posible que el scheduler de Vercel no ejecute los crons con fiabilidad (o no los ejecute en absoluto).
+
+El código del cron (`route.ts`) es correcto: no tiene dependencia del navegador. El problema está en el nivel de infraestructura (Vercel Hobby), no en el código.
+
+### Tres checks autoritativos (pendientes de ejecución manual)
+
+**A — Vercel Dashboard → Cron Jobs:**
+```
+Vercel Dashboard → app-finanzas → pestaña "Cron Jobs"
+```
+Muestra el historial de ejecuciones con timestamp. Si el scheduler no aparece en el histórico durante días laborables en el horario previsto → los crons no están disparando en Hobby.
+
+**B — Comparar `runAt` antes y después del horario del cron:**
+```bash
+BASE="https://www.beaihub.com"
+# Antes del cron (ej. 08:50 Madrid)
+curl -s "$BASE/api/engine/run" | jq '{runAt}'
+# Después del cron (ej. 09:15 Madrid) — sin abrir el navegador
+curl -s "$BASE/api/engine/run" | jq '{runAt}'
+```
+Si `runAt` cambia entre los dos checks → el cron ejecutó el motor. Si no cambia → el cron no disparó.
+
+**C — Test manual del endpoint:**
+```bash
+BASE="https://www.beaihub.com"
+SECRET="<tu-CRON_SECRET>"
+curl -s "$BASE/api/cron/daily" \
+  -H "Authorization: Bearer $SECRET" | jq '{success, runAt, alerts, errors}'
+```
+Respuesta esperada: `{"success": true, "runAt": "...", "alerts": N, "errors": []}`. Este test confirma que el endpoint funciona; no confirma que el scheduler lo invoque.
+
+### Decisión pendiente
+
+Si el check A confirma que el scheduler no ejecuta en Hobby:
+
+| Opción | Descripción |
+|---|---|
+| **Hobby → Pro** | Upgrade a Vercel Pro garantiza crons. Coste ~$20/mes. |
+| **Ajuste de horario UTC** | Mover a `0 6` / `0 15` UTC en verano para obtener 08:00/17:00 Madrid. No resuelve si el scheduler no dispara. |
+| **Trigger externo** | Un job de GitHub Actions o cron externo hace `curl … /api/cron/daily` en el horario deseado. Gratuito. |
+| **Aceptar** | Usar sólo el botón "Analizar" del dashboard. Sin automatización. |
+
+Registrar la decisión en `docs/DECISIONS.md` cuando se tome.
+
+### El código del cron no tiene dependencia del navegador
+
+Para referencia: `src/app/api/cron/daily/route.ts` únicamente requiere que Vercel invoque el endpoint con el header correcto. No hay WebSocket, no hay SSE, no hay polling del cliente. El navegador abierto sólo causa el `POST /api/engine/run` del botón "Analizar" — eso es distinto del cron.
+
+---
+
 ## Vercel "Error" en PR con build READY (post-deploy check)
 
 ### Síntoma
@@ -824,7 +906,7 @@ curl -s "$BASE/api/portfolio" | jq '{holdingsCount: (.config.holdings | length),
 
 ```bash
 npm ci                  # Clean install from lock file
-npm test                # 24 suites, 1527 asserts
+npm test                # 26 suites, 1571 asserts
 npm run build           # Production build
 npx tsc --noEmit        # Type-check
 npm run dev             # Local dev server :3000
