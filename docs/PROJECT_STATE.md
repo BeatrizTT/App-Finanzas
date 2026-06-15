@@ -1,6 +1,6 @@
 # App Finanzas — Project State
 
-Last updated: 2026-06-12 · Branch: `main` (PR #31 — alert history KV-first verificado en producción)
+Last updated: 2026-06-14 · Branch: `p1-telegram-sell-reduce-alerts` (P1-4b — alertas defensivas Telegram + recordatorio REDUCE + Codex fixes: Markdown escaping y dedupe condicionado a entrega Telegram)
 
 > Agentes/IA: leer `AGENTS.md` en la raíz del repo antes de cualquier cambio.
 
@@ -24,7 +24,7 @@ A personal investment decision-support app. It scans a curated universe of stock
 | FX | USD→EUR via Yahoo FX pair; GBX→GBP built-in |
 | Alerts | Telegram Bot API via `node-telegram-bot-api` |
 | Cron | Vercel Cron — 07:00 UTC + 16:00 UTC Mon–Fri |
-| Test runner | `npx tsx scripts/run-tests.ts` (not Jest) — 24 suites, 1527 asserts |
+| Test runner | `npx tsx scripts/run-tests.ts` (not Jest) — 26 suites, 1571 asserts |
 | Scripts | `npx tsx scripts/<name>.ts` |
 
 ---
@@ -95,12 +95,12 @@ Tras el merge a `main` (commit `270887a`), ejecutado desde `www.beaihub.com` (Ve
 **Fase 2 — en curso (autorizada 2026-06-12):**
 - PR-0 (#27): shared KV client refactor — `kv-client.ts` creado, `engine-store.ts` y `portfolio-store.ts` migrados, 12 nuevos tests. Merged.
 - `p1-alert-history-kv` (PR-1): mover history.ts (alert history + previous-states / dedupe ring buffer) a KV — **MERGEADO Y VERIFICADO EN PRODUCCIÓN** (PR #31, commit `270887a`, 2026-06-12). Incluye fix crítico: state-change bypasa cooldown (BUY_MORE → REDUCE no se suprime). 26 suites, 1549 asserts, TSC OK, build OK.
-- `p1-discovery-state-kv` (PR-2): mover watchlist y snapshots a KV (prefijo `discovery:`) — desbloqueado (PR-0 merged), siguiente tras PR-1.
-- P1-4b (registrado en backlog): alertas Telegram de venta/reducción — depende de PR-1 (alert history KV para anti-spam).
+- P1-4b `telegram-sell-reduce-alerts`: alertas defensivas Telegram (REDUCE/REVIEW de cartera) — **IMPLEMENTADO** (2026-06-12, rama `p1-telegram-sell-reduce-alerts`). Templates dedicados (🟡 REDUCE / ⚠️ REVIEW, copy en lenguaje simple) + recordatorio `REDUCE → REDUCE` cada `ALERT_REDUCE_REMINDER_DAYS` días (default 3, `0` desactiva, prefijo `🔁 Recordatorio`). Guards: `priceError` no alerta; `currentPrice: null` alerta sin cifras. **Codex Review fixes (2026-06-14)**: (a) `escapeMd()` escapa valores dinámicos para Telegram Markdown (`BUY_MORE` → `BUY-MORE`); (b) **P1-4d** — `generateAlerts()` ya no persiste `previous_states`; el dedupe avanza solo con entrega Telegram confirmada vía `commitPreviousStates(context, deliveredAlerts)` (`previous_states.state` = último estado notificado con éxito). 26 suites, 1571 asserts, TSC OK, build OK. No cubre oportunidades `EXIT`/`REVIEW_FOR_TRIM` (P1-4c). No es tiempo real: evalúa en cada engine run (cron/manual).
+- `p1-discovery-state-kv` (PR-2): mover watchlist y snapshots a KV (prefijo `discovery:`) — desbloqueado (PR-0 merged), siguiente candidato tras P1-4b.
 
 **Not yet built:**
 - Radar for strong companies outside current portfolio with deep drawdowns (Phase 3 — external screener)
-- Reliable sell/reduce alerts with multi-run trend tracking (needs alert history KV — Phase 2)
+- Defensive alerts for opportunity states `EXIT`/`REVIEW_FOR_TRIM` (P1-4c — registered, not started)
 - "Verify now" live check for a single asset (Phase 4)
 - "Why did it fall?" news + thesis explanation (Phase 5 — requires external news provider decision)
 
@@ -135,7 +135,7 @@ Tras el merge a `main` (commit `270887a`), ejecutado desde `www.beaihub.com` (Ve
 | Portfolio config (write: `/api/portfolio/import`) | `savePortfolioConfig()` → KV first, file-store fallback | **Yes if KV configured** |
 | Portfolio config (read: all consumers) | `loadPortfolioConfig()` → KV first, `config/portfolio.json` fallback | **Yes if KV configured** |
 | Alert history | `saveAlerts()` → KV first (`alerts:history`, ring buffer max 500) + file-store fallback | **Yes if KV configured** (PR #31) |
-| Previous states (dedupe) | `savePreviousStates()` → KV first (`alerts:previous_states`) + file-store fallback | **Yes if KV configured** (PR #31) |
+| Previous states (dedupe) | `commitPreviousStates()` → `savePreviousStates()` → KV first (`alerts:previous_states`) + file-store fallback. Avanza solo con entrega Telegram confirmada (P1-4d) | **Yes if KV configured** (PR #31) |
 | Discovery watchlist | file-store → `/tmp/app-finanzas` | **No — resets each invocation** |
 | Discovery snapshots | file-store → `/tmp/app-finanzas` | **No — resets each invocation** |
 

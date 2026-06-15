@@ -223,19 +223,20 @@ async function main(): Promise<void> {
     const savedCooldown = process.env.ALERT_COOLDOWN_HOURS;
     try {
       delete process.env.ALERT_COOLDOWN_HOURS; // default 24h
+      // BUY_MORE (not REDUCE) — standard cooldown path, no reminder window.
       const recent: PreviousStates = {
         updatedAt: '',
-        portfolio: { nvda: { assetId: 'nvda', state: 'REDUCE', lastAlertAt: new Date().toISOString() } },
+        portfolio: { nvda: { assetId: 'nvda', state: 'BUY_MORE', lastAlertAt: new Date().toISOString() } },
         opportunities: {},
       };
-      assert(H.shouldSendAlert('nvda', recent, 'REDUCE') === false, 'should suppress within 24h cooldown for same state');
+      assert(H.shouldSendAlert('nvda', recent, 'BUY_MORE') === false, 'should suppress within 24h cooldown for same state');
 
       const old: PreviousStates = {
         updatedAt: '',
-        portfolio: { nvda: { assetId: 'nvda', state: 'REDUCE', lastAlertAt: new Date(Date.now() - 48 * 3600 * 1000).toISOString() } },
+        portfolio: { nvda: { assetId: 'nvda', state: 'BUY_MORE', lastAlertAt: new Date(Date.now() - 48 * 3600 * 1000).toISOString() } },
         opportunities: {},
       };
-      assert(H.shouldSendAlert('nvda', old, 'REDUCE') === true, 'should allow after cooldown elapsed');
+      assert(H.shouldSendAlert('nvda', old, 'BUY_MORE') === true, 'should allow after cooldown elapsed');
     } finally {
       if (savedCooldown === undefined) delete process.env.ALERT_COOLDOWN_HOURS;
       else process.env.ALERT_COOLDOWN_HOURS = savedCooldown;
@@ -282,22 +283,75 @@ async function main(): Promise<void> {
     }
   });
 
-  await test('shouldSendAlert: REDUCE → REDUCE after cooldown is allowed', () => {
-    const savedCooldown = process.env.ALERT_COOLDOWN_HOURS;
+  // ── REDUCE reminder window (P1-4b) ──────────────────────────────────────
+  // REDUCE → REDUCE uses ALERT_REDUCE_REMINDER_DAYS (default 3) instead of
+  // the standard cooldown: an unresolved defensive signal re-alerts every N
+  // days. 0 disables reminders entirely.
+
+  function mkReducePrev(hoursAgo: number): PreviousStates {
+    return {
+      updatedAt: '',
+      portfolio: {
+        nvda: { assetId: 'nvda', state: 'REDUCE', lastAlertAt: new Date(Date.now() - hoursAgo * 3600 * 1000).toISOString() },
+      },
+      opportunities: {},
+    };
+  }
+
+  await test('shouldSendAlert: REDUCE → REDUCE at 2 days is suppressed (default reminder 3 days)', () => {
+    const saved = process.env.ALERT_REDUCE_REMINDER_DAYS;
     try {
-      delete process.env.ALERT_COOLDOWN_HOURS;
-      const prev: PreviousStates = {
-        updatedAt: '',
-        portfolio: {
-          nvda: { assetId: 'nvda', state: 'REDUCE', lastAlertAt: new Date(Date.now() - 48 * 3600 * 1000).toISOString() },
-        },
-        opportunities: {},
-      };
-      // shouldSendAlert allows it; generator still blocks via stateChanged=false
-      assert(H.shouldSendAlert('nvda', prev, 'REDUCE') === true, 'REDUCE→REDUCE after cooldown should return true from shouldSendAlert');
+      delete process.env.ALERT_REDUCE_REMINDER_DAYS; // default 3
+      assert(H.shouldSendAlert('nvda', mkReducePrev(48), 'REDUCE') === false, '2 days < 3-day reminder window → suppressed');
     } finally {
-      if (savedCooldown === undefined) delete process.env.ALERT_COOLDOWN_HOURS;
-      else process.env.ALERT_COOLDOWN_HOURS = savedCooldown;
+      if (saved === undefined) delete process.env.ALERT_REDUCE_REMINDER_DAYS;
+      else process.env.ALERT_REDUCE_REMINDER_DAYS = saved;
+    }
+  });
+
+  await test('shouldSendAlert: REDUCE → REDUCE at 4 days fires a reminder (default 3 days)', () => {
+    const saved = process.env.ALERT_REDUCE_REMINDER_DAYS;
+    try {
+      delete process.env.ALERT_REDUCE_REMINDER_DAYS;
+      assert(H.shouldSendAlert('nvda', mkReducePrev(96), 'REDUCE') === true, '4 days >= 3-day reminder window → fires');
+    } finally {
+      if (saved === undefined) delete process.env.ALERT_REDUCE_REMINDER_DAYS;
+      else process.env.ALERT_REDUCE_REMINDER_DAYS = saved;
+    }
+  });
+
+  await test('shouldSendAlert: ALERT_REDUCE_REMINDER_DAYS=0 disables reminders entirely', () => {
+    const saved = process.env.ALERT_REDUCE_REMINDER_DAYS;
+    try {
+      process.env.ALERT_REDUCE_REMINDER_DAYS = '0';
+      assert(H.shouldSendAlert('nvda', mkReducePrev(240), 'REDUCE') === false, 'reminders disabled → suppressed even after 10 days');
+    } finally {
+      if (saved === undefined) delete process.env.ALERT_REDUCE_REMINDER_DAYS;
+      else process.env.ALERT_REDUCE_REMINDER_DAYS = saved;
+    }
+  });
+
+  await test('shouldSendAlert: ALERT_REDUCE_REMINDER_DAYS=7 respects custom window', () => {
+    const saved = process.env.ALERT_REDUCE_REMINDER_DAYS;
+    try {
+      process.env.ALERT_REDUCE_REMINDER_DAYS = '7';
+      assert(H.shouldSendAlert('nvda', mkReducePrev(96), 'REDUCE') === false, '4 days < 7-day window → suppressed');
+      assert(H.shouldSendAlert('nvda', mkReducePrev(8 * 24), 'REDUCE') === true, '8 days >= 7-day window → fires');
+    } finally {
+      if (saved === undefined) delete process.env.ALERT_REDUCE_REMINDER_DAYS;
+      else process.env.ALERT_REDUCE_REMINDER_DAYS = saved;
+    }
+  });
+
+  await test('shouldSendAlert: invalid ALERT_REDUCE_REMINDER_DAYS falls back to default 3', () => {
+    const saved = process.env.ALERT_REDUCE_REMINDER_DAYS;
+    try {
+      process.env.ALERT_REDUCE_REMINDER_DAYS = 'not-a-number';
+      assert(H.shouldSendAlert('nvda', mkReducePrev(48), 'REDUCE') === false, 'invalid value → default 3 days → 2 days suppressed');
+      assert(H.shouldSendAlert('nvda', mkReducePrev(96), 'REDUCE') === true, 'invalid value → default 3 days → 4 days fires');
+    } finally {
+      if (saved === undefined) delete process.env.ALERT_REDUCE_REMINDER_DAYS;
+      else process.env.ALERT_REDUCE_REMINDER_DAYS = saved;
     }
   });
 

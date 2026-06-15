@@ -4,7 +4,7 @@
 import { runPortfolioEngine } from '../portfolio/engine';
 import { runOpportunityScanner } from '../scanner/scanner';
 import { runCapitalAllocator } from '../allocator/allocator';
-import { generateAlerts } from '../alerts/generator';
+import { generateAlerts, commitPreviousStates, type PreviousStatesContext } from '../alerts/generator';
 import { sendAlerts } from '../alerts/telegram';
 import { sendDailyDigest } from '../alerts/digest';
 import { saveAlerts } from '../alerts/history';
@@ -372,8 +372,9 @@ export async function runDailyEngine(options?: {
 
   // --- Alert generation ---
   let generatedAlerts: DailyEngineOutput['alertsGenerated'] = [];
+  let prevStatesContext: PreviousStatesContext | null = null;
   try {
-    generatedAlerts = await generateAlerts(
+    const result = await generateAlerts(
       portfolioAnalyses,
       stockOpportunities,
       etfOpportunities,
@@ -381,6 +382,8 @@ export async function runDailyEngine(options?: {
       concentration,
       allocationRecommendations
     );
+    generatedAlerts = result.alerts;
+    prevStatesContext = result.context;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[Engine] Alert generation failed:', msg);
@@ -397,7 +400,25 @@ export async function runDailyEngine(options?: {
       const msg = err instanceof Error ? err.message : String(err);
       console.error('[Engine] Sending alerts failed:', msg);
       errors.push(`telegram_alerts: ${msg}`);
+      // On throw, sentAlerts stays as the generated alerts (telegramSent:false),
+      // so nothing is marked delivered below — a failed send never advances dedupe.
       try { await saveAlerts(generatedAlerts); } catch { /* ignore */ }
+    }
+  }
+
+  // --- Persist dedupe state for delivered alerts only (P1-4b / P1-4d) ---
+  // deliveredAlerts is empty when sending is disabled (generated alerts default
+  // telegramSent:false), when a send throws, and for any individual message that
+  // failed — so a defensive REDUCE/REVIEW is never marked "alerted" unless it was
+  // actually delivered to Telegram. Partial sends advance only the delivered ones.
+  if (prevStatesContext) {
+    const deliveredAlerts = sentAlerts.filter((a) => a.telegramSent);
+    try {
+      await commitPreviousStates(prevStatesContext, deliveredAlerts);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[Engine] Persisting alert states failed:', msg);
+      errors.push(`alert_states: ${msg}`);
     }
   }
 

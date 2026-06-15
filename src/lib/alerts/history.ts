@@ -124,6 +124,11 @@ export async function savePreviousStates(states: PreviousStates): Promise<void> 
 //   • If currentState differs from the last-alerted state → bypass cooldown.
 //     Capital-protection transitions (e.g. BUY_MORE → REDUCE) must not be
 //     swallowed because a recent alert for the old state is still in-window.
+//   • REDUCE → REDUCE (unresolved defensive signal): reminder window of
+//     ALERT_REDUCE_REMINDER_DAYS days (default 3) replaces the standard
+//     cooldown. Value 0 disables reminders entirely (PR-1 behavior).
+//     A capital-protection alert must not stay buried forever just because
+//     the first one went unnoticed (P1-4b).
 //   • Same state within cooldown → suppress (anti-spam).
 //   • Same state after cooldown → allow.
 
@@ -139,8 +144,17 @@ export function shouldSendAlert(
   // State change always bypasses cooldown.
   if (currentState !== undefined && entry.state !== currentState) return true;
 
-  const cooldownHours = parseInt(process.env['ALERT_COOLDOWN_HOURS'] ?? '24', 10);
   const hoursSince = (Date.now() - new Date(entry.lastAlertAt).getTime()) / (1000 * 60 * 60);
+
+  // Unresolved REDUCE: reminder window instead of the standard cooldown.
+  if (currentState === 'REDUCE' && entry.state === 'REDUCE') {
+    const parsed = parseInt(process.env['ALERT_REDUCE_REMINDER_DAYS'] ?? '3', 10);
+    const reminderDays = Number.isNaN(parsed) ? 3 : parsed;
+    if (reminderDays <= 0) return false; // reminders disabled
+    return hoursSince >= reminderDays * 24;
+  }
+
+  const cooldownHours = parseInt(process.env['ALERT_COOLDOWN_HOURS'] ?? '24', 10);
   return hoursSince >= cooldownHours;
 }
 
