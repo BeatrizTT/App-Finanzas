@@ -196,3 +196,9 @@ They are inert (do not affect any code path). They may represent planned feature
 3. Open a docs-only PR to reconcile.
 4. Only then decide on functional changes.
 **Reason**: Docs can lag production. An agent acting on stale docs may recommend changes that break a working system (e.g., changing `PRICE_PROVIDER=twelvedata` to `yahoo` when twelvedata was already working and yahoo was not reliable from Vercel IPs).
+
+---
+
+## Site access gate — proposed, not deployed
+
+**Decision (owner-requested, `feat/site-password-gate`):** A single shared password protects the existing personal site via `src/proxy.ts`. Web Crypto HMAC-SHA256 signs a 30-day HttpOnly session cookie with `AUTH_SECRET`; `SITE_PASSWORD` is checked only on the server. Cron routes are exempt from the site gate because they already verify `CRON_SECRET`. This does not change investment calculations, API handlers, or provider configuration. Production and Preview must both have the two secrets before the PR is deployed. The existing `ENGINE_API_SECRET` design remains unchanged; unauthenticated callers are now stopped by the proxy.
