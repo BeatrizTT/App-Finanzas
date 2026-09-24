@@ -243,3 +243,9 @@ Tras el merge a `main` (commit `270887a`), ejecutado desde `www.beaihub.com` (Ve
 ```
 npx tsx scripts/run-tests.ts   →  26 suites · 1571 asserts · 0 failed
 ```
+
+---
+
+## Password gate — proposed in `feat/site-password-gate` (not yet production)
+
+The Next.js 16 proxy requires a signed `bh_session` cookie on pages and API routes. `/login`, `/api/login`, and `/api/cron/*` are open to the proxy; cron handlers retain their own `CRON_SECRET` check. Unauthenticated API calls return 401 and pages redirect to login. The login form uses `SITE_PASSWORD` and signs a 30-day HttpOnly cookie with `AUTH_SECRET`. Both variables must be configured for Production and Preview before deployment. `robots.txt` disallows crawling. Existing endpoint behavior after login is unchanged. The old statements above describing publicly callable endpoints refer to production before this PR merges.

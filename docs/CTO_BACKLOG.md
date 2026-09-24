@@ -545,3 +545,9 @@ Automate the most common ops tasks:
 ## Rule: update this file
 
 **Before closing any PR**, update `PROJECT_STATE.md` with what changed. Before opening any PR, check this backlog for conflicts. This is the source of truth for the project's direction.
+
+---
+
+## Pending site access gate (`feat/site-password-gate`)
+
+Owner-requested change: password-protect the dashboard and ordinary APIs, preserving Vercel cron auth. Review and merge after confirming `SITE_PASSWORD` and `AUTH_SECRET` exist in both Production and Preview. Redeploy after merge, then check sign-in and scheduled cron. Existing roadmap priorities for the investment engine are unchanged.

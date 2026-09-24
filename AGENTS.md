@@ -157,3 +157,9 @@ Actualizar `AGENTS.md` cuando cambie:
 - el orden de los próximos PRs
 
 Mantenerlo sincronizado con `docs/PROJECT_STATE.md`.
+
+---
+
+## Pending password-gate change (`feat/site-password-gate`)
+
+This branch adds owner-requested password protection in the Next.js proxy. `/api/cron/*` remains exempt and checks `CRON_SECRET` in its route. After merging, pages and other APIs require the signed `bh_session` cookie, so older unauthenticated `curl` commands in the runbook need a session. `SITE_PASSWORD` and `AUTH_SECRET` must exist for both Production and Preview before deployment. Investment engine code, cron handler, and dependencies remain untouched. See `docs/RUNBOOK.md` for the owner action.

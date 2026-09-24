@@ -943,3 +943,21 @@ Si no se actualizan, el PR debe explicar explícitamente por qué no aplica.
 Si un PR requiere que el propietario haga algo en Vercel, Telegram, GitHub Actions u otro servicio externo, debe aparecer en el PR y en los docs con el formato `ACCIÓN MANUAL PARA EL PROPIETARIO` descrito en `AGENTS.md`.
 
 Las instrucciones deben estar en español y escritas para una persona no técnica.
+
+---
+
+## Acceso privado — tras merge de `feat/site-password-gate`
+
+El acceso a páginas y API (salvo `/api/cron/*`) requiere iniciar sesión en `/login`. La cookie `bh_session` dura 30 días. `/api/logout` borra la cookie. El cron conserva su autenticación propia con `CRON_SECRET`; **no cambiar esa variable**. Los ejemplos anteriores de `curl` sin cookie para endpoints ordinarios devolverán 401 tras el despliegue. Para pruebas manuales, inicia sesión con el navegador o pasa la cookie obtenida en `/api/login`.
+
+### ACCIÓN MANUAL PARA EL PROPIETARIO
+
+**Qué:** Comprobar que `SITE_PASSWORD` (contraseña de entrada) y `AUTH_SECRET` (secreto de firma largo y aleatorio) tienen un valor, y redeployar tras el merge.
+
+**Dónde:** Vercel → proyecto `app-finanzas` → Settings → Environment Variables; después Deployments → Redeploy del commit mergeado.
+
+**Cuándo:** Antes de promover el cambio a producción; verificar Production y Preview.
+
+**Qué pasa si no se hace:** Sin `SITE_PASSWORD` o `AUTH_SECRET`, no se puede iniciar sesión; el sitio queda cerrado.
+
+**Qué NO tocar:** `CRON_SECRET`, las variables de precios/KV/Telegram, y `ENGINE_API_SECRET`.
